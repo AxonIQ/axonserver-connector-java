@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.axoniq.axonserver.connector;
+package io.axoniq.axonserver.connector.impl;
 
 import io.grpc.CallOptions;
 import io.grpc.Channel;

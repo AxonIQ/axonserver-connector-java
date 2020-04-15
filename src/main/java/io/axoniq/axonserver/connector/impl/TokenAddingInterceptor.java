@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-package io.axoniq.axonserver.connector;
+package io.axoniq.axonserver.connector.impl;
 
 import io.grpc.CallOptions;
 import io.grpc.Channel;
@@ -24,19 +24,19 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 
 /**
- * Interceptor around a gRPC request to add a Context element to the metadata.
+ * Interceptor around a GRPC request to add a Token element to the metadata.
  *
  * @author Marc Gathier
  * @since 4.0
  */
-public class ContextAddingInterceptor implements ClientInterceptor {
+public class TokenAddingInterceptor implements ClientInterceptor {
 
-    private static final Metadata.Key<String> CONTEXT_TOKEN_KEY =
-            Metadata.Key.of("AxonIQ-Context", Metadata.ASCII_STRING_MARSHALLER);
+    private static final Metadata.Key<String> ACCESS_TOKEN_KEY =
+            Metadata.Key.of("AxonIQ-Access-Token", Metadata.ASCII_STRING_MARSHALLER);
 
     private final String token;
 
-    public ContextAddingInterceptor(String token) {
+    public TokenAddingInterceptor(String token) {
         this.token = token;
     }
 
@@ -50,7 +50,7 @@ public class ContextAddingInterceptor implements ClientInterceptor {
             @Override
             public void start(Listener<RespT> responseListener, Metadata headers) {
                 if (token != null) {
-                    headers.put(CONTEXT_TOKEN_KEY, token);
+                    headers.put(ACCESS_TOKEN_KEY, token);
                 }
                 super.start(responseListener, headers);
             }

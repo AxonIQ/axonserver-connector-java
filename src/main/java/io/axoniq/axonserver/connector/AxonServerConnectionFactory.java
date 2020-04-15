@@ -16,6 +16,10 @@
 
 package io.axoniq.axonserver.connector;
 
+import io.axoniq.axonserver.connector.impl.ContextAddingInterceptor;
+import io.axoniq.axonserver.connector.impl.ContextConnection;
+import io.axoniq.axonserver.connector.impl.GrpcBufferingInterceptor;
+import io.axoniq.axonserver.connector.impl.TokenAddingInterceptor;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
 import io.axoniq.axonserver.grpc.control.PlatformInfo;
 import io.axoniq.axonserver.grpc.control.PlatformServiceGrpc;
@@ -45,9 +49,9 @@ import static java.util.Collections.singletonList;
  * @author Marc Gathier
  * @since 4.0
  */
-public class Connector {
+public class AxonServerConnectionFactory {
 
-    private static final Logger logger = LoggerFactory.getLogger(Connector.class);
+    private static final Logger logger = LoggerFactory.getLogger(AxonServerConnectionFactory.class);
     private static final String CONNECTOR_VERSION = "4.4";
     private final Map<String, String> tags = new HashMap<>();
     private final String applicationName;
@@ -62,43 +66,37 @@ public class Connector {
     private volatile boolean suppressDownloadMessage = false;
     private ScheduledExecutorService executorService = new ScheduledThreadPoolExecutor(5);
 
-    protected Connector(String applicationName, String clientInstanceId) {
+    protected AxonServerConnectionFactory(String applicationName, String clientInstanceId) {
         this.applicationName = applicationName;
         this.clientInstanceId = clientInstanceId;
         routingServers = singletonList(new ServerAddress());
     }
 
-    public static Connector forClient(String applicationName) {
-        return new Connector(applicationName, UUID.randomUUID().toString());
+    public static AxonServerConnectionFactory forClient(String applicationName) {
+        return new AxonServerConnectionFactory(applicationName, UUID.randomUUID().toString());
     }
 
-    public static Connector forClient(String applicationName, String clientInstanceId) {
-        return new Connector(applicationName, clientInstanceId);
+    public static AxonServerConnectionFactory forClient(String applicationName, String clientInstanceId) {
+        return new AxonServerConnectionFactory(applicationName, clientInstanceId);
     }
 
-    public Connector clientTags(Map<String, String> additionalTags) {
+    public AxonServerConnectionFactory clientTags(Map<String, String> additionalTags) {
         this.tags.putAll(additionalTags);
         return this;
     }
 
-    public Connector clientTag(String key, String value) {
+    public AxonServerConnectionFactory clientTag(String key, String value) {
         this.tags.put(key, value);
         return this;
     }
 
-    public Connector token(String token) {
+    public AxonServerConnectionFactory token(String token) {
         this.token = token;
         return this;
     }
 
-    public ContextConnection connect(String context) {
+    public AxonServerConnection connect(String context) {
         ContextConnection c;
-        // clean disconnected instances
-        while ((c = connections.get(context)) != null) {
-            if (!c.isConnected()) {
-                connections.remove(context, c);
-            }
-        }
         return connections.computeIfAbsent(context, this::createConnection);
     }
 

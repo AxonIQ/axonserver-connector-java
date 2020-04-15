@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.axoniq.axonserver.connector;import java.util.function.Consumer;
+package io.axoniq.axonserver.connector.impl;import java.util.function.Consumer;
 
 public class ObjectUtils {
 

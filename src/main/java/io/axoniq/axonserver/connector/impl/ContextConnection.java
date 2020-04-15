@@ -14,8 +14,11 @@
  * limitations under the License.
  */
 
-package io.axoniq.axonserver.connector;
+package io.axoniq.axonserver.connector.impl;
 
+import io.axoniq.axonserver.connector.AxonServerConnection;
+import io.axoniq.axonserver.connector.CommandChannel;
+import io.axoniq.axonserver.connector.InstructionChannel;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
 import io.grpc.ConnectivityState;
 import io.grpc.ManagedChannel;
@@ -23,25 +26,22 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
-import java.util.stream.Stream;
 
-import static io.axoniq.axonserver.connector.ObjectUtils.silently;
+import static io.axoniq.axonserver.connector.impl.ObjectUtils.silently;
 
-public class ContextConnection {
+public class ContextConnection implements AxonServerConnection {
 
     private static final Logger logger = LoggerFactory.getLogger(ContextConnection.class);
     private final String context;
     private final ClientIdentification clientIdentification;
-    private final AtomicReference<InstructionChannel> instructionChannel = new AtomicReference<>();
-    private final AtomicReference<CommandChannel> commandChannel = new AtomicReference<>();
+    private final AtomicReference<InstructionChannelImpl> instructionChannel = new AtomicReference<>();
+    private final AtomicReference<CommandChannelImpl> commandChannel = new AtomicReference<>();
     private final AtomicReference<ManagedChannel> connection = new AtomicReference<>();
     private ScheduledExecutorService executorService;
     private BiFunction<String, ClientIdentification, ManagedChannel> connectionFactory;
@@ -55,20 +55,22 @@ public class ContextConnection {
         this.connectionFactory = connectionFactory;
     }
 
+    @Override
     public boolean isConnected() {
         return
                 Optional.ofNullable(connection.get()).map(c -> c.getState(false) == ConnectivityState.READY
-                        && (Optional.ofNullable(instructionChannel.get()).map(InstructionChannel::isConnected).orElse(false)
-                        || Optional.ofNullable(commandChannel.get()).map(CommandChannel::isConnected).orElse(false))
+                        && (Optional.ofNullable(instructionChannel.get()).map(InstructionChannelImpl::isConnected).orElse(false)
+                        || Optional.ofNullable(commandChannel.get()).map(CommandChannelImpl::isConnected).orElse(false))
                 ).orElse(false);
         // TODO - Also check command, query and event context
     }
 
+    @Override
     public void disconnect() {
         ManagedChannel c = connection.getAndSet(null);
         c.shutdown();
-        ObjectUtils.doIfNotNull(instructionChannel.get(), InstructionChannel::disconnect);
-        ObjectUtils.doIfNotNull(commandChannel.get(), CommandChannel::disconnect);
+        ObjectUtils.doIfNotNull(instructionChannel.get(), InstructionChannelImpl::disconnect);
+        ObjectUtils.doIfNotNull(commandChannel.get(), CommandChannelImpl::disconnect);
         try {
             if (!c.awaitTermination(5, TimeUnit.SECONDS)) {
                 c.shutdownNow();
@@ -79,16 +81,18 @@ public class ContextConnection {
         }
     }
 
+    @Override
     public InstructionChannel instructionChannel() {
-        InstructionChannel instructionChannel = this.instructionChannel.updateAndGet(getIfNull(() -> new InstructionChannel(clientIdentification)));
+        InstructionChannelImpl instructionChannel = this.instructionChannel.updateAndGet(getIfNull(() -> new InstructionChannelImpl(clientIdentification)));
         if (!instructionChannel.isConnected()) {
             instructionChannel.connect(getLiveConnection());
         }
         return instructionChannel;
     }
 
+    @Override
     public CommandChannel commandChannel() {
-        CommandChannel commandChannel = this.commandChannel.updateAndGet(getIfNull(() -> new CommandChannel(clientIdentification, 5000, 2000)));
+        CommandChannelImpl commandChannel = this.commandChannel.updateAndGet(getIfNull(() -> new CommandChannelImpl(clientIdentification, 5000, 2000)));
         if (!commandChannel.isConnected()) {
             commandChannel.connect(getLiveConnection());
         }

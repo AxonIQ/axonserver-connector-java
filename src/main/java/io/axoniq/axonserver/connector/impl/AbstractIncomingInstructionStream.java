@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 
-package io.axoniq.axonserver.connector;
+package io.axoniq.axonserver.connector.impl;
 
+import io.axoniq.axonserver.connector.ErrorCode;
+import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.grpc.ErrorMessage;
 import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.InstructionAckOrBuilder;

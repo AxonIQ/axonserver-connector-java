@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
-class ConnectorTest {
+public class ConnectorRunner {
 
     private static CompletableFuture<CommandResponse> handle(Command command) {
         return CompletableFuture.completedFuture(
@@ -42,8 +42,8 @@ class ConnectorTest {
     public static class Sender {
 
         public static void main(String[] args) throws InterruptedException, ExecutionException, TimeoutException {
-            Connector testSubject = Connector.forClient("testClient");
-            ContextConnection contextConnection = testSubject
+            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient");
+            AxonServerConnection contextConnection = testSubject
                     .connect("default");
 
             CommandChannel channel = contextConnection.commandChannel();
@@ -80,14 +80,14 @@ class ConnectorTest {
 
     public static class Handler {
         public static void main(String[] args) {
-            Connector testSubject = Connector.forClient("testClient");
-            ContextConnection contextConnection = testSubject
+            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient");
+            AxonServerConnection contextConnection = testSubject
                     .connect("default");
 
             InstructionChannel instructionChannel = contextConnection.instructionChannel();
             CommandChannel commandChannel = contextConnection.commandChannel();
 
-            commandChannel.registerCommandHandler(ConnectorTest::handle, "test");
+            commandChannel.registerCommandHandler(ConnectorRunner::handle, "test");
 
             new Scanner(System.in).nextLine();
 
