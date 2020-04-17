@@ -16,20 +16,25 @@
 
 package io.axoniq.axonserver.connector;
 
+import io.axoniq.axonserver.grpc.ErrorMessage;
+
 public class AxonServerException extends RuntimeException {
 
-    private String errorCode;
+    private ErrorCode errorCode;
 
-    public AxonServerException(String errorCode, String message) {
+    public AxonServerException(ErrorMessage errorMessage) {
+        this(ErrorCode.getFromCode(errorMessage.getErrorCode()), errorMessage.getMessage());
+    }
+    public AxonServerException(ErrorCode errorCode, String message) {
         this(errorCode, message, null);
     }
 
-    public AxonServerException(String errorCode, String message, Throwable cause) {
-        super("["+errorCode + "] " + message, cause);
+    public AxonServerException(ErrorCode errorCode, String message, Throwable cause) {
+        super("["+errorCode.errorCode() + "] " + message, cause);
         this.errorCode = errorCode;
     }
 
-    public String getErrorCode() {
+    public ErrorCode getErrorCode() {
         return errorCode;
     }
 }

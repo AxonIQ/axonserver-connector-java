@@ -31,29 +31,34 @@ public abstract class FlowControlledStream<MsgIn, MsgOut> implements ClientRespo
 
     private final AtomicInteger permitsConsumed = new AtomicInteger();
     private final int permitsBatch;
-    private final FlowControl additionalPermitsRequest;
-    private final FlowControl initialPermitsRequest;
+    private final MsgOut additionalPermitsRequest;
+    private final MsgOut initialPermitsRequest;
 
     public FlowControlledStream(String clientId, int permits, int permitsBatch) {
         this.permitsBatch = permitsBatch;
-        this.additionalPermitsRequest = FlowControl.newBuilder()
-                                                   .setPermits(permitsBatch)
-                                                   .setClientId(clientId)
-                                                   .build();
-        this.initialPermitsRequest = FlowControl.newBuilder()
-                                                .setPermits(permits)
-                                                .setClientId(clientId)
-                                                .build();
+        this.additionalPermitsRequest = buildFlowControlMessage(FlowControl.newBuilder()
+                                                                           .setPermits(permitsBatch)
+                                                                           .setClientId(clientId)
+                                                                           .build());
+        this.initialPermitsRequest = buildFlowControlMessage(FlowControl.newBuilder()
+                                                                        .setPermits(permits)
+                                                                        .setClientId(clientId)
+                                                                        .build());
     }
 
     public void enableFlowControl() {
         permitsConsumed.set(0);
-        outboundStream().onNext(buildFlowControlMessage(initialPermitsRequest));
+        if (initialPermitsRequest != null) {
+            outboundStream().onNext((initialPermitsRequest));
+        }
     }
 
     protected abstract MsgOut buildFlowControlMessage(FlowControl flowControl);
 
     public void markConsumed() {
+        if (additionalPermitsRequest == null) {
+            return;
+        }
         int ticker = permitsConsumed.updateAndGet(current -> {
             if (current == permitsBatch - 1) {
                 return 0;
@@ -62,7 +67,7 @@ public abstract class FlowControlledStream<MsgIn, MsgOut> implements ClientRespo
         });
         if (ticker == 0) {
             logger.info("Requesting additional permits");
-            outboundStream().onNext(buildFlowControlMessage(additionalPermitsRequest));
+            outboundStream().onNext((additionalPermitsRequest));
         }
     }
 

@@ -39,12 +39,14 @@ public abstract class AbstractIncomingInstructionStream<MsgIn, MsgOut> extends F
                                                                                                          .setMessage("No handler for instruction")
                                                                                                          .build())
                                                                                    .build();
-    private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+    private final Logger logger = LoggerFactory.getLogger(getClass());
+    private final Runnable disconnectHandler;
 
     private StreamObserver<MsgOut> instructionsForPlatform;
 
-    public AbstractIncomingInstructionStream(String clientId, int permits, int permitsBatch) {
+    public AbstractIncomingInstructionStream(String clientId, int permits, int permitsBatch, Runnable disconnectHandler) {
         super(clientId, permits, permitsBatch);
+        this.disconnectHandler = disconnectHandler;
     }
 
     @Override
@@ -85,6 +87,7 @@ public abstract class AbstractIncomingInstructionStream<MsgIn, MsgOut> extends F
         logger.warn("Error received");
         if (replaceOutBoundStream(instructionsForPlatform, null)) {
             logger.warn("Instruction channel failed to connect.");
+            disconnectHandler.run();
             instructionsForPlatform.onCompleted();
         }
     }

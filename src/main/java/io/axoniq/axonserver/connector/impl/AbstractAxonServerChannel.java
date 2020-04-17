@@ -16,9 +16,35 @@
 
 package io.axoniq.axonserver.connector.impl;
 
+import io.grpc.ConnectivityState;
 import io.grpc.ManagedChannel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public abstract class AbstractAxonServerChannel {
+    private final Logger logger = LoggerFactory.getLogger(getClass());
+    private final ScheduledExecutorService executor;
+
+    public AbstractAxonServerChannel(ScheduledExecutorService executor) {
+        this.executor = executor;
+    }
+
+    protected void scheduleReconnect(ManagedChannel channel) {
+        executor.schedule(() -> {
+            ConnectivityState connectivityState = channel.getState(true);
+            if (connectivityState != ConnectivityState.TRANSIENT_FAILURE
+                    && connectivityState != ConnectivityState.SHUTDOWN) {
+                connect(channel);
+            } else {
+                logger.info("Not using this channel to set up stream. It has been disconnected ");
+            }
+        }, 500, TimeUnit.MILLISECONDS);
+    }
+
+    // TODO - Keep reference to latest channel to make connect idempotent when already connected
     public abstract void connect(ManagedChannel channel);
 
     public abstract void disconnect();

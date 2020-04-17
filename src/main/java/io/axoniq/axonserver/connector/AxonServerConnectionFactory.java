@@ -26,10 +26,13 @@ import io.axoniq.axonserver.grpc.control.PlatformServiceGrpc;
 import io.grpc.Channel;
 import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
+import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NettyChannelBuilder;
+import io.netty.handler.ssl.SslContextBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.SSLException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
@@ -39,6 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.function.UnaryOperator;
 
 import static java.util.Collections.singletonList;
 
@@ -58,13 +62,14 @@ public class AxonServerConnectionFactory {
     private final String clientInstanceId;
 
     private final Map<String, ContextConnection> connections = new ConcurrentHashMap<>();
-    private boolean sslEnabled = false;
     private Iterable<? extends ServerAddress> routingServers;
     private long connectTimeout = 10000;
     private String token;
     private volatile boolean shutdown;
     private volatile boolean suppressDownloadMessage = false;
     private ScheduledExecutorService executorService = new ScheduledThreadPoolExecutor(5);
+    private boolean allowLazyConnect = true;
+    private UnaryOperator<SslContextBuilder> sslConfig;
 
     protected AxonServerConnectionFactory(String applicationName, String clientInstanceId) {
         this.applicationName = applicationName;
@@ -101,9 +106,6 @@ public class AxonServerConnectionFactory {
     }
 
     private ContextConnection createConnection(String context) {
-        logger.info("Connecting using {}...",
-                    sslEnabled ? "TLS" : "unencrypted connection");
-
         ClientIdentification clientIdentification =
                 ClientIdentification.newBuilder()
                                     .setClientId(clientInstanceId)
@@ -123,21 +125,23 @@ public class AxonServerConnectionFactory {
                     PlatformServiceGrpc.newBlockingStub(candidate)
                                        .withDeadlineAfter(connectTimeout, TimeUnit.MILLISECONDS);
             try {
-                logger.info("Requesting connection details from {}:{}",
-                            nodeInfo.hostName(), nodeInfo.grpcPort());
+                logger.info("Requesting connection details from {}:{} using {}",
+                            nodeInfo.hostName(), nodeInfo.grpcPort(),
+                            sslConfig != null ? "TLS" : "unencrypted connection");
+
                 PlatformInfo clusterInfo = stub.getPlatformServer(clientIdentification);
                 logger.debug("Received PlatformInfo suggesting [{}] ({}:{}), {}",
                              clusterInfo.getPrimary().getNodeName(),
                              clusterInfo.getPrimary().getHostName(),
                              clusterInfo.getPrimary().getGrpcPort(),
-                             clusterInfo.getSameConnection() ? "reusing existing connection" : "using new connection");
+                             clusterInfo.getSameConnection() ? "allowing use of existing connection" : "requiring new connection");
                 if (clusterInfo.getSameConnection()
                         || (clusterInfo.getPrimary().getGrpcPort() == nodeInfo.grpcPort()
                         && clusterInfo.getPrimary().getHostName().equals(nodeInfo.hostName()))) {
-                    logger.info("Reusing existing channel");
+                    logger.debug("Reusing existing channel");
                     connection = candidate;
                 } else {
-                    shutdownNow(candidate);
+                    candidate.shutdown();
                     logger.info("Connecting to [{}] ({}:{})",
                                 clusterInfo.getPrimary().getNodeName(),
                                 clusterInfo.getPrimary().getHostName(),
@@ -152,8 +156,8 @@ public class AxonServerConnectionFactory {
             } catch (StatusRuntimeException sre) {
                 shutdownNow(candidate);
                 logger.warn(
-                        "Connecting to AxonServer node [{}]:[{}] failed: {}",
-                        nodeInfo.hostName(), nodeInfo.grpcPort, sre.getMessage()
+                        "Connecting to AxonServer node [{}:{}] failed: {}",
+                        nodeInfo.hostName(), nodeInfo.grpcPort, sre.getMessage(), sre
                 );
             }
         }
@@ -163,7 +167,7 @@ public class AxonServerConnectionFactory {
                 suppressDownloadMessage = true;
                 writeDownloadMessage();
             }
-            throw new AxonServerException(ErrorCode.CONNECTION_FAILED.errorCode(),
+            throw new AxonServerException(ErrorCode.CONNECTION_FAILED,
                                           "No connection to AxonServer available");
         } else {
             suppressDownloadMessage = true;
@@ -208,28 +212,15 @@ public class AxonServerConnectionFactory {
 //        }
 
         // TODO - configure SSL
-//        if (axonServerConfiguration.isSslEnabled()) {
-//            try {
-//                if (axonServerConfiguration.getCertFile() != null) {
-//                    File certFile = new File(axonServerConfiguration.getCertFile());
-//                    if (!certFile.exists()) {
-//                        throw new RuntimeException(
-//                                "Certificate file [" + axonServerConfiguration.getCertFile() + "] does not exist"
-//                        );
-//                    }
-//                    SslContext sslContext = GrpcSslContexts.forClient()
-//                                                           .trustManager(new File(
-//                                                                   axonServerConfiguration.getCertFile()
-//                                                           ))
-//                                                           .build();
-//                    builder.sslContext(sslContext);
-//                }
-//            } catch (SSLException e) {
-//                throw new RuntimeException("Couldn't set up SSL context", e);
-//            }
-//        } else {
-        builder.usePlaintext();
-//        }
+        if (sslConfig != null) {
+            try {
+                builder.sslContext(sslConfig.apply(GrpcSslContexts.forClient()).build());
+            } catch (SSLException e) {
+                throw new RuntimeException("Couldn't set up SSL context", e);
+            }
+        } else {
+            builder.usePlaintext();
+        }
 
         return builder.intercept(new GrpcBufferingInterceptor(50),
                                  new ContextAddingInterceptor(context),
@@ -241,6 +232,7 @@ public class AxonServerConnectionFactory {
     public void shutdown() {
         shutdown = true;
         connections.forEach((k, conn) -> conn.disconnect());
+        executorService.shutdown();
     }
 
     private static class ServerAddress {

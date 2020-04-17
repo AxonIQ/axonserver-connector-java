@@ -20,10 +20,9 @@ import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformInboundInstructionOrBuilder;
 import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
 
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
-public interface InstructionHandler {
-
-    void handle(PlatformOutboundInstruction value, Consumer<PlatformInboundInstruction> replyStream);
+public interface InstructionHandler extends BiConsumer<PlatformOutboundInstruction, ReplyChannel<PlatformInboundInstruction>> {
 
 }

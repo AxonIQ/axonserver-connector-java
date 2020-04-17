@@ -16,12 +16,14 @@
 
 package io.axoniq.axonserver.connector.impl;
 
-import io.axoniq.axonserver.connector.ErrorCode;
 import io.axoniq.axonserver.connector.InstructionChannel;
 import io.axoniq.axonserver.connector.InstructionHandler;
-import io.axoniq.axonserver.grpc.ErrorMessage;
+import io.axoniq.axonserver.connector.ReplyChannel;
+import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
+import io.axoniq.axonserver.grpc.control.EventProcessorInfo;
+import io.axoniq.axonserver.grpc.control.Heartbeat;
 import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformServiceGrpc;
@@ -31,13 +33,12 @@ import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.silently;
 
@@ -46,41 +47,34 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
     private static final Logger logger = LoggerFactory.getLogger(InstructionChannel.class);
     private final ClientIdentification clientIdentification;
     private final AtomicReference<StreamObserver<PlatformInboundInstruction>> instructionDispatcher = new AtomicReference<>();
-    private final InstructionHandler unknownInstructionHandler;
-    private final Map<PlatformOutboundInstruction.RequestCase, Set<InstructionHandler>> instructionHandlers = new HashMap<>();
+    private final Map<PlatformOutboundInstruction.RequestCase, BiConsumer<PlatformOutboundInstruction, ReplyChannel<PlatformInboundInstruction>>> instructionHandlers = new HashMap<>();
 
-    public InstructionChannelImpl(ClientIdentification clientIdentification) {
+    public InstructionChannelImpl(ClientIdentification clientIdentification, ScheduledExecutorService executor) {
+        super(executor);
         this.clientIdentification = clientIdentification;
-        this.unknownInstructionHandler = new UnknownInstructionHandler(clientIdentification.getClientId());
-        this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.ACK, r -> new CopyOnWriteArraySet<>())
-                                .add(new AckHandler());
+        this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.ACK, i -> new AckHandler());
     }
 
     @Override
     public synchronized void connect(ManagedChannel channel) {
         PlatformServiceGrpc.PlatformServiceStub platformServiceStub = PlatformServiceGrpc.newStub(channel);
         StreamObserver<PlatformInboundInstruction> existing = instructionDispatcher.get();
-        if (existing == null) {
-            logger.info("Connecting with ChannelState " + channel.getState(false).name());
-            ConnectivityState state = channel.getState(true);
-            logger.info("Connecting with ChannelState " + state.name());
-
-            PlatformOutboundInstructionHandler responseObserver = new PlatformOutboundInstructionHandler();
+        if (existing != null) {
+            logger.info("Not connecting - connection already present");
+        } else {
+            PlatformOutboundInstructionHandler responseObserver = new PlatformOutboundInstructionHandler(clientIdentification.getClientId(), 0, 0, () -> scheduleReconnect(channel));
             logger.info("Opening instruction stream");
             StreamObserver<PlatformInboundInstruction> instructionsForPlatform = platformServiceStub.openStream(responseObserver);
             StreamObserver<PlatformInboundInstruction> previous = instructionDispatcher.getAndSet(instructionsForPlatform);
             silently(previous, StreamObserver::onCompleted);
-            responseObserver.registerDispatcher(instructionsForPlatform);
 
             StreamObserver<PlatformInboundInstruction> connection = instructionDispatcher.get();
             if (connection != null) {
-                logger.info("Connected instruction stream");
+                logger.info("Connected instruction stream. Sending client identification");
                 connection.onNext(PlatformInboundInstruction.newBuilder().setRegister(clientIdentification).build());
             } else {
                 logger.info("Connection failed");
             }
-        } else {
-            logger.info("Not connecting - connection already present");
         }
     }
 
@@ -92,10 +86,25 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
         }
     }
 
-    @Override public Runnable registerInstructionHandler(PlatformOutboundInstruction.RequestCase type, InstructionHandler handler) {
-        instructionHandlers.computeIfAbsent(type, t -> new CopyOnWriteArraySet<>())
-                           .add(handler);
-        return () -> instructionHandlers.getOrDefault(type, Collections.emptySet()).remove(handler);
+    @Override
+    public Runnable registerInstructionHandler(PlatformOutboundInstruction.RequestCase type, InstructionHandler handler) {
+        instructionHandlers.put(type, handler);
+        return () -> instructionHandlers.remove(type, handler);
+    }
+
+    public CompletableFuture<Void> sendProcessorInfo(EventProcessorInfo processorInfo) {
+        return sendInstruction(PlatformInboundInstruction.newBuilder().setEventProcessorInfo(processorInfo).build());
+    }
+
+    public CompletableFuture<Void> sendHeartBeat() {
+        return sendInstruction(PlatformInboundInstruction.newBuilder().setHeartbeat(Heartbeat.newBuilder().build()).build());
+    }
+
+    private CompletableFuture<Void> sendInstruction(PlatformInboundInstruction instruction) {
+        CompletableFuture<Void> result = new CompletableFuture<>();
+        // TODO - Provide support for sending instructions
+        result.completeExceptionally(new UnsupportedOperationException("Sending instructions is not supported yet"));
+        return result;
     }
 
     @Override
@@ -103,83 +112,42 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
         return instructionDispatcher.get() != null;
     }
 
-    private static class UnknownInstructionHandler implements InstructionHandler {
+    private class PlatformOutboundInstructionHandler extends AbstractIncomingInstructionStream<PlatformOutboundInstruction, PlatformInboundInstruction> {
 
-        private final InstructionAck.Builder NO_ACK;
-
-        private UnknownInstructionHandler(String clientId) {
-            ErrorMessage.Builder error = ErrorMessage.newBuilder()
-                                                     .setErrorCode(ErrorCode.UNSUPPORTED_INSTRUCTION.errorCode())
-                                                     .setMessage("Unsupported instruction")
-                                                     .setLocation(clientId);
-            NO_ACK = InstructionAck.newBuilder()
-                                   .setSuccess(false)
-                                   .setError(error);
+        public PlatformOutboundInstructionHandler(String clientId, int permits, int permitsBatch, Runnable disconnectHandler) {
+            super(clientId, permits, permitsBatch, disconnectHandler);
         }
 
         @Override
-        public void handle(PlatformOutboundInstruction value, Consumer<PlatformInboundInstruction> replyStream) {
-            logger.warn("Received unsupported instruction: {} ({})", value.getRequestCase().name(), value.getRequestCase().getNumber());
-            if (!"".equals(value.getInstructionId())) {
-                replyStream.accept(PlatformInboundInstruction.newBuilder()
-                                                             .setAck(NO_ACK)
-                                                             .setInstructionId(value.getInstructionId())
-                                                             .build());
-            }
+        protected PlatformInboundInstruction buildAckMessage(InstructionAck ack) {
+            return PlatformInboundInstruction.newBuilder().setAck(ack).build();
+        }
+
+        @Override
+        protected String getInstructionId(PlatformOutboundInstruction value) {
+            return value.getInstructionId();
+        }
+
+        @Override
+        protected BiConsumer<PlatformOutboundInstruction, ReplyChannel<PlatformInboundInstruction>> getHandler(PlatformOutboundInstruction platformOutboundInstruction) {
+            return instructionHandlers.get(platformOutboundInstruction.getRequestCase());
+        }
+
+        @Override
+        protected boolean replaceOutBoundStream(StreamObserver<PlatformInboundInstruction> expected, StreamObserver<PlatformInboundInstruction> replaceBy) {
+            return instructionDispatcher.compareAndSet(expected, replaceBy);
+        }
+
+        @Override
+        protected PlatformInboundInstruction buildFlowControlMessage(FlowControl flowControl) {
+            return null;
         }
     }
 
-    private class PlatformOutboundInstructionHandler implements StreamObserver<PlatformOutboundInstruction> {
-
-        private StreamObserver<PlatformInboundInstruction> instructionsForPlatform;
-        private volatile boolean closed;
+    private class AckHandler implements BiConsumer<PlatformOutboundInstruction, ReplyChannel<PlatformInboundInstruction>> {
 
         @Override
-        public void onNext(PlatformOutboundInstruction value) {
-            instructionHandlers.getOrDefault(value.getRequestCase(),
-                                             Collections.singleton(unknownInstructionHandler))
-                               .forEach(h -> h.handle(value, instructionsForPlatform::onNext));
-
-        }
-
-        @Override
-        public void onError(Throwable t) {
-            closed = true;
-            logger.info("Received error. Attempting to close " + instructionsForPlatform);
-            if (instructionDispatcher.compareAndSet(instructionsForPlatform, null)) {
-                logger.warn("Received error on instruction channel.", t);
-                try {
-                    instructionsForPlatform.onCompleted();
-                } catch (Exception e) {
-                    // we did our best
-                }
-            }
-        }
-
-        @Override
-        public void onCompleted() {
-            logger.info("Stream completed from server side");
-            closed = true;
-            if (instructionDispatcher.compareAndSet(instructionsForPlatform, null)) {
-                instructionsForPlatform.onCompleted();
-                InstructionChannelImpl.this.disconnect();
-            }
-        }
-
-        public void registerDispatcher(StreamObserver<PlatformInboundInstruction> instructionsForPlatform) {
-            this.instructionsForPlatform = instructionsForPlatform;
-            if (closed) {
-                if (instructionDispatcher.compareAndSet(instructionsForPlatform, null)) {
-                    logger.warn("Instruction channel failed to connect.");
-                    instructionsForPlatform.onCompleted();
-                }
-            }
-        }
-    }
-
-    private class AckHandler implements InstructionHandler {
-        @Override
-        public void handle(PlatformOutboundInstruction value, Consumer<PlatformInboundInstruction> replyStream) {
+        public void accept(PlatformOutboundInstruction ackMessage, ReplyChannel<PlatformInboundInstruction> replyChannel) {
             // TODO: Check if a result handler was registered for the incoming ACK and call it.
         }
     }
