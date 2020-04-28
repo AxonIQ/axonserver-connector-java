@@ -17,6 +17,7 @@
 package io.axoniq.axonserver.connector.impl;
 
 import io.axoniq.axonserver.grpc.FlowControl;
+import io.grpc.stub.ClientCallStreamObserver;
 import io.grpc.stub.ClientResponseObserver;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
@@ -33,6 +34,7 @@ public abstract class FlowControlledStream<MsgIn, MsgOut> implements ClientRespo
     private final int permitsBatch;
     private final MsgOut additionalPermitsRequest;
     private final MsgOut initialPermitsRequest;
+    private StreamObserver<MsgOut> outboundStream;
 
     public FlowControlledStream(String clientId, int permits, int permitsBatch) {
         this.permitsBatch = permitsBatch;
@@ -66,10 +68,17 @@ public abstract class FlowControlledStream<MsgIn, MsgOut> implements ClientRespo
             return current + 1;
         });
         if (ticker == 0) {
-            logger.info("Requesting additional permits");
+            logger.debug("Requesting additional {} permits", permitsBatch);
             outboundStream().onNext((additionalPermitsRequest));
         }
     }
 
-    protected abstract StreamObserver<MsgOut> outboundStream();
+    @Override
+    public void beforeStart(ClientCallStreamObserver<MsgOut> requestStream) {
+        this.outboundStream = requestStream;
+    }
+
+    protected StreamObserver<MsgOut> outboundStream() {
+        return outboundStream;
+    }
 }

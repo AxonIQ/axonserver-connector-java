@@ -16,10 +16,7 @@
 
 package io.axoniq.axonserver.connector;
 
-import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.InstructionAckOrBuilder;
-import io.axoniq.axonserver.grpc.command.CommandProviderOutbound;
-import io.grpc.stub.StreamObserver;
 
 import java.util.function.Function;
 

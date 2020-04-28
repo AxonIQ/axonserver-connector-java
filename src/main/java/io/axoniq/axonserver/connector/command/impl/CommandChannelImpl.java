@@ -14,12 +14,15 @@
  * limitations under the License.
  */
 
-package io.axoniq.axonserver.connector.impl;
+package io.axoniq.axonserver.connector.command.impl;
 
 import io.axoniq.axonserver.connector.AxonServerException;
-import io.axoniq.axonserver.connector.CommandChannel;
+import io.axoniq.axonserver.connector.command.CommandChannel;
 import io.axoniq.axonserver.connector.ErrorCode;
 import io.axoniq.axonserver.connector.ReplyChannel;
+import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
+import io.axoniq.axonserver.connector.impl.AbstractIncomingInstructionStream;
+import io.axoniq.axonserver.connector.impl.ObjectUtils;
 import io.axoniq.axonserver.grpc.ErrorMessage;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.InstructionAck;

@@ -26,7 +26,6 @@ import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.lang.invoke.MethodHandles;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
@@ -47,11 +46,6 @@ public abstract class AbstractIncomingInstructionStream<MsgIn, MsgOut> extends F
     public AbstractIncomingInstructionStream(String clientId, int permits, int permitsBatch, Runnable disconnectHandler) {
         super(clientId, permits, permitsBatch);
         this.disconnectHandler = disconnectHandler;
-    }
-
-    @Override
-    protected StreamObserver<MsgOut> outboundStream() {
-        return instructionsForPlatform;
     }
 
     @Override
@@ -94,6 +88,7 @@ public abstract class AbstractIncomingInstructionStream<MsgIn, MsgOut> extends F
 
     @Override
     public void beforeStart(ClientCallStreamObserver<MsgOut> requestStream) {
+        super.beforeStart(requestStream);
         this.instructionsForPlatform = requestStream;
     }
 

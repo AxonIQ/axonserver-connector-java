@@ -17,7 +17,8 @@
 package io.axoniq.axonserver.connector;
 
 import com.google.protobuf.ByteString;
-import com.sun.org.apache.xpath.internal.operations.Bool;
+import io.axoniq.axonserver.connector.command.CommandChannel;
+import io.axoniq.axonserver.connector.instruction.InstructionChannel;
 import io.axoniq.axonserver.grpc.SerializedObject;
 import io.axoniq.axonserver.grpc.command.Command;
 import io.axoniq.axonserver.grpc.command.CommandResponse;
@@ -34,7 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class ConnectorRunner {
+public class ConnectorRunner_Command {
 
     private static CompletableFuture<CommandResponse> handle(Command command) {
         return CompletableFuture.completedFuture(
@@ -44,7 +45,7 @@ public class ConnectorRunner {
                                .setPayload(command.getPayload()).build());
     }
 
-    public static class Sender {
+    public static class CommandSender {
 
         public static void main(String[] args) {
             AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient");
@@ -89,8 +90,8 @@ public class ConnectorRunner {
 
     }
 
-    public static class Handler {
-        private static final Logger logger = LoggerFactory.getLogger(Handler.class);
+    public static class CommandHandler {
+        private static final Logger logger = LoggerFactory.getLogger(CommandHandler.class);
 
         public static void main(String[] args) {
             AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient");

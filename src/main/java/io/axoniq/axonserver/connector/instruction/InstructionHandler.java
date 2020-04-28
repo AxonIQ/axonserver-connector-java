@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-package io.axoniq.axonserver.connector;
+package io.axoniq.axonserver.connector.instruction;
 
+import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
-import io.axoniq.axonserver.grpc.control.PlatformInboundInstructionOrBuilder;
 import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
 
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 
 public interface InstructionHandler extends BiConsumer<PlatformOutboundInstruction, ReplyChannel<PlatformInboundInstruction>> {
 

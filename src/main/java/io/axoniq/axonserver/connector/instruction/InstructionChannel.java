@@ -1,4 +1,4 @@
-package io.axoniq.axonserver.connector;
+package io.axoniq.axonserver.connector.instruction;
 
 import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
 

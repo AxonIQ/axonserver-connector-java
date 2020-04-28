@@ -18,8 +18,11 @@ package io.axoniq.axonserver.connector.impl;
 
 import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerException;
-import io.axoniq.axonserver.connector.CommandChannel;
-import io.axoniq.axonserver.connector.InstructionChannel;
+import io.axoniq.axonserver.connector.command.CommandChannel;
+import io.axoniq.axonserver.connector.command.impl.CommandChannelImpl;
+import io.axoniq.axonserver.connector.event.EventChannel;
+import io.axoniq.axonserver.connector.event.impl.EventChannelImpl;
+import io.axoniq.axonserver.connector.instruction.InstructionChannel;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
 import io.grpc.ConnectivityState;
 import io.grpc.ManagedChannel;
@@ -45,6 +48,7 @@ public class ContextConnection implements AxonServerConnection {
     private final InstructionChannelImpl instructionChannel;
     private final AtomicReference<CommandChannelImpl> commandChannel = new AtomicReference<>();
     private final AtomicReference<ManagedChannel> connection = new AtomicReference<>();
+    private final AtomicReference<EventChannelImpl> eventChannel = new AtomicReference<>();
     private final AtomicReference<ScheduledFuture<?>> connectTask = new AtomicReference<>();
     private final ScheduledExecutorService executorService;
     private final BiFunction<String, ClientIdentification, ManagedChannel> connectionFactory;
@@ -94,6 +98,12 @@ public class ContextConnection implements AxonServerConnection {
     public CommandChannel commandChannel() {
         CommandChannelImpl commandChannel = this.commandChannel.updateAndGet(getIfNull(() -> new CommandChannelImpl(clientIdentification, 5000, 2000, executorService)));
         return connected(commandChannel);
+    }
+
+    @Override
+    public EventChannel eventChannel() {
+        EventChannelImpl eventChannel = this.eventChannel.updateAndGet(getIfNull(() -> new EventChannelImpl(executorService)));
+        return connected(eventChannel);
     }
 
     private <T extends AbstractAxonServerChannel> T connected(T channel) {
@@ -165,11 +175,6 @@ public class ContextConnection implements AxonServerConnection {
 
     // TODO - Create QueryChannel
 //    public QueryChannel queryChannel() {
-//
-//    }
-
-    // TODO - Create EventChannel
-//    public EventChannel eventChannel() {
 //
 //    }
 

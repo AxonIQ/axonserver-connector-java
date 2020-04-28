@@ -16,8 +16,8 @@
 
 package io.axoniq.axonserver.connector.impl;
 
-import io.axoniq.axonserver.connector.InstructionChannel;
-import io.axoniq.axonserver.connector.InstructionHandler;
+import io.axoniq.axonserver.connector.instruction.InstructionChannel;
+import io.axoniq.axonserver.connector.instruction.InstructionHandler;
 import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.InstructionAck;
@@ -27,7 +27,6 @@ import io.axoniq.axonserver.grpc.control.Heartbeat;
 import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformServiceGrpc;
-import io.grpc.ConnectivityState;
 import io.grpc.ManagedChannel;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
