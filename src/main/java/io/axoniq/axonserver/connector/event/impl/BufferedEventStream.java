@@ -46,6 +46,18 @@ public class BufferedEventStream extends FlowControlledBuffer<EventWithToken, Ge
     }
 
     @Override
+    public void onError(Throwable t) {
+        super.onError(t);
+        onAvailableCallback.run();
+    }
+
+    @Override
+    public void onCompleted() {
+        super.onCompleted();
+        onAvailableCallback.run();
+    }
+
+    @Override
     public EventWithToken peek() {
         return super.peek();
     }
