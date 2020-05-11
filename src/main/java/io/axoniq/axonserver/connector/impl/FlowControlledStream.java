@@ -19,7 +19,6 @@ package io.axoniq.axonserver.connector.impl;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.grpc.stub.ClientCallStreamObserver;
 import io.grpc.stub.ClientResponseObserver;
-import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +33,7 @@ public abstract class FlowControlledStream<MsgIn, MsgOut> implements ClientRespo
     private final int permitsBatch;
     private final MsgOut additionalPermitsRequest;
     private final MsgOut initialPermitsRequest;
-    private StreamObserver<MsgOut> outboundStream;
+    private ClientCallStreamObserver<MsgOut> outboundStream;
 
     public FlowControlledStream(String clientId, int permits, int permitsBatch) {
         this.permitsBatch = permitsBatch;
@@ -78,7 +77,7 @@ public abstract class FlowControlledStream<MsgIn, MsgOut> implements ClientRespo
         this.outboundStream = requestStream;
     }
 
-    protected StreamObserver<MsgOut> outboundStream() {
+    protected ClientCallStreamObserver<MsgOut> outboundStream() {
         return outboundStream;
     }
 }

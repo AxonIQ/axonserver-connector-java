@@ -17,7 +17,7 @@ public class BufferedAggregateEventStream extends FlowControlledBuffer<Event, Ge
     }
 
     public BufferedAggregateEventStream(int bufferSize) {
-        super("unused", TERMINAL_MESSAGE, bufferSize, 0);
+        super("unused", bufferSize, 0);
     }
 
     @Override
@@ -40,7 +40,7 @@ public class BufferedAggregateEventStream extends FlowControlledBuffer<Event, Ge
         try {
             peeked = tryTake();
         } catch (InterruptedException e) {
-            close();
+            cancel();
             Thread.currentThread().interrupt();
             return false;
         }
@@ -48,13 +48,18 @@ public class BufferedAggregateEventStream extends FlowControlledBuffer<Event, Ge
     }
 
     @Override
-    public void close() {
-        // noop - this call automatically terminates
+    public void cancel() {
+        outboundStream().cancel("Request cancelled by client", null);
     }
 
     @Override
     protected GetAggregateEventsRequest buildFlowControlMessage(FlowControl flowControl) {
         // no flow control available on this request
         return null;
+    }
+
+    @Override
+    protected Event terminalMessage() {
+        return TERMINAL_MESSAGE;
     }
 }

@@ -16,14 +16,16 @@
 
 package io.axoniq.axonserver.connector.event.impl;
 
+import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.event.AggregateEventStream;
 import io.axoniq.axonserver.connector.event.AppendEventsTransaction;
 import io.axoniq.axonserver.connector.event.EventChannel;
-import io.axoniq.axonserver.connector.event.EventStream;
 import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
+import io.axoniq.axonserver.connector.impl.FutureStreamObserver;
 import io.axoniq.axonserver.grpc.event.Confirmation;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.EventStoreGrpc;
+import io.axoniq.axonserver.grpc.event.EventWithToken;
 import io.axoniq.axonserver.grpc.event.GetAggregateEventsRequest;
 import io.axoniq.axonserver.grpc.event.GetAggregateSnapshotsRequest;
 import io.axoniq.axonserver.grpc.event.GetFirstTokenRequest;
@@ -32,7 +34,6 @@ import io.axoniq.axonserver.grpc.event.GetTokenAtRequest;
 import io.axoniq.axonserver.grpc.event.ReadHighestSequenceNrRequest;
 import io.axoniq.axonserver.grpc.event.ReadHighestSequenceNrResponse;
 import io.axoniq.axonserver.grpc.event.TrackingToken;
-import io.grpc.ConnectivityState;
 import io.grpc.ManagedChannel;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
@@ -40,27 +41,23 @@ import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.atomic.AtomicReference;
 
 public class EventChannelImpl extends AbstractAxonServerChannel implements EventChannel {
 
     private static final Logger logger = LoggerFactory.getLogger(EventChannel.class);
     public static final ReadHighestSequenceNrResponse UNKNOWN_HIGHEST_SEQ = ReadHighestSequenceNrResponse.newBuilder().setToSequenceNr(-1).build();
     public static final TrackingToken NO_TOKEN_AVAILABLE = TrackingToken.newBuilder().setToken(-1).build();
-    private final AtomicReference<EventStoreGrpc.EventStoreStub> eventStore = new AtomicReference<>();
+    private final EventStoreGrpc.EventStoreStub eventStore;
     // guarded by -this-
-    private volatile ManagedChannel connectedChannel;
 
-    public EventChannelImpl(ScheduledExecutorService executor) {
-        super(executor);
+    public EventChannelImpl(ScheduledExecutorService executor, ManagedChannel channel) {
+        super(executor, channel);
+        eventStore = EventStoreGrpc.newStub(channel);
     }
 
     @Override
     public synchronized void connect(ManagedChannel channel) {
-        if (connectedChannel != channel) {
-            connectedChannel = channel;
-            eventStore.set(EventStoreGrpc.newStub(channel));
-        }
+        // there is no instruction stream for the events channel
     }
 
     @Override
@@ -69,20 +66,20 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
 
     @Override
     public boolean isConnected() {
-        return connectedChannel != null && connectedChannel.getState(true) == ConnectivityState.READY;
+        return true;
     }
 
     @Override
     public AppendEventsTransaction startAppendEventsTransaction() {
         FutureStreamObserver<Confirmation> result = new FutureStreamObserver<>(null);
-        StreamObserver<Event> clientStream = eventStore.get().appendEvent(result);
+        StreamObserver<Event> clientStream = eventStore.appendEvent(result);
         return new AppendEventsTransactionImpl(clientStream, result);
     }
 
     @Override
     public CompletableFuture<Long> findHighestSequence(String aggregateId) {
         FutureStreamObserver<ReadHighestSequenceNrResponse> result = new FutureStreamObserver<>(UNKNOWN_HIGHEST_SEQ);
-        eventStore.get().readHighestSequenceNr(ReadHighestSequenceNrRequest.newBuilder()
+        eventStore.readHighestSequenceNr(ReadHighestSequenceNrRequest.newBuilder()
                                                                            .setAggregateId(aggregateId)
                                                                            .build(),
                                                result);
@@ -90,10 +87,10 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
     }
 
     @Override
-    public EventStream openStream(long token, int bufferSize, int refillBatch) {
+    public ResultStream<EventWithToken> openStream(long token, int bufferSize, int refillBatch) {
         BufferedEventStream buffer = new BufferedEventStream(Math.max(64, bufferSize), Math.max(16, Math.min(bufferSize, refillBatch)));
         //noinspection ResultOfMethodCallIgnored
-        eventStore.get().listEvents(buffer);
+        eventStore.listEvents(buffer);
         buffer.enableFlowControl();
         return buffer;
     }
@@ -117,14 +114,14 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
     @Override
     public CompletableFuture<?> appendSnapshot(Event snapshotEvent) {
         FutureStreamObserver<Confirmation> result = new FutureStreamObserver<>(Confirmation.newBuilder().setSuccess(false).build());
-        eventStore.get().appendSnapshot(snapshotEvent, result);
+        eventStore.appendSnapshot(snapshotEvent, result);
         return result;
     }
 
     @Override
     public AggregateEventStream loadSnapshots(String aggregateIdentifier, long initialSequence, long maxSequence, int maxResults) {
         BufferedAggregateEventStream buffer = new BufferedAggregateEventStream(maxResults);
-        eventStore.get().listAggregateSnapshots(GetAggregateSnapshotsRequest.newBuilder()
+        eventStore.listAggregateSnapshots(GetAggregateSnapshotsRequest.newBuilder()
                                                                             .setInitialSequence(initialSequence)
                                                                             .setMaxResults(maxResults)
                                                                             .setMaxSequence(maxSequence)
@@ -136,65 +133,28 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
     @Override
     public CompletableFuture<Long> getLastToken() {
         FutureStreamObserver<TrackingToken> result = new FutureStreamObserver<>(NO_TOKEN_AVAILABLE);
-        eventStore.get().getLastToken(GetLastTokenRequest.newBuilder().build(), result);
+        eventStore.getLastToken(GetLastTokenRequest.newBuilder().build(), result);
         return result.thenApply(TrackingToken::getToken);
     }
 
     @Override
     public CompletableFuture<Long> getFirstToken() {
         FutureStreamObserver<TrackingToken> result = new FutureStreamObserver<>(NO_TOKEN_AVAILABLE);
-        eventStore.get().getFirstToken(GetFirstTokenRequest.newBuilder().build(), result);
+        eventStore.getFirstToken(GetFirstTokenRequest.newBuilder().build(), result);
         return result.thenApply(TrackingToken::getToken);
     }
 
     @Override
     public CompletableFuture<Long> getTokenAt(long instant) {
         FutureStreamObserver<TrackingToken> result = new FutureStreamObserver<>(NO_TOKEN_AVAILABLE);
-        eventStore.get().getTokenAt(GetTokenAtRequest.newBuilder().setInstant(instant).build(), result);
+        eventStore.getTokenAt(GetTokenAtRequest.newBuilder().setInstant(instant).build(), result);
         return result.thenApply(TrackingToken::getToken);
     }
 
     private AggregateEventStream doGetAggregateStream(GetAggregateEventsRequest request) {
         BufferedAggregateEventStream buffer = new BufferedAggregateEventStream();
-        eventStore.get().listAggregateEvents(request, buffer);
+        eventStore.listAggregateEvents(request, buffer);
         return buffer;
-    }
-
-    private static class FutureStreamObserver<T> extends CompletableFuture<T> implements StreamObserver<T> {
-
-        private final Object valueWhenNoResult;
-
-        private FutureStreamObserver(T valueWhenNoResult) {
-            this.valueWhenNoResult = valueWhenNoResult;
-        }
-
-        private FutureStreamObserver(Throwable valueWhenNoResult) {
-            this.valueWhenNoResult = valueWhenNoResult;
-        }
-
-        @Override
-        public void onNext(T value) {
-            complete(value);
-        }
-
-        @Override
-        public void onError(Throwable t) {
-            if (!isDone()) {
-                completeExceptionally(t);
-            }
-        }
-
-        @Override
-        public void onCompleted() {
-            if (!isDone()) {
-                if (valueWhenNoResult instanceof Throwable) {
-                    completeExceptionally((Throwable) valueWhenNoResult);
-                } else {
-                    //noinspection unchecked
-                    complete((T) valueWhenNoResult);
-                }
-            }
-        }
     }
 
 }

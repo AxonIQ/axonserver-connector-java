@@ -8,15 +8,15 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public abstract class FlowControlledBuffer<T, R> extends FlowControlledStream<T, R> {
 
-    private final T terminalMessage;
     private final BlockingQueue<T> buffer;
     private final AtomicReference<Throwable> errorResult = new AtomicReference<>();
 
-    public FlowControlledBuffer(String clientId, T terminalMessage, int bufferSize, int refillBatch) {
+    public FlowControlledBuffer(String clientId, int bufferSize, int refillBatch) {
         super(clientId, bufferSize, refillBatch);
-        this.terminalMessage = terminalMessage;
         this.buffer = (bufferSize > Integer.MAX_VALUE >> 1) ? new LinkedBlockingQueue<>() : new ArrayBlockingQueue<>(bufferSize + 1);
     }
+
+    protected abstract T terminalMessage();
 
     @Override
     public void onNext(T value) {
@@ -26,40 +26,36 @@ public abstract class FlowControlledBuffer<T, R> extends FlowControlledStream<T,
     @Override
     public void onError(Throwable t) {
         errorResult.set(t);
-        buffer.offer(terminalMessage);
+        buffer.offer(terminalMessage());
     }
 
     @Override
     public void onCompleted() {
-        buffer.offer(terminalMessage);
-    }
-
-    protected T poll(int timeout, TimeUnit unit) throws InterruptedException {
-        T taken = validate(buffer.poll(timeout, unit));
-        if (taken != null) {
-            markConsumed();
-        }
-        return taken;
-    }
-
-    protected T poll() {
-        T taken = validate(buffer.poll());
-        if (taken != null) {
-            markConsumed();
-        }
-        return taken;
+        buffer.offer(terminalMessage());
     }
 
     protected T tryTakeNow() {
         T taken = validate(buffer.poll(), true);
 
-        markConsumed();
+        if (taken != null) {
+            markConsumed();
+        }
+        return taken;
+    }
+
+    protected T tryTake(long timeout, TimeUnit timeUnit) throws InterruptedException {
+        T taken = validate(buffer.poll(timeout, timeUnit), true);
+        if (taken != null) {
+            markConsumed();
+        }
         return taken;
     }
 
     protected T tryTake() throws InterruptedException {
         T taken = validate(buffer.take(), true);
-        markConsumed();
+        if (taken != null) {
+            markConsumed();
+        }
         return taken;
     }
 
@@ -78,10 +74,10 @@ public abstract class FlowControlledBuffer<T, R> extends FlowControlledStream<T,
     }
 
     private T validate(T peek, boolean nullOnTerminal) {
-        if (terminalMessage.equals(peek)) {
+        if (terminalMessage().equals(peek)) {
             if (buffer.isEmpty()) {
                 // just to make sure there is always a TERMINAL entry left in a terminated buffer
-                buffer.offer(terminalMessage);
+                buffer.offer(terminalMessage());
             }
             if (nullOnTerminal) {
                 return null;
@@ -92,6 +88,6 @@ public abstract class FlowControlledBuffer<T, R> extends FlowControlledStream<T,
     }
 
     protected boolean isClosed() {
-        return terminalMessage.equals(buffer.peek());
+        return terminalMessage().equals(buffer.peek());
     }
 }

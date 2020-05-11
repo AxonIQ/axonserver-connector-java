@@ -16,16 +16,16 @@
 
 package io.axoniq.axonserver.connector;
 
+import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
 import io.axoniq.axonserver.connector.impl.ContextAddingInterceptor;
 import io.axoniq.axonserver.connector.impl.ContextConnection;
+import io.axoniq.axonserver.connector.impl.DisconnectedChannel;
 import io.axoniq.axonserver.connector.impl.GrpcBufferingInterceptor;
+import io.axoniq.axonserver.connector.impl.ServerAddress;
 import io.axoniq.axonserver.connector.impl.TokenAddingInterceptor;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
-import io.axoniq.axonserver.grpc.control.PlatformInfo;
-import io.axoniq.axonserver.grpc.control.PlatformServiceGrpc;
 import io.grpc.Channel;
 import io.grpc.ManagedChannel;
-import io.grpc.StatusRuntimeException;
 import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NettyChannelBuilder;
 import io.netty.handler.ssl.SslContextBuilder;
@@ -35,7 +35,10 @@ import org.slf4j.LoggerFactory;
 import javax.net.ssl.SSLException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -62,7 +65,7 @@ public class AxonServerConnectionFactory {
     private final String clientInstanceId;
 
     private final Map<String, ContextConnection> connections = new ConcurrentHashMap<>();
-    private Iterable<? extends ServerAddress> routingServers;
+    private List<ServerAddress> routingServers;
     private long connectTimeout = 10000;
     private String token;
     private volatile boolean shutdown;
@@ -85,6 +88,11 @@ public class AxonServerConnectionFactory {
         return new AxonServerConnectionFactory(applicationName, clientInstanceId);
     }
 
+    public AxonServerConnectionFactory routingServers(ServerAddress... serverAddresses) {
+        this.routingServers = new ArrayList<>(Arrays.asList(serverAddresses));
+        return this;
+    }
+
     public AxonServerConnectionFactory clientTags(Map<String, String> additionalTags) {
         this.tags.putAll(additionalTags);
         return this;
@@ -101,8 +109,9 @@ public class AxonServerConnectionFactory {
     }
 
     public AxonServerConnection connect(String context) {
-        ContextConnection c;
-        return connections.computeIfAbsent(context, this::createConnection);
+        ContextConnection contextConnection = connections.computeIfAbsent(context, this::createConnection);
+        contextConnection.connect();
+        return contextConnection;
     }
 
     private ContextConnection createConnection(String context) {
@@ -114,76 +123,31 @@ public class AxonServerConnectionFactory {
                                     .setVersion(CONNECTOR_VERSION)
                                     .build();
 
-        return new ContextConnection(context, clientIdentification, executorService, this::openChannel);
+        return new ContextConnection(clientIdentification, executorService,
+                                     new AxonServerManagedChannel(routingServers,
+                                                                  5, 1, TimeUnit.SECONDS,
+                                                                  context,
+                                                                  clientIdentification,
+                                                                  executorService,
+                                                                  true,
+                                                                  this::createChannel));
     }
 
-    private ManagedChannel openChannel(String context, ClientIdentification clientIdentification) throws AxonServerException {
-        ManagedChannel connection = null;
-        for (ServerAddress nodeInfo : routingServers) {
-            ManagedChannel candidate = createChannel(nodeInfo.hostName(), nodeInfo.grpcPort(), context);
-            PlatformServiceGrpc.PlatformServiceBlockingStub stub =
-                    PlatformServiceGrpc.newBlockingStub(candidate)
-                                       .withDeadlineAfter(connectTimeout, TimeUnit.MILLISECONDS);
-            try {
-                logger.info("Requesting connection details from {}:{} using {}",
-                            nodeInfo.hostName(), nodeInfo.grpcPort(),
-                            sslConfig != null ? "TLS" : "unencrypted connection");
-
-                PlatformInfo clusterInfo = stub.getPlatformServer(clientIdentification);
-                logger.debug("Received PlatformInfo suggesting [{}] ({}:{}), {}",
-                             clusterInfo.getPrimary().getNodeName(),
-                             clusterInfo.getPrimary().getHostName(),
-                             clusterInfo.getPrimary().getGrpcPort(),
-                             clusterInfo.getSameConnection() ? "allowing use of existing connection" : "requiring new connection");
-                if (clusterInfo.getSameConnection()
-                        || (clusterInfo.getPrimary().getGrpcPort() == nodeInfo.grpcPort()
-                        && clusterInfo.getPrimary().getHostName().equals(nodeInfo.hostName()))) {
-                    logger.debug("Reusing existing channel");
-                    connection = candidate;
-                } else {
-                    candidate.shutdown();
-                    logger.info("Connecting to [{}] ({}:{})",
-                                clusterInfo.getPrimary().getNodeName(),
-                                clusterInfo.getPrimary().getHostName(),
-                                clusterInfo.getPrimary().getGrpcPort());
-                    connection = createChannel(
-                            clusterInfo.getPrimary().getHostName(),
-                            clusterInfo.getPrimary().getGrpcPort(),
-                            context
-                    );
-                }
-                break;
-            } catch (StatusRuntimeException sre) {
-                shutdownNow(candidate);
-                logger.warn(
-                        "Connecting to AxonServer node [{}:{}] failed: {}",
-                        nodeInfo.hostName(), nodeInfo.grpcPort, sre.getMessage(), sre
-                );
-            }
-        }
-
-        if (connection == null) {
-            if (!suppressDownloadMessage) {
-                suppressDownloadMessage = true;
-                writeDownloadMessage();
-            }
-            throw new AxonServerException(ErrorCode.CONNECTION_FAILED,
-                                          "No connection to AxonServer available");
-        } else {
-            suppressDownloadMessage = true;
-        }
-        return connection;
-    }
 
     private void writeDownloadMessage() {
-        try (InputStream in = getClass().getClassLoader().getResourceAsStream("axonserver_download.txt")) {
-            byte[] buffer = new byte[1024];
-            int read;
-            while (in != null && (read = in.read(buffer, 0, 1024)) >= 0) {
-                System.out.write(buffer, 0, read);
+        if (!suppressDownloadMessage) {
+            suppressDownloadMessage = true;
+            try (InputStream in = getClass().getClassLoader().getResourceAsStream("axonserver_download.txt")) {
+                byte[] buffer = new byte[1024];
+                int read;
+                while (in != null && (read = in.read(buffer, 0, 1024)) >= 0) {
+                    System.out.write(buffer, 0, read);
+                }
+            } catch (IOException e) {
+                logger.debug("Unable to write download advice. You're on your own now.", e);
             }
-        } catch (IOException e) {
-            logger.debug("Unable to write download advice. You're on your own now.", e);
+        } else {
+            suppressDownloadMessage = true;
         }
     }
 
@@ -196,37 +160,42 @@ public class AxonServerConnectionFactory {
         }
     }
 
-    private ManagedChannel createChannel(String hostName, int port, String context) {
-        NettyChannelBuilder builder = NettyChannelBuilder.forAddress(hostName, port);
+    private ManagedChannel createChannel(ServerAddress address, String context) {
+        try {
+            NettyChannelBuilder builder = NettyChannelBuilder.forAddress(address.hostName(), address.grpcPort());
 
-        // TODO - configure gRPC KeepAlive pings
+            // TODO - configure gRPC KeepAlive pings
 //        if (axonServerConfiguration.getKeepAliveTime() > 0) {
 //            builder.keepAliveTime(axonServerConfiguration.getKeepAliveTime(), TimeUnit.MILLISECONDS)
 //                   .keepAliveTimeout(axonServerConfiguration.getKeepAliveTimeout(), TimeUnit.MILLISECONDS)
 //                   .keepAliveWithoutCalls(true);
 //        }
 
-        // TODO - configure max inbound message size
+            // TODO - configure max inbound message size
 //        if (axonServerConfiguration.getMaxMessageSize() > 0) {
 //            builder.maxInboundMessageSize(axonServerConfiguration.getMaxMessageSize());
 //        }
 
-        // TODO - configure SSL
-        if (sslConfig != null) {
-            try {
-                builder.sslContext(sslConfig.apply(GrpcSslContexts.forClient()).build());
-            } catch (SSLException e) {
-                throw new RuntimeException("Couldn't set up SSL context", e);
+            // TODO - configure SSL
+            if (sslConfig != null) {
+                try {
+                    builder.sslContext(sslConfig.apply(GrpcSslContexts.forClient()).build());
+                } catch (SSLException e) {
+                    throw new RuntimeException("Couldn't set up SSL context", e);
+                }
+            } else {
+                builder.usePlaintext();
             }
-        } else {
-            builder.usePlaintext();
-        }
 
-        return builder.intercept(new GrpcBufferingInterceptor(50),
-                                 new ContextAddingInterceptor(context),
-                                 new TokenAddingInterceptor(token)
-        )
-                      .build();
+            return builder.intercept(new GrpcBufferingInterceptor(50),
+                                     new ContextAddingInterceptor(context),
+                                     new TokenAddingInterceptor(token)
+            )
+                          .build();
+        } catch (Exception e) {
+            writeDownloadMessage();
+            return new DisconnectedChannel();
+        }
     }
 
     public void shutdown() {
@@ -235,30 +204,5 @@ public class AxonServerConnectionFactory {
         executorService.shutdown();
     }
 
-    private static class ServerAddress {
 
-        private final int grpcPort;
-        private final String host;
-
-        public ServerAddress() {
-            this("localhost");
-        }
-
-        public ServerAddress(String host) {
-            this(host, 8124);
-        }
-
-        public ServerAddress(String host, int grpcPort) {
-            this.grpcPort = grpcPort;
-            this.host = host;
-        }
-
-        public int grpcPort() {
-            return grpcPort;
-        }
-
-        public String hostName() {
-            return host;
-        }
-    }
 }

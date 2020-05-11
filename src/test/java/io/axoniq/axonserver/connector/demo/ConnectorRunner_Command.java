@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 
-package io.axoniq.axonserver.connector;
+package io.axoniq.axonserver.connector.demo;
 
 import com.google.protobuf.ByteString;
+import io.axoniq.axonserver.connector.AxonServerConnection;
+import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
 import io.axoniq.axonserver.connector.command.CommandChannel;
 import io.axoniq.axonserver.connector.instruction.InstructionChannel;
 import io.axoniq.axonserver.grpc.SerializedObject;

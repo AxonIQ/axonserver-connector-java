@@ -1,6 +1,8 @@
 package io.axoniq.axonserver.connector.event;
 
+import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.grpc.event.Event;
+import io.axoniq.axonserver.grpc.event.EventWithToken;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -9,11 +11,11 @@ public interface EventChannel {
 
     CompletableFuture<Long> findHighestSequence(String aggregateId);
 
-    default EventStream openStream(long token, int bufferSize) {
+    default ResultStream<EventWithToken> openStream(long token, int bufferSize) {
         return openStream(token, bufferSize, Math.max(bufferSize >> 3, 100));
     }
 
-    EventStream openStream(long token, int bufferSize, int refillBatch);
+    ResultStream<EventWithToken> openStream(long token, int bufferSize, int refillBatch);
 
     default AggregateEventStream openAggregateStream(String aggregateIdentifier) {
         return openAggregateStream(aggregateIdentifier, true);

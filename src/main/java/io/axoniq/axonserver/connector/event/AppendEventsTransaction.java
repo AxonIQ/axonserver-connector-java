@@ -1,14 +1,15 @@
 package io.axoniq.axonserver.connector.event;
 
+import io.axoniq.axonserver.grpc.event.Confirmation;
 import io.axoniq.axonserver.grpc.event.Event;
 
 import java.util.concurrent.CompletableFuture;
 
 public interface AppendEventsTransaction {
 
-    void appendEvent(Event event);
+    AppendEventsTransaction appendEvent(Event event);
 
-    CompletableFuture<?> commit();
+    CompletableFuture<Confirmation> commit();
 
     void rollback();
 }

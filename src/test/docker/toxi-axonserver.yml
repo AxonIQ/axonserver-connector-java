@@ -1,0 +1,26 @@
+version: '3.3'
+
+services:
+  axonserver:
+    image: axoniq/axonserver
+    hostname: axonserver
+    environment:
+      - AXONIQ_AXONSERVER_NAME=axonserver
+      - AXONIQ_AXONSERVER_HOSTNAME=localhost
+      - AXONIQ_AXONSERVER_DEVMODE_ENABLED=true
+    ports:
+      - '8024:8024'
+    volumes:
+      - axonserver-data:/data
+      - axonserver-eventstore:/eventdata
+
+  toxiproxy:
+    image: shopify/toxiproxy
+    hostname: toxiproxy
+    ports:
+      - '8474:8474'
+      - '8124:8124'
+
+volumes:
+  axonserver-data:
+  axonserver-eventstore:

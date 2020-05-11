@@ -16,9 +16,10 @@
 
 package io.axoniq.axonserver.connector.impl;
 
+import io.axoniq.axonserver.connector.Registration;
+import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.connector.instruction.InstructionChannel;
 import io.axoniq.axonserver.connector.instruction.InstructionHandler;
-import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
@@ -36,8 +37,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.silently;
 
@@ -45,40 +48,47 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
 
     private static final Logger logger = LoggerFactory.getLogger(InstructionChannel.class);
     private final ClientIdentification clientIdentification;
+    private final ScheduledExecutorService executor;
     private final AtomicReference<StreamObserver<PlatformInboundInstruction>> instructionDispatcher = new AtomicReference<>();
     private final Map<PlatformOutboundInstruction.RequestCase, BiConsumer<PlatformOutboundInstruction, ReplyChannel<PlatformInboundInstruction>>> instructionHandlers = new HashMap<>();
+    private final HeartbeatMonitor heartbeatMonitor;
 
-    public InstructionChannelImpl(ClientIdentification clientIdentification, ScheduledExecutorService executor) {
-        super(executor);
+    public InstructionChannelImpl(ClientIdentification clientIdentification,
+                                  ScheduledExecutorService executor, AxonServerManagedChannel channel) {
+        super(executor, channel);
         this.clientIdentification = clientIdentification;
+        this.executor = executor;
         this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.ACK, i -> new AckHandler());
+        heartbeatMonitor = new HeartbeatMonitor(executor, this::sendHeartBeat, channel::forceReconnect);
     }
 
     @Override
     public synchronized void connect(ManagedChannel channel) {
-        PlatformServiceGrpc.PlatformServiceStub platformServiceStub = PlatformServiceGrpc.newStub(channel);
         StreamObserver<PlatformInboundInstruction> existing = instructionDispatcher.get();
         if (existing != null) {
             logger.info("Not connecting - connection already present");
         } else {
-            PlatformOutboundInstructionHandler responseObserver = new PlatformOutboundInstructionHandler(clientIdentification.getClientId(), 0, 0, () -> scheduleReconnect(channel));
+            PlatformServiceGrpc.PlatformServiceStub platformServiceStub = PlatformServiceGrpc.newStub(channel);
+            PlatformOutboundInstructionHandler responseObserver = new PlatformOutboundInstructionHandler(clientIdentification.getClientId(), 0, 0, e -> scheduleReconnect());
             logger.info("Opening instruction stream");
             StreamObserver<PlatformInboundInstruction> instructionsForPlatform = platformServiceStub.openStream(responseObserver);
             StreamObserver<PlatformInboundInstruction> previous = instructionDispatcher.getAndSet(instructionsForPlatform);
             silently(previous, StreamObserver::onCompleted);
 
-            StreamObserver<PlatformInboundInstruction> connection = instructionDispatcher.get();
-            if (connection != null) {
-                logger.info("Connected instruction stream. Sending client identification");
-                connection.onNext(PlatformInboundInstruction.newBuilder().setRegister(clientIdentification).build());
-            } else {
-                logger.info("Connection failed");
+            logger.info("Connected instruction stream. Sending client identification");
+            try {
+                instructionsForPlatform.onNext(PlatformInboundInstruction.newBuilder().setRegister(clientIdentification).build());
+            } catch (Exception e) {
+                instructionDispatcher.set(null);
+                instructionsForPlatform.onError(e);
             }
         }
+
     }
 
     @Override
     public void disconnect() {
+        heartbeatMonitor.disableHeartbeat();
         StreamObserver<PlatformInboundInstruction> dispatcher = instructionDispatcher.getAndSet(null);
         if (dispatcher != null) {
             dispatcher.onCompleted();
@@ -86,9 +96,19 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
     }
 
     @Override
-    public Runnable registerInstructionHandler(PlatformOutboundInstruction.RequestCase type, InstructionHandler handler) {
+    public Registration registerInstructionHandler(PlatformOutboundInstruction.RequestCase type, InstructionHandler handler) {
         instructionHandlers.put(type, handler);
         return () -> instructionHandlers.remove(type, handler);
+    }
+
+    @Override
+    public void enableHeartbeat(long interval, long timeout, TimeUnit timeUnit) {
+        heartbeatMonitor.enableHeartbeat(interval, timeout, timeUnit);
+    }
+
+    @Override
+    public void disableHeartbeat() {
+        heartbeatMonitor.disableHeartbeat();
     }
 
     public CompletableFuture<Void> sendProcessorInfo(EventProcessorInfo processorInfo) {
@@ -113,7 +133,7 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
 
     private class PlatformOutboundInstructionHandler extends AbstractIncomingInstructionStream<PlatformOutboundInstruction, PlatformInboundInstruction> {
 
-        public PlatformOutboundInstructionHandler(String clientId, int permits, int permitsBatch, Runnable disconnectHandler) {
+        public PlatformOutboundInstructionHandler(String clientId, int permits, int permitsBatch, Consumer<Throwable> disconnectHandler) {
             super(clientId, permits, permitsBatch, disconnectHandler);
         }
 

@@ -17,9 +17,10 @@
 package io.axoniq.axonserver.connector.command.impl;
 
 import io.axoniq.axonserver.connector.AxonServerException;
-import io.axoniq.axonserver.connector.command.CommandChannel;
 import io.axoniq.axonserver.connector.ErrorCode;
+import io.axoniq.axonserver.connector.Registration;
 import io.axoniq.axonserver.connector.ReplyChannel;
+import io.axoniq.axonserver.connector.command.CommandChannel;
 import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
 import io.axoniq.axonserver.connector.impl.AbstractIncomingInstructionStream;
 import io.axoniq.axonserver.connector.impl.ObjectUtils;
@@ -42,7 +43,6 @@ import io.netty.util.internal.OutOfDirectMemoryError;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -50,6 +50,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
@@ -67,8 +68,9 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
     private final int permitsBatch;
 
     public CommandChannelImpl(ClientIdentification clientIdentification,
-                              int permits, int permitsBatch, ScheduledExecutorService executor) {
-        super(executor);
+                              int permits, int permitsBatch,
+                              ScheduledExecutorService executor, ManagedChannel channel) {
+        super(executor, channel);
         this.clientIdentification = clientIdentification;
         this.permits = permits;
         this.permitsBatch = permitsBatch;
@@ -78,7 +80,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
 
     private void handleIncomingCommand(CommandProviderInbound message, ReplyChannel<CommandProviderOutbound> outbound) {
         Command command = message.getCommand();
-        commandHandlers.get(command.getName())
+        commandHandlers.getOrDefault(command.getName(), c -> noHandlerForCommand())
                        .apply(command)
                        .exceptionally(e -> CommandResponse.newBuilder()
                                                           .setErrorCode(ErrorCode.COMMAND_EXECUTION_ERROR.errorCode())
@@ -89,6 +91,12 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
                        .whenComplete((r, e) ->
                                              outbound.send(CommandProviderOutbound.newBuilder().setCommandResponse(r).build()))
                        .thenRun(outbound::markConsumed);
+    }
+
+    private CompletableFuture<CommandResponse> noHandlerForCommand() {
+        CompletableFuture<CommandResponse> r = new CompletableFuture<>();
+        r.completeExceptionally(new AxonServerException(ErrorCode.NO_HANDLER_FOR_COMMAND, "No handler for command"));
+        return r;
     }
 
     private void handleAck(CommandProviderInbound message, ReplyChannel<CommandProviderOutbound> outbound) {
@@ -106,15 +114,14 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
 
     @Override
     public synchronized void connect(ManagedChannel channel) {
-        if (outboundCommandStream.get() != null
-                && Optional.of(commandService.get()).map(s -> channel.equals(s.getChannel())).orElse(false)) {
+        if (outboundCommandStream.get() != null) {
             // we're already connected on this channel
             return;
         }
         CommandServiceGrpc.CommandServiceStub commandServiceStub = CommandServiceGrpc.newStub(channel);
         IncomingCommandStream responseObserver = new IncomingCommandStream(clientIdentification.getClientId(),
                                                                            permits, permitsBatch,
-                                                                           () -> scheduleReconnect(channel));
+                                                                           this::onConnectionError);
         StreamObserver<CommandProviderOutbound> newValue = commandServiceStub.openStream(responseObserver);
 
         StreamObserver<CommandProviderOutbound> previous = outboundCommandStream.getAndSet(newValue);
@@ -129,8 +136,16 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
         commandService.getAndSet(commandServiceStub);
     }
 
+    private void onConnectionError(Throwable error) {
+        instructionsAwaitingAck.keySet().forEach(
+                k -> doIfNotNull(instructionsAwaitingAck.remove(k),
+                                 f -> f.completeExceptionally(error)));
+        scheduleReconnect();
+    }
+
     @Override
     public void disconnect() {
+        // TODO - Unsubscribe commands from server first, allowing dispatched commands to still be handled
         doIfNotNull(outboundCommandStream.getAndSet(null), StreamObserver::onCompleted);
     }
 
@@ -140,7 +155,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
     }
 
     @Override
-    public Runnable registerCommandHandler(Function<Command, CompletableFuture<CommandResponse>> handler, String... commandNames) {
+    public Registration registerCommandHandler(Function<Command, CompletableFuture<CommandResponse>> handler, String... commandNames) {
         for (String commandName : commandNames) {
             commandHandlers.put(commandName, handler);
             logger.info("Registered handler for command {}", commandName);
@@ -150,7 +165,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
         }
         return () -> {
             for (String commandName : commandNames) {
-                if (commandHandlers.remove(commandName) == handler) {
+                if (commandHandlers.remove(commandName, handler)) {
                     outboundCommandStream.get().onNext(
                             CommandProviderOutbound.newBuilder()
                                                    .setUnsubscribe(CommandSubscription.newBuilder()
@@ -242,7 +257,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
 
     private class IncomingCommandStream extends AbstractIncomingInstructionStream<CommandProviderInbound, CommandProviderOutbound> {
 
-        public IncomingCommandStream(String clientId, int permits, int permitsBatch, Runnable disconnectHandler) {
+        public IncomingCommandStream(String clientId, int permits, int permitsBatch, Consumer<Throwable> disconnectHandler) {
             super(clientId, permits, permitsBatch, disconnectHandler);
         }
 

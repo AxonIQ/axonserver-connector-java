@@ -27,6 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 
@@ -39,11 +40,11 @@ public abstract class AbstractIncomingInstructionStream<MsgIn, MsgOut> extends F
                                                                                                          .build())
                                                                                    .build();
     private final Logger logger = LoggerFactory.getLogger(getClass());
-    private final Runnable disconnectHandler;
+    private final Consumer<Throwable> disconnectHandler;
 
     private StreamObserver<MsgOut> instructionsForPlatform;
 
-    public AbstractIncomingInstructionStream(String clientId, int permits, int permitsBatch, Runnable disconnectHandler) {
+    public AbstractIncomingInstructionStream(String clientId, int permits, int permitsBatch, Consumer<Throwable> disconnectHandler) {
         super(clientId, permits, permitsBatch);
         this.disconnectHandler = disconnectHandler;
     }
@@ -70,7 +71,7 @@ public abstract class AbstractIncomingInstructionStream<MsgIn, MsgOut> extends F
 
     @Override
     public void onCompleted() {
-        logger.info("Stream completed from server side");
+        logger.debug("Stream completed from server side");
         if (replaceOutBoundStream(instructionsForPlatform, null)) {
             instructionsForPlatform.onCompleted();
         }
@@ -78,10 +79,10 @@ public abstract class AbstractIncomingInstructionStream<MsgIn, MsgOut> extends F
 
     @Override
     public void onError(Throwable t) {
-        logger.warn("Error received");
+        logger.debug("Error received", t);
         if (replaceOutBoundStream(instructionsForPlatform, null)) {
-            logger.warn("Instruction channel failed to connect.");
-            disconnectHandler.run();
+            logger.debug("Instruction stream disconnected. Scheduling reconnect");
+            disconnectHandler.accept(t);
             instructionsForPlatform.onCompleted();
         }
     }

@@ -27,19 +27,21 @@ import java.util.concurrent.TimeUnit;
 public abstract class AbstractAxonServerChannel {
     private final Logger logger = LoggerFactory.getLogger(getClass());
     private final ScheduledExecutorService executor;
+    private final ManagedChannel channel;
 
-    public AbstractAxonServerChannel(ScheduledExecutorService executor) {
+    public AbstractAxonServerChannel(ScheduledExecutorService executor,
+                                     ManagedChannel axonServerManagedChannel) {
         this.executor = executor;
+        this.channel = axonServerManagedChannel;
     }
 
-    protected void scheduleReconnect(ManagedChannel channel) {
+    protected void scheduleReconnect() {
         executor.schedule(() -> {
-            ConnectivityState connectivityState = channel.getState(true);
-            if (connectivityState != ConnectivityState.TRANSIENT_FAILURE
-                    && connectivityState != ConnectivityState.SHUTDOWN) {
+            ConnectivityState connectivityState = channel.getState(false);
+            if (connectivityState == ConnectivityState.READY) {
                 connect(channel);
             } else {
-                logger.info("Not using this channel to set up stream. It has been disconnected ");
+                scheduleReconnect();
             }
         }, 500, TimeUnit.MILLISECONDS);
     }

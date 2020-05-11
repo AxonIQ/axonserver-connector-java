@@ -14,15 +14,18 @@
  * limitations under the License.
  */
 
-package io.axoniq.axonserver.connector;
+package io.axoniq.axonserver.connector.demo;
 
 import com.google.protobuf.ByteString;
+import io.axoniq.axonserver.connector.AxonServerConnection;
+import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
+import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.event.AggregateEventStream;
 import io.axoniq.axonserver.connector.event.AppendEventsTransaction;
 import io.axoniq.axonserver.connector.event.EventChannel;
-import io.axoniq.axonserver.connector.event.EventStream;
 import io.axoniq.axonserver.grpc.SerializedObject;
 import io.axoniq.axonserver.grpc.event.Event;
+import io.axoniq.axonserver.grpc.event.EventWithToken;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -43,7 +46,7 @@ public class ConnectorRunner_Events {
             AxonServerConnection contextConnection = testSubject.connect("default");
 
             EventChannel channel = contextConnection.eventChannel();
-            EventStream stream = channel.openStream(-1, 10000);
+            ResultStream<EventWithToken> stream = channel.openStream(-1, 10000);
             long counter = 0;
             long t1 = System.currentTimeMillis();
             while (stream.nextIfAvailable(1, TimeUnit.SECONDS) != null) {
