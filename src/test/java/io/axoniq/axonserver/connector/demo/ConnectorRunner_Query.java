@@ -38,7 +38,8 @@ public class ConnectorRunner_Query {
         public static void main(String[] args) {
 
 
-            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient");
+            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient")
+                                                                                 .build();
             AxonServerConnection contextConnection = testSubject.connect("default");
 
             QueryChannel channel = contextConnection.queryChannel();
@@ -60,7 +61,8 @@ public class ConnectorRunner_Query {
     public static class QueryHandler {
 
         public static void main(String[] args) {
-            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient-Success");
+            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient-Success")
+                                                                                 .build();
             AxonServerConnection contextConnection = testSubject.connect("default");
 
             QueryChannel channel = contextConnection.queryChannel();
@@ -79,7 +81,8 @@ public class ConnectorRunner_Query {
     public static class FaultyQueryHandler {
 
         public static void main(String[] args) {
-            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient-Faulty");
+            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient-Faulty")
+                                                                                 .build();
             AxonServerConnection contextConnection = testSubject.connect("default");
 
             QueryChannel channel = contextConnection.queryChannel();

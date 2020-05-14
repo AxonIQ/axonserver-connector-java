@@ -7,6 +7,8 @@ import io.axoniq.axonserver.connector.query.QueryChannel;
 
 public interface AxonServerConnection {
 
+    boolean isConnectionFailed();
+
     boolean isReady();
 
     boolean isConnected();

@@ -50,11 +50,17 @@ public class ContextConnection implements AxonServerConnection {
 
     public ContextConnection(ClientIdentification clientIdentification,
                              ScheduledExecutorService executorService,
-                             AxonServerManagedChannel connection) {
+                             AxonServerManagedChannel connection,
+                             String context) {
         this.clientIdentification = clientIdentification;
         this.executorService = executorService;
         this.connection = connection;
-        this.instructionChannel = new InstructionChannelImpl(clientIdentification, executorService, connection);
+        this.instructionChannel = new InstructionChannelImpl(clientIdentification, context, executorService, connection);
+    }
+
+    @Override
+    public boolean isConnectionFailed() {
+        return connection.getState(false) == ConnectivityState.TRANSIENT_FAILURE;
     }
 
     @Override
@@ -68,7 +74,7 @@ public class ContextConnection implements AxonServerConnection {
 
     @Override
     public boolean isConnected() {
-        return connection.getState(true) == ConnectivityState.READY;
+        return connection.getState(false) == ConnectivityState.READY;
     }
 
     @Override
@@ -134,10 +140,5 @@ public class ContextConnection implements AxonServerConnection {
     public void connect() {
         connected(instructionChannel);
     }
-
-    // TODO - Create QueryChannel
-//    public QueryChannel queryChannel() {
-//
-//    }
 
 }

@@ -28,12 +28,18 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
     @BeforeEach
     void setUp() {
         connectionFactory1 = AxonServerConnectionFactory.forClient(getClass().getSimpleName() + "_Handler")
-                                                        .routingServers(axonServerAddress);
+                                                        .connectTimeout(1000, TimeUnit.MILLISECONDS)
+                                                        .reconnectInterval(500, TimeUnit.MILLISECONDS)
+                                                        .routingServers(axonServerAddress)
+                                                        .build();
 
         connection1 = connectionFactory1.connect("default");
 
         connectionFactory2 = AxonServerConnectionFactory.forClient(getClass().getSimpleName() + "_Sender")
-                                                        .routingServers(axonServerAddress);
+                                                        .connectTimeout(1000, TimeUnit.MILLISECONDS)
+                                                        .reconnectInterval(500, TimeUnit.MILLISECONDS)
+                                                        .routingServers(axonServerAddress)
+                                                        .build();
         connection2 = connectionFactory2.connect("default");
     }
 
@@ -80,6 +86,8 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
         axonServerProxy.enable();
 
         assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
+
+        Thread.sleep(100);
 
         ResultStream<QueryResponse> result = connection2.queryChannel().query(QueryRequest.newBuilder().setQuery("testQuery").build());
 

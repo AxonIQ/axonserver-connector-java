@@ -104,6 +104,49 @@ class HeartbeatMonitorTest {
         assertTrue(trigger.get());
     }
 
+
+    @Test
+    void testPausingPreventsTriggers() {
+        testSubject.enableHeartbeat(100, 500, TimeUnit.MILLISECONDS);
+
+        elapseTime(100);
+        nextCheckBeat.run();
+
+        testSubject.pause();
+
+        elapseTime(1000);
+        // the next beat was already scheduled
+        nextCheckBeat.run();
+        assertFalse(trigger.get());
+
+        assertNull(nextCheckBeat, "Did not expect scheduling of heartbeat after pause");
+
+    }
+
+    @Test
+    void testResumeRestartsTimers() {
+        testSubject.enableHeartbeat(100, 500, TimeUnit.MILLISECONDS);
+
+        elapseTime(100);
+        testSubject.pause();
+        nextCheckBeat.run();
+        assertFalse(trigger.get());
+
+        assertNull(nextCheckBeat, "Did not expect scheduling of heartbeat after pause");
+
+        elapseTime(1000);
+        testSubject.resume();
+
+        nextCheckBeat.run();
+        elapseTime(499);
+        nextCheckBeat.run();
+        assertFalse(trigger.get());
+        elapseTime(1);
+        nextCheckBeat.run();
+
+        assertTrue(trigger.get());
+    }
+
     @Test
     void testHeartbeatTriggeredWhenDeadlineElapses() {
         testSubject.enableHeartbeat(1000, 500, TimeUnit.MILLISECONDS);

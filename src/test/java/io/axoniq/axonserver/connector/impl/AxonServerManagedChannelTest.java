@@ -21,6 +21,7 @@ import java.util.function.Supplier;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyLong;
@@ -167,7 +168,9 @@ class AxonServerManagedChannelTest extends AbstractAxonServerIntegrationTest {
 
         assertWithin(1, TimeUnit.SECONDS, () -> {
             // by requesting a connection, we force a FAILURE - AxonServer is down
-            assertEquals(ConnectivityState.TRANSIENT_FAILURE, testSubject.getState(true));
+            ConnectivityState state = testSubject.getState(true);
+            assertNotEquals(ConnectivityState.READY, state);
+            assertNotEquals(ConnectivityState.SHUTDOWN, state);
             // we also want to wait for the next reconnect task to be scheduled, to avoid race conditions later on
             assertNotNull(nextConnectTask);
         });

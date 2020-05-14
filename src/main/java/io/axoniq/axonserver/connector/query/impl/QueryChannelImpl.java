@@ -359,8 +359,8 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
         }
 
         @Override
-        protected boolean replaceOutBoundStream(StreamObserver<QueryProviderOutbound> expected, StreamObserver<QueryProviderOutbound> replaceBy) {
-            return outboundQueryStream.compareAndSet(expected, replaceBy);
+        protected boolean unregisterOutboundStream(StreamObserver<QueryProviderOutbound> expected) {
+            return outboundQueryStream.compareAndSet(expected, null);
         }
     }
 }

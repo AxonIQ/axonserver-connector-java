@@ -42,7 +42,8 @@ public class ConnectorRunner_Events {
         public static void main(String[] args) throws InterruptedException {
 
 
-            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient");
+            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient")
+                                                                                 .build();
             AxonServerConnection contextConnection = testSubject.connect("default");
 
             EventChannel channel = contextConnection.eventChannel();
@@ -67,7 +68,8 @@ public class ConnectorRunner_Events {
     public static class ReadAggregateStream {
 
         public static void main(String[] args) throws Exception {
-            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient");
+            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient")
+                                                                                 .build();
             AxonServerConnection contextConnection = testSubject
                     .connect("default");
 
@@ -83,15 +85,16 @@ public class ConnectorRunner_Events {
     public static class Tokens {
 
         public static void main(String[] args) throws Exception {
-            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient");
+            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient")
+                                                                                 .build();
             AxonServerConnection contextConnection = testSubject
                     .connect("default");
 
             EventChannel channel = contextConnection.eventChannel();
             CompletableFuture<?> done = CompletableFuture.allOf(
-            channel.getFirstToken().whenComplete((r, e) -> System.out.println("First token:" + r)),
-            channel.getLastToken().whenComplete((r, e) -> System.out.println("Last token:" + r)),
-            channel.getTokenAt(Instant.now().minus(1, ChronoUnit.HOURS).toEpochMilli()).whenComplete((r, e) -> System.out.println("Token an hour ago :" + r)));
+                    channel.getFirstToken().whenComplete((r, e) -> System.out.println("First token:" + r)),
+                    channel.getLastToken().whenComplete((r, e) -> System.out.println("Last token:" + r)),
+                    channel.getTokenAt(Instant.now().minus(1, ChronoUnit.HOURS).toEpochMilli()).whenComplete((r, e) -> System.out.println("Token an hour ago :" + r)));
 
             done.get();
         }
@@ -100,7 +103,8 @@ public class ConnectorRunner_Events {
     public static class EventSender {
 
         public static void main(String[] args) throws InterruptedException, ExecutionException, TimeoutException {
-            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient");
+            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient")
+                                                                                 .build();
             AxonServerConnection contextConnection = testSubject
                     .connect("default");
 

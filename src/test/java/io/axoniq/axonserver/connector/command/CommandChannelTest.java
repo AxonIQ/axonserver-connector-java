@@ -9,6 +9,8 @@ import io.axoniq.axonserver.grpc.command.CommandResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -23,15 +25,25 @@ public class CommandChannelTest extends AbstractAxonServerIntegrationTest {
     private AxonServerConnection connection1;
     private AxonServerConnectionFactory connectionFactory2;
     private AxonServerConnection connection2;
+    private static final Logger logger = LoggerFactory.getLogger(CommandChannelTest.class);
 
     @BeforeEach
     void setUp() {
-        connectionFactory1 = AxonServerConnectionFactory.forClient(getClass().getSimpleName())
-                                                        .routingServers(axonServerAddress);
+        connectionFactory1 = AxonServerConnectionFactory.forClient(getClass().getSimpleName(),
+                                                                   "client1")
+                                                        .routingServers(axonServerAddress)
+                                                        .forcePlatformReconnect(false)
+                                                        .reconnectInterval(500, TimeUnit.MILLISECONDS)
+                                                        .build();
         connection1 = connectionFactory1.connect("default");
 
-        connectionFactory2 = AxonServerConnectionFactory.forClient(getClass().getSimpleName())
-                                                        .routingServers(axonServerAddress);
+        connectionFactory2 = AxonServerConnectionFactory.forClient(getClass().getSimpleName(),
+                                                                   "client2")
+                                                        .routingServers(axonServerAddress)
+                                                        .reconnectInterval(500, TimeUnit.MILLISECONDS)
+                                                        .forcePlatformReconnect(false)
+                                                        .build();
+
         connection2 = connectionFactory2.connect("default");
     }
 
@@ -51,14 +63,18 @@ public class CommandChannelTest extends AbstractAxonServerIntegrationTest {
         CompletableFuture<CommandResponse> result = connection2.commandChannel().sendCommand(Command.newBuilder().setName("testCommand").build());
 
         assertTrue(result.get(1, TimeUnit.SECONDS).hasErrorMessage());
+
+        logger.info("Closing TCP connection to AxonServer");
         axonServerProxy.disable();
-        assertWithin(100, TimeUnit.MILLISECONDS, () -> assertFalse(connection1.isReady()));
+        assertWithin(1000, TimeUnit.MILLISECONDS, () -> assertTrue(connection1.isConnectionFailed()));
+//Thread.sleep(1000);
+        logger.info("Re-enabling TCP connection to AxonServer");
         axonServerProxy.enable();
 
-        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
+        assertWithin(2, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
 
         CompletableFuture<CommandResponse> result2 = connection2.commandChannel().sendCommand(Command.newBuilder().setName("testCommand").build());
-        assertTrue(result.get(1, TimeUnit.SECONDS).hasErrorMessage());
+        assertTrue(result2.get(1, TimeUnit.SECONDS).hasErrorMessage());
     }
 
     @Test
@@ -72,7 +88,9 @@ public class CommandChannelTest extends AbstractAxonServerIntegrationTest {
 
         axonServerProxy.enable();
 
-        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
+        assertWithin(2, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
+
+        Thread.sleep(100);
 
         CompletableFuture<CommandResponse> result = connection2.commandChannel().sendCommand(Command.newBuilder().setName("testCommand").build());
 

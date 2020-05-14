@@ -51,19 +51,36 @@ public class HeartbeatMonitor {
     }
 
     public void checkAndReschedule(int task) {
-        checkBeat();
         if (task == taskId.get()) {
+            // heartbeats should not be considered valid when a change was made
+            checkBeat();
             executor.schedule(() -> checkAndReschedule(task), 500, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    public void pause() {
+        long interval = this.interval.get();
+        long timeout = this.timeout.get();
+        if (interval != Long.MAX_VALUE || timeout != Long.MAX_VALUE) {
+            taskId.incrementAndGet();
+        }
+    }
+
+    public void resume() {
+        long interval = this.interval.get();
+        long timeout = this.timeout.get();
+        if (interval != Long.MAX_VALUE && timeout != Long.MAX_VALUE) {
+            enableHeartbeat(interval, timeout, TimeUnit.MILLISECONDS);
         }
     }
 
     public void checkBeat() {
         long now = clock.millis();
-        long timeout = nextHeartbeatTimeout.get();
-        if (timeout <= now) {
+        long nextTimeout = nextHeartbeatTimeout.get();
+        if (nextTimeout <= now) {
             logger.info("Did not receive heartbeat acknowledgement within {}ms", this.timeout.get());
             onHeartbeatMissed.run();
-            nextHeartbeatTimeout.compareAndSet(timeout, now + interval.get());
+            nextHeartbeatTimeout.compareAndSet(nextTimeout, now + interval.get());
         }
         if (nextHeartbeat.getAndAccumulate(interval.get(),
                                            (next, interval) -> next <= now ? now + interval : next) <= now) {
@@ -71,7 +88,7 @@ public class HeartbeatMonitor {
                 if (e == null) {
                     long interval = this.interval.get();
                     if (interval != Long.MAX_VALUE) {
-                        nextHeartbeatTimeout.updateAndGet(current -> Math.max(timeout + interval, current));
+                        nextHeartbeatTimeout.updateAndGet(current -> Math.max(nextTimeout + interval, current));
                     }
                 }
             });

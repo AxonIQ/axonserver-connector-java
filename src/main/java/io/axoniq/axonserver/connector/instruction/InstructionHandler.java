@@ -22,6 +22,7 @@ import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
 
 import java.util.function.BiConsumer;
 
+@FunctionalInterface
 public interface InstructionHandler extends BiConsumer<PlatformOutboundInstruction, ReplyChannel<PlatformInboundInstruction>> {
 
 }

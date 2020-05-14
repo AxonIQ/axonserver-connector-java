@@ -72,7 +72,7 @@ public abstract class AbstractIncomingInstructionStream<MsgIn, MsgOut> extends F
     @Override
     public void onCompleted() {
         logger.debug("Stream completed from server side");
-        if (replaceOutBoundStream(instructionsForPlatform, null)) {
+        if (unregisterOutboundStream(instructionsForPlatform)) {
             instructionsForPlatform.onCompleted();
         }
     }
@@ -80,7 +80,7 @@ public abstract class AbstractIncomingInstructionStream<MsgIn, MsgOut> extends F
     @Override
     public void onError(Throwable t) {
         logger.debug("Error received", t);
-        if (replaceOutBoundStream(instructionsForPlatform, null)) {
+        if (unregisterOutboundStream(instructionsForPlatform)) {
             logger.debug("Instruction stream disconnected. Scheduling reconnect");
             disconnectHandler.accept(t);
             instructionsForPlatform.onCompleted();
@@ -93,7 +93,7 @@ public abstract class AbstractIncomingInstructionStream<MsgIn, MsgOut> extends F
         this.instructionsForPlatform = requestStream;
     }
 
-    protected abstract boolean replaceOutBoundStream(StreamObserver<MsgOut> expected, StreamObserver<MsgOut> replaceBy);
+    protected abstract boolean unregisterOutboundStream(StreamObserver<MsgOut> expected);
 
     @Override
     public void send(MsgOut outboundMessage) {

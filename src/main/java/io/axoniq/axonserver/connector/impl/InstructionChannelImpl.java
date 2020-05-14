@@ -35,7 +35,9 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -52,11 +54,14 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
     private final AtomicReference<StreamObserver<PlatformInboundInstruction>> instructionDispatcher = new AtomicReference<>();
     private final Map<PlatformOutboundInstruction.RequestCase, BiConsumer<PlatformOutboundInstruction, ReplyChannel<PlatformInboundInstruction>>> instructionHandlers = new HashMap<>();
     private final HeartbeatMonitor heartbeatMonitor;
+    private final Map<String, CompletableFuture<?>> awaitingAck = new ConcurrentHashMap<>();
+    private final String context;
 
-    public InstructionChannelImpl(ClientIdentification clientIdentification,
+    public InstructionChannelImpl(ClientIdentification clientIdentification, String context,
                                   ScheduledExecutorService executor, AxonServerManagedChannel channel) {
         super(executor, channel);
         this.clientIdentification = clientIdentification;
+        this.context = context;
         this.executor = executor;
         this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.ACK, i -> new AckHandler());
         heartbeatMonitor = new HeartbeatMonitor(executor, this::sendHeartBeat, channel::forceReconnect);
@@ -70,14 +75,15 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
         } else {
             PlatformServiceGrpc.PlatformServiceStub platformServiceStub = PlatformServiceGrpc.newStub(channel);
             PlatformOutboundInstructionHandler responseObserver = new PlatformOutboundInstructionHandler(clientIdentification.getClientId(), 0, 0, e -> scheduleReconnect());
-            logger.info("Opening instruction stream");
+            logger.debug("Opening instruction stream");
             StreamObserver<PlatformInboundInstruction> instructionsForPlatform = platformServiceStub.openStream(responseObserver);
             StreamObserver<PlatformInboundInstruction> previous = instructionDispatcher.getAndSet(instructionsForPlatform);
             silently(previous, StreamObserver::onCompleted);
 
-            logger.info("Connected instruction stream. Sending client identification");
             try {
+                logger.info("Connected instruction stream for context '{}'. Sending client identification", context);
                 instructionsForPlatform.onNext(PlatformInboundInstruction.newBuilder().setRegister(clientIdentification).build());
+                heartbeatMonitor.resume();
             } catch (Exception e) {
                 instructionDispatcher.set(null);
                 instructionsForPlatform.onError(e);
@@ -116,13 +122,17 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
     }
 
     public CompletableFuture<Void> sendHeartBeat() {
-        return sendInstruction(PlatformInboundInstruction.newBuilder().setHeartbeat(Heartbeat.newBuilder().build()).build());
+        if (!isConnected()) {
+            return CompletableFuture.completedFuture(null);
+        }
+        return sendInstruction(PlatformInboundInstruction.newBuilder().setInstructionId(UUID.randomUUID().toString()).setHeartbeat(Heartbeat.newBuilder()).build());
     }
 
     private CompletableFuture<Void> sendInstruction(PlatformInboundInstruction instruction) {
         CompletableFuture<Void> result = new CompletableFuture<>();
-        // TODO - Provide support for sending instructions
-        result.completeExceptionally(new UnsupportedOperationException("Sending instructions is not supported yet"));
+        awaitingAck.put(instruction.getInstructionId(), result);
+        logger.info("Sent instruction {}", instruction.getInstructionId());
+        instructionDispatcher.get().onNext(instruction);
         return result;
     }
 
@@ -153,8 +163,9 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
         }
 
         @Override
-        protected boolean replaceOutBoundStream(StreamObserver<PlatformInboundInstruction> expected, StreamObserver<PlatformInboundInstruction> replaceBy) {
-            return instructionDispatcher.compareAndSet(expected, replaceBy);
+        protected boolean unregisterOutboundStream(StreamObserver<PlatformInboundInstruction> expected) {
+            heartbeatMonitor.pause();
+            return instructionDispatcher.compareAndSet(expected, null);
         }
 
         @Override
@@ -163,11 +174,16 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
         }
     }
 
-    private class AckHandler implements BiConsumer<PlatformOutboundInstruction, ReplyChannel<PlatformInboundInstruction>> {
+    private class AckHandler implements InstructionHandler {
 
         @Override
         public void accept(PlatformOutboundInstruction ackMessage, ReplyChannel<PlatformInboundInstruction> replyChannel) {
-            // TODO: Check if a result handler was registered for the incoming ACK and call it.
+            String instructionId = ackMessage.getAck().getInstructionId();
+            logger.info("Received ACK for {}", instructionId);
+            CompletableFuture<?> handle = awaitingAck.remove(instructionId);
+            if (handle != null) {
+                handle.complete(null);
+            }
         }
     }
 }

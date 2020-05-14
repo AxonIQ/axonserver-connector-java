@@ -20,7 +20,6 @@ import com.google.protobuf.ByteString;
 import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
 import io.axoniq.axonserver.connector.command.CommandChannel;
-import io.axoniq.axonserver.connector.instruction.InstructionChannel;
 import io.axoniq.axonserver.grpc.SerializedObject;
 import io.axoniq.axonserver.grpc.command.Command;
 import io.axoniq.axonserver.grpc.command.CommandResponse;
@@ -50,7 +49,8 @@ public class ConnectorRunner_Command {
     public static class CommandSender {
 
         public static void main(String[] args) {
-            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient");
+            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient")
+                                                                                 .build();
             AxonServerConnection contextConnection = testSubject
                     .connect("default");
 
@@ -60,10 +60,10 @@ public class ConnectorRunner_Command {
                 AtomicReference<CompletableFuture<Integer>> results = new AtomicReference<>(CompletableFuture.completedFuture(0));
                 for (int c = 0; c < 200_000; c++) {
                     CompletableFuture<Integer> result = channel.sendCommand(Command.newBuilder()
-                                                                                .setPayload(SerializedObject.newBuilder()
-                                                                                                                       .setType("String")
-                                                                                                                       .setData(ByteString.copyFromUtf8("Hello " + (c + 1) + " of 1000"))
-                                                                                                                       .build())
+                                                                                   .setPayload(SerializedObject.newBuilder()
+                                                                                                               .setType("String")
+                                                                                                               .setData(ByteString.copyFromUtf8("Hello " + (c + 1) + " of 1000"))
+                                                                                                               .build())
                                                                                 .setMessageIdentifier(UUID.randomUUID().toString())
                                                                                 .setName("test")
                                                                                 .build())
@@ -79,7 +79,7 @@ public class ConnectorRunner_Command {
                     CompletableFuture<Integer> fullResult = results.get();
                     errorCount = fullResult.get(5, TimeUnit.MINUTES);
                 } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                    e.printStackTrace();
+//                    e.printStackTrace();
                 }
                 long resultsCompleted = System.currentTimeMillis();
                 System.out.println("Full handling took " + (resultsCompleted - started) + "ms and reported " + errorCount + " errors." );
@@ -96,27 +96,29 @@ public class ConnectorRunner_Command {
         private static final Logger logger = LoggerFactory.getLogger(CommandHandler.class);
 
         public static void main(String[] args) {
-            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient");
+            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient")
+                                                                                 .build();
             AxonServerConnection contextConnection = testSubject
                     .connect("default");
 
-            InstructionChannel instructionChannel = contextConnection.instructionChannel();
             CommandChannel commandChannel = contextConnection.commandChannel();
 
             AtomicInteger counter = new AtomicInteger();
             AtomicLong timer = new AtomicLong();
-            commandChannel.registerCommandHandler(command -> {
-                if (counter.updateAndGet(t -> t == 9999 ? 0 : t + 1) == 0) {
-                    long now = System.currentTimeMillis();
-                    long previous = timer.getAndSet(now);
-                    logger.info("Handled another 10000 in {} ms", now - previous);
-                }
-                return handle(command);
-            }, "test");
+            try {
+                commandChannel.registerCommandHandler(command -> {
+                    if (counter.updateAndGet(t -> t == 9999 ? 0 : t + 1) == 0) {
+                        long now = System.currentTimeMillis();
+                        long previous = timer.getAndSet(now);
+                        logger.info("Handled another 10000 in {} ms", now - previous);
+                    }
+                    return handle(command);
+                }, "test");
 
-            new Scanner(System.in).nextLine();
-
-            testSubject.shutdown();
+                new Scanner(System.in).nextLine();
+            } finally {
+                testSubject.shutdown();
+            }
         }
     }
 }

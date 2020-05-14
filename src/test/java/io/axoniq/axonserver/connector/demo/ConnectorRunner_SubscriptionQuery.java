@@ -44,9 +44,10 @@ public class ConnectorRunner_SubscriptionQuery {
     public static class QuerySender {
 
         public static void main(String[] args) throws Exception {
-            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient");
+            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient")
+                                                                                 .build();
             AxonServerConnection contextConnection = testSubject.connect("default");
-            while(!contextConnection.isConnected()) {
+            while (!contextConnection.isConnected()) {
                 System.out.println("Waiting for connection...");
                 Thread.sleep(1000);
             }
@@ -82,7 +83,8 @@ public class ConnectorRunner_SubscriptionQuery {
         public static void main(String[] args) {
             ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 
-            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient-Success");
+            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient-Success")
+                                                                                 .build();
             AxonServerConnection contextConnection = testSubject.connect("default");
 
             QueryChannel channel = contextConnection.queryChannel();
@@ -122,7 +124,7 @@ public class ConnectorRunner_SubscriptionQuery {
     public static class FaultyQueryHandler {
 
         public static void main(String[] args) {
-            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient-Faulty");
+            AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient("testClient-Faulty").build();
             AxonServerConnection contextConnection = testSubject.connect("default");
 
             QueryChannel channel = contextConnection.queryChannel();

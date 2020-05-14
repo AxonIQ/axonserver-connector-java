@@ -282,8 +282,8 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
         }
 
         @Override
-        protected boolean replaceOutBoundStream(StreamObserver<CommandProviderOutbound> expected, StreamObserver<CommandProviderOutbound> replaceBy) {
-            return outboundCommandStream.compareAndSet(expected, replaceBy);
+        protected boolean unregisterOutboundStream(StreamObserver<CommandProviderOutbound> expected) {
+            return outboundCommandStream.compareAndSet(expected, null);
         }
     }
 }

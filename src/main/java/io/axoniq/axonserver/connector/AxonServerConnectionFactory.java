@@ -19,20 +19,26 @@ package io.axoniq.axonserver.connector;
 import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
 import io.axoniq.axonserver.connector.impl.ContextAddingInterceptor;
 import io.axoniq.axonserver.connector.impl.ContextConnection;
-import io.axoniq.axonserver.connector.impl.DisconnectedChannel;
 import io.axoniq.axonserver.connector.impl.GrpcBufferingInterceptor;
 import io.axoniq.axonserver.connector.impl.ServerAddress;
 import io.axoniq.axonserver.connector.impl.TokenAddingInterceptor;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
+import io.grpc.CallOptions;
 import io.grpc.Channel;
+import io.grpc.ClientCall;
+import io.grpc.ClientInterceptor;
+import io.grpc.ForwardingClientCall;
+import io.grpc.ForwardingClientCallListener;
 import io.grpc.ManagedChannel;
-import io.grpc.netty.GrpcSslContexts;
+import io.grpc.ManagedChannelBuilder;
+import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
+import io.grpc.Status;
 import io.grpc.netty.NettyChannelBuilder;
-import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.net.ssl.SSLException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -45,9 +51,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
-
-import static java.util.Collections.singletonList;
 
 /**
  * The component which manages all the connections which an Axon client can establish with an Axon Server instance.
@@ -65,50 +70,46 @@ public class AxonServerConnectionFactory {
     private final String clientInstanceId;
 
     private final Map<String, ContextConnection> connections = new ConcurrentHashMap<>();
-    private List<ServerAddress> routingServers;
-    private long connectTimeout = 10000;
-    private String token;
+    private final List<ServerAddress> routingServers;
+    private final long connectTimeout;
+    private final String token;
+    private final ScheduledExecutorService executorService;
+    private final Function<NettyChannelBuilder, ManagedChannelBuilder<?>> connectionConfig;
+    private final boolean forcePlatformReconnect;
+    private final long reconnectInterval;
+    private final boolean suppressDownloadMessage;
+
     private volatile boolean shutdown;
-    private volatile boolean suppressDownloadMessage = false;
-    private ScheduledExecutorService executorService = new ScheduledThreadPoolExecutor(5);
-    private boolean allowLazyConnect = true;
-    private UnaryOperator<SslContextBuilder> sslConfig;
 
-    protected AxonServerConnectionFactory(String applicationName, String clientInstanceId) {
-        this.applicationName = applicationName;
-        this.clientInstanceId = clientInstanceId;
-        routingServers = singletonList(new ServerAddress());
+    protected AxonServerConnectionFactory(Builder builder) {
+        this.applicationName = builder.applicationName;
+        this.clientInstanceId = builder.clientInstanceId;
+        this.connectTimeout = builder.connectTimeout;
+        this.token = builder.token;
+        this.executorService = builder.executorService;
+        this.suppressDownloadMessage = builder.suppressDownloadMessage;
+        this.routingServers = builder.routingServers;
+        this.connectionConfig = builder.sslConfig
+                .andThen(builder.keepAliveConfig)
+                .andThen(builder.otherConfig);
+        this.forcePlatformReconnect = builder.forcePlatformReconnect;
+        this.reconnectInterval = builder.reconnectInterval;
     }
 
-    public static AxonServerConnectionFactory forClient(String applicationName) {
-        return new AxonServerConnectionFactory(applicationName, UUID.randomUUID().toString());
+    public static Builder forClient(String applicationName) {
+        return forClient(applicationName, UUID.randomUUID().toString());
     }
 
-    public static AxonServerConnectionFactory forClient(String applicationName, String clientInstanceId) {
-        return new AxonServerConnectionFactory(applicationName, clientInstanceId);
+    public static Builder forClient(String applicationName, String clientInstanceId) {
+        return new AxonServerConnectionFactory.Builder(applicationName, clientInstanceId);
     }
 
-    public AxonServerConnectionFactory routingServers(ServerAddress... serverAddresses) {
-        this.routingServers = new ArrayList<>(Arrays.asList(serverAddresses));
-        return this;
-    }
-
-    public AxonServerConnectionFactory clientTags(Map<String, String> additionalTags) {
-        this.tags.putAll(additionalTags);
-        return this;
-    }
-
-    public AxonServerConnectionFactory clientTag(String key, String value) {
-        this.tags.put(key, value);
-        return this;
-    }
-
-    public AxonServerConnectionFactory token(String token) {
-        this.token = token;
-        return this;
-    }
 
     public AxonServerConnection connect(String context) {
+        if (shutdown) {
+            throw new IllegalStateException("Connector is already shut down");
+        }
+
         ContextConnection contextConnection = connections.computeIfAbsent(context, this::createConnection);
         contextConnection.connect();
         return contextConnection;
@@ -125,84 +126,202 @@ public class AxonServerConnectionFactory {
 
         return new ContextConnection(clientIdentification, executorService,
                                      new AxonServerManagedChannel(routingServers,
-                                                                  5, 1, TimeUnit.SECONDS,
+                                                                  connectTimeout, reconnectInterval, TimeUnit.MILLISECONDS,
                                                                   context,
                                                                   clientIdentification,
                                                                   executorService,
-                                                                  true,
-                                                                  this::createChannel));
-    }
-
-
-    private void writeDownloadMessage() {
-        if (!suppressDownloadMessage) {
-            suppressDownloadMessage = true;
-            try (InputStream in = getClass().getClassLoader().getResourceAsStream("axonserver_download.txt")) {
-                byte[] buffer = new byte[1024];
-                int read;
-                while (in != null && (read = in.read(buffer, 0, 1024)) >= 0) {
-                    System.out.write(buffer, 0, read);
-                }
-            } catch (IOException e) {
-                logger.debug("Unable to write download advice. You're on your own now.", e);
-            }
-        } else {
-            suppressDownloadMessage = true;
-        }
-    }
-
-    private void shutdownNow(ManagedChannel managedChannel) {
-        try {
-            managedChannel.shutdownNow().awaitTermination(1, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            logger.debug("Interrupted during shutdown");
-        }
+                                                                  forcePlatformReconnect,
+                                                                  this::createChannel),
+                                     context);
     }
 
     private ManagedChannel createChannel(ServerAddress address, String context) {
-        try {
-            NettyChannelBuilder builder = NettyChannelBuilder.forAddress(address.hostName(), address.grpcPort());
+        ManagedChannelBuilder<?> builder = connectionConfig.apply(NettyChannelBuilder.forAddress(address.hostName(), address.grpcPort()));
 
-            // TODO - configure gRPC KeepAlive pings
-//        if (axonServerConfiguration.getKeepAliveTime() > 0) {
-//            builder.keepAliveTime(axonServerConfiguration.getKeepAliveTime(), TimeUnit.MILLISECONDS)
-//                   .keepAliveTimeout(axonServerConfiguration.getKeepAliveTimeout(), TimeUnit.MILLISECONDS)
-//                   .keepAliveWithoutCalls(true);
-//        }
-
-            // TODO - configure max inbound message size
-//        if (axonServerConfiguration.getMaxMessageSize() > 0) {
-//            builder.maxInboundMessageSize(axonServerConfiguration.getMaxMessageSize());
-//        }
-
-            // TODO - configure SSL
-            if (sslConfig != null) {
-                try {
-                    builder.sslContext(sslConfig.apply(GrpcSslContexts.forClient()).build());
-                } catch (SSLException e) {
-                    throw new RuntimeException("Couldn't set up SSL context", e);
-                }
-            } else {
-                builder.usePlaintext();
-            }
-
-            return builder.intercept(new GrpcBufferingInterceptor(50),
-                                     new ContextAddingInterceptor(context),
-                                     new TokenAddingInterceptor(token)
-            )
-                          .build();
-        } catch (Exception e) {
-            writeDownloadMessage();
-            return new DisconnectedChannel();
+        if (!suppressDownloadMessage) {
+            builder.intercept(new DowloadInstructionInterceptor());
         }
+
+        return builder.intercept(new GrpcBufferingInterceptor(50),
+                                  new ContextAddingInterceptor(context),
+                                  new TokenAddingInterceptor(token)
+                ).build();
     }
 
     public void shutdown() {
         shutdown = true;
         connections.forEach((k, conn) -> conn.disconnect());
         executorService.shutdown();
+        try {
+            executorService.awaitTermination(2, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        executorService.shutdownNow();
     }
 
+    public static class Builder {
+        public final String applicationName;
+        public final String clientInstanceId;
+        private final Map<String, String> tags = new HashMap<>();
+        private List<ServerAddress> routingServers;
+        private long connectTimeout = 10000;
+        private String token;
+        private boolean suppressDownloadMessage = false;
+        private ScheduledExecutorService executorService;
+        private Function<NettyChannelBuilder, NettyChannelBuilder> sslConfig = NettyChannelBuilder::usePlaintext;
+        private Function<NettyChannelBuilder, NettyChannelBuilder> keepAliveConfig = UnaryOperator.identity();
+        private Function<ManagedChannelBuilder<?>, ManagedChannelBuilder<?>> otherConfig = UnaryOperator.identity();
+        private boolean forcePlatformReconnect = true;
+        private long reconnectInterval = 2000;
+        private int reconnectExecutorPoolsize = 2;
 
+        public Builder(String applicationName, String clientInstanceId) {
+            this.applicationName = applicationName;
+            this.clientInstanceId = clientInstanceId;
+        }
+
+        public Builder routingServers(ServerAddress... serverAddresses) {
+            suppressDownloadMessage = true;
+            this.routingServers = new ArrayList<>(Arrays.asList(serverAddresses));
+            return this;
+        }
+
+        public Builder reconnectInterval(long interval, TimeUnit timeUnit) {
+            this.reconnectInterval = timeUnit.toMillis(interval);
+            return this;
+        }
+
+        public Builder connectTimeout(long timeout, TimeUnit timeUnit) {
+            this.connectTimeout = timeUnit.toMillis(timeout);
+            return this;
+        }
+
+        public Builder clientTags(Map<String, String> additionalTags) {
+            this.tags.putAll(additionalTags);
+            return this;
+        }
+
+        public Builder clientTag(String key, String value) {
+            this.tags.put(key, value);
+            return this;
+        }
+
+        public Builder token(String token) {
+            this.token = token;
+            return this;
+        }
+
+        public Builder useTransportSecurity() {
+            sslConfig = NettyChannelBuilder::useTransportSecurity;
+            return this;
+        }
+
+        public Builder useTransportSecurity(SslContext sslContext) {
+            sslConfig = cb -> cb.sslContext(sslContext);
+            return this;
+        }
+
+        public Builder forcePlatformReconnect(boolean forcePlatformReconnect) {
+            this.forcePlatformReconnect = forcePlatformReconnect;
+            return this;
+        }
+
+        public Builder reconnectorThreadPoolSize(int poolSize) {
+            this.reconnectExecutorPoolsize = poolSize;
+            return this;
+        }
+
+        /**
+         * Sets the time without read activity before sending a keepalive ping. An unreasonably small value might be
+         * increased, and Long.MAX_VALUE nano seconds or an unreasonably large value will disable keepalive.
+         * Defaults to infinite.
+         * <p>
+         * If no read activity is recorded within the given timeout after sending a keepalive ping, the connection is
+         * considered dead.
+         * <p>
+         * Clients must receive permission from the service owner before enabling this option. Keepalives can increase
+         * the
+         * load on services and are commonly "invisible" making it hard to notice when they are causing excessive load.
+         * Clients are strongly encouraged to use only as small of a value as necessary.
+         *
+         * @param interval time without read activity before sending a keepalive ping
+         * @param timeout  the time waiting for read activity after sending a keepalive ping
+         * @param timeUnit the unit in which the interval and timeout are expressed
+         *
+         * @return this instance
+         */
+        public Builder usingKeepAlive(long interval, long timeout, TimeUnit timeUnit, boolean keepAliveWithoutCalls) {
+            keepAliveConfig = cb -> cb.keepAliveTime(interval, timeUnit)
+                                      .keepAliveTimeout(timeout, timeUnit)
+                                      .keepAliveWithoutCalls(keepAliveWithoutCalls);
+            return this;
+        }
+
+        public Builder maxInboundMessageSize(int bytes) {
+            otherConfig = otherConfig.andThen(cb -> cb.maxInboundMessageSize(bytes));
+            return this;
+        }
+
+        public Builder customize(Function<ManagedChannelBuilder<?>, ManagedChannelBuilder<?>> customization) {
+            otherConfig = otherConfig.andThen(customization);
+            return this;
+        }
+
+        protected void validate() {
+            if (executorService == null) {
+                executorService = new ScheduledThreadPoolExecutor(reconnectExecutorPoolsize, AxonConnectorThreadFactory.forInstanceId(clientInstanceId));
+            }
+        }
+
+        public AxonServerConnectionFactory build() {
+            validate();
+            return new AxonServerConnectionFactory(this);
+        }
+
+    }
+
+    private static class DowloadInstructionInterceptor implements ClientInterceptor {
+
+        private volatile boolean suppressDownloadMessage = false;
+
+        @Override
+        public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
+            if (suppressDownloadMessage || "io.axoniq.axonserver.grpc.control.PlatformService/GetPlatformServer".equals(method.getFullMethodName())) {
+                return new ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
+                    @Override
+                    public void start(Listener<RespT> responseListener, Metadata headers) {
+                        super.start(new ForwardingClientCallListener.SimpleForwardingClientCallListener<RespT>(responseListener) {
+                            @Override
+                            public void onClose(Status status, Metadata trailers) {
+                                if (status.getCode() == Status.Code.UNAVAILABLE) {
+                                    writeDownloadMessage();
+                                }
+                                super.onClose(status, trailers);
+                            }
+                        }, headers);
+                    }
+                };
+
+            }
+            return next.newCall(method, callOptions);
+        }
+
+        private synchronized void writeDownloadMessage() {
+            if (!suppressDownloadMessage) {
+                suppressDownloadMessage = true;
+                try (InputStream in = getClass().getClassLoader().getResourceAsStream("axonserver_download.txt")) {
+                    byte[] buffer = new byte[1024];
+                    int read;
+                    while (in != null && (read = in.read(buffer, 0, 1024)) >= 0) {
+                        System.out.write(buffer, 0, read);
+                    }
+                } catch (IOException e) {
+                    logger.debug("Unable to write download advice. You're on your own now.", e);
+                }
+            } else {
+                suppressDownloadMessage = true;
+            }
+        }
+    }
 }

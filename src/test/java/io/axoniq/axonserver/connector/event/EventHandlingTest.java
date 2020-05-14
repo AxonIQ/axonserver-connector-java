@@ -21,6 +21,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -34,11 +35,15 @@ public class EventHandlingTest extends AbstractAxonServerIntegrationTest {
     @BeforeEach
     void setUp() {
         client1 = AxonServerConnectionFactory.forClient("event-handler")
-                                             .routingServers(axonServerAddress);
+                                             .routingServers(axonServerAddress)
+                                             .reconnectInterval(500, MILLISECONDS)
+                                             .build();
         connection1 = client1.connect("default");
 
         client2 = AxonServerConnectionFactory.forClient("event-sender")
-                                             .routingServers(axonServerAddress);
+                                             .routingServers(axonServerAddress)
+                                             .reconnectInterval(500, MILLISECONDS)
+                                             .build();
         connection2 = client2.connect("default");
     }
 

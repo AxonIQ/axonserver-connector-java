@@ -46,7 +46,6 @@ public abstract class AbstractAxonServerChannel {
         }, 500, TimeUnit.MILLISECONDS);
     }
 
-    // TODO - Keep reference to latest channel to make connect idempotent when already connected
     public abstract void connect(ManagedChannel channel);
 
     public abstract void disconnect();
