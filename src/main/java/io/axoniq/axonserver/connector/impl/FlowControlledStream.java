@@ -30,12 +30,14 @@ public abstract class FlowControlledStream<MsgIn, MsgOut> implements ClientRespo
     private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
     private final AtomicInteger permitsConsumed = new AtomicInteger();
+    private final String clientId;
     private final int permitsBatch;
     private final MsgOut additionalPermitsRequest;
     private final MsgOut initialPermitsRequest;
     private ClientCallStreamObserver<MsgOut> outboundStream;
 
     public FlowControlledStream(String clientId, int permits, int permitsBatch) {
+        this.clientId = clientId;
         this.permitsBatch = permitsBatch;
         this.additionalPermitsRequest = buildFlowControlMessage(FlowControl.newBuilder()
                                                                            .setPermits(permitsBatch)
@@ -55,6 +57,10 @@ public abstract class FlowControlledStream<MsgIn, MsgOut> implements ClientRespo
     }
 
     protected abstract MsgOut buildFlowControlMessage(FlowControl flowControl);
+
+    protected String clientId() {
+        return clientId;
+    }
 
     public void markConsumed() {
         if (additionalPermitsRequest == null) {

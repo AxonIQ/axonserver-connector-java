@@ -12,7 +12,7 @@ public class FutureStreamObserver<T> extends CompletableFuture<T> implements Str
         this.valueWhenNoResult = valueWhenNoResult;
     }
 
-    private FutureStreamObserver(Throwable valueWhenNoResult) {
+    public FutureStreamObserver(Throwable valueWhenNoResult) {
         this.valueWhenNoResult = valueWhenNoResult;
     }
 

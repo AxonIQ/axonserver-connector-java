@@ -90,7 +90,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
                        .thenApply(r -> r.setRequestIdentifier(command.getMessageIdentifier()))
                        .whenComplete((r, e) ->
                                              outbound.send(CommandProviderOutbound.newBuilder().setCommandResponse(r).build()))
-                       .thenRun(outbound::markConsumed);
+                       .thenRun(outbound::complete);
     }
 
     private CompletableFuture<CommandResponse> noHandlerForCommand() {

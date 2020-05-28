@@ -60,7 +60,6 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
     private final ConcurrentMap<String, Set<QueryHandler>> queryHandlers = new ConcurrentHashMap<>();
     private final ConcurrentMap<Enum<?>, BiConsumer<QueryProviderInbound, ReplyChannel<QueryProviderOutbound>>> instructionHandlers = new ConcurrentHashMap<>();
 
-    // TODO - keep track of subscriptions to close them when closing this channel
     private final ClientIdentification clientIdentification;
     private final int permits;
     private final int permitsBatch;
@@ -86,7 +85,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
 
     private void handleAck(QueryProviderInbound query, ReplyChannel<QueryProviderOutbound> result) {
         // TODO - Keep track of instructions awaiting ACK and complete them
-        result.markConsumed();
+        result.complete();
     }
 
     private void unsubscribeToQueryUpdates(QueryProviderInbound query, ReplyChannel<QueryProviderOutbound> result) {
@@ -250,6 +249,13 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
     @Override
     public void disconnect() {
         doIfNotNull(outboundQueryStream.getAndSet(null), StreamObserver::onCompleted);
+        cancelAllSubscriptionQueries();
+    }
+
+    private void cancelAllSubscriptionQueries() {
+        subscriptionQueries.forEach((k, v) -> {
+            subscriptionQueries.remove(k).forEach(Registration::cancel);
+        });
     }
 
     @Override
@@ -301,8 +307,8 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
 
             @Override
             public void complete() {
-                result.markConsumed();
                 result.send(QueryProviderOutbound.newBuilder().setQueryComplete(QueryComplete.newBuilder().setRequestId(inbound.getQuery().getMessageIdentifier()).setMessageId(UUID.randomUUID().toString()).build()).build());
+                result.complete();
             }
         });
     }
@@ -360,7 +366,12 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
 
         @Override
         protected boolean unregisterOutboundStream(StreamObserver<QueryProviderOutbound> expected) {
-            return outboundQueryStream.compareAndSet(expected, null);
+            if (outboundQueryStream.compareAndSet(expected, null)) {
+                // TODO - Do update handlers need to be unregistered when disconnections occur?
+                cancelAllSubscriptionQueries();
+                return true;
+            }
+            return false;
         }
     }
 }

@@ -99,6 +99,19 @@ public class CommandChannelTest extends AbstractAxonServerIntegrationTest {
                     () -> "Unexpected message: " + commandResponse.getErrorMessage().getMessage());
     }
 
+    @Test
+    void testDispatchCommandOnDisconnectReturnsError() throws Exception {
+        CommandChannel commandChannel = connection1.commandChannel();
+        commandChannel.registerCommandHandler(this::mockHandler, "testCommand");
+
+        axonServerProxy.disable();
+
+        assertWithin(1, TimeUnit.SECONDS, () -> assertFalse(connection1.isConnected()));
+        CompletableFuture<CommandResponse> result = commandChannel.sendCommand(Command.newBuilder().setName("testCommand").build());
+
+        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(result.isCompletedExceptionally()));
+    }
+
     private CompletableFuture<CommandResponse> mockHandler(Command command) {
         return CompletableFuture.completedFuture(CommandResponse.getDefaultInstance());
     }

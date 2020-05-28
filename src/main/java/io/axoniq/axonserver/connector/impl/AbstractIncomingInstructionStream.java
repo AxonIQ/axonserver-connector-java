@@ -20,7 +20,6 @@ import io.axoniq.axonserver.connector.ErrorCode;
 import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.grpc.ErrorMessage;
 import io.axoniq.axonserver.grpc.InstructionAck;
-import io.axoniq.axonserver.grpc.InstructionAckOrBuilder;
 import io.grpc.stub.ClientCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
@@ -28,10 +27,9 @@ import org.slf4j.LoggerFactory;
 
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 
-public abstract class AbstractIncomingInstructionStream<MsgIn, MsgOut> extends FlowControlledStream<MsgIn, MsgOut> implements ReplyChannel<MsgOut> {
+public abstract class AbstractIncomingInstructionStream<MsgIn, MsgOut> extends FlowControlledStream<MsgIn, MsgOut> {
 
     private static final InstructionAck NO_HANDLER_FOR_INSTRUCTION = InstructionAck.newBuilder().setSuccess(false)
                                                                                    .setError(ErrorMessage.newBuilder()
@@ -56,10 +54,11 @@ public abstract class AbstractIncomingInstructionStream<MsgIn, MsgOut> extends F
             markConsumed();
             String instructionId = getInstructionId(value);
             if (instructionId != null && !instructionId.isEmpty()) {
-                send(buildAckMessage(NO_HANDLER_FOR_INSTRUCTION));
+                instructionsForPlatform.onNext(buildAckMessage(NO_HANDLER_FOR_INSTRUCTION));
             }
         } else {
-            handler.accept(value, this);
+            ForwardingReplyChannel<MsgOut> replyChannel = new ForwardingReplyChannel<MsgOut>(getInstructionId(value), clientId(), instructionsForPlatform, this::buildAckMessage, this::markConsumed);
+            handler.accept(value, replyChannel);
         }
     }
 
@@ -95,15 +94,4 @@ public abstract class AbstractIncomingInstructionStream<MsgIn, MsgOut> extends F
 
     protected abstract boolean unregisterOutboundStream(StreamObserver<MsgOut> expected);
 
-    @Override
-    public void send(MsgOut outboundMessage) {
-        instructionsForPlatform.onNext(outboundMessage);
-    }
-
-    @Override
-    public void ack(String instructionId, Function<InstructionAckOrBuilder, MsgOut> msgBuilder) {
-        if (instructionId != null && !instructionId.isEmpty()) {
-            instructionsForPlatform.onNext(msgBuilder.apply(InstructionAck.newBuilder().setInstructionId(instructionId).setSuccess(true).build()));
-        }
-    }
 }

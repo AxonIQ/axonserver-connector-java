@@ -11,7 +11,7 @@ public interface QueryHandler {
     void handle(QueryRequest query, ResponseHandler responseHandler);
 
     default Registration registerSubscriptionQuery(QueryRequest query, UpdateHandler sendUpdate) {
-        return () -> {};
+        return null;
     }
 
     interface ResponseHandler {

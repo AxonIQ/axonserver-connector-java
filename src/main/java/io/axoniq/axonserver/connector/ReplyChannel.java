@@ -16,15 +16,15 @@
 
 package io.axoniq.axonserver.connector;
 
-import io.axoniq.axonserver.grpc.InstructionAckOrBuilder;
-
-import java.util.function.Function;
+import io.axoniq.axonserver.grpc.ErrorMessage;
 
 public interface ReplyChannel<MsgOut> {
 
     void send(MsgOut outboundMessage);
 
-    void ack(String instructionId, Function<InstructionAckOrBuilder, MsgOut> msgBuilder);
+    void complete();
 
-    void markConsumed();
+    void completeWithError(ErrorMessage errorMessage);
+
+    void completeWithError(ErrorCode errorCode, String message);
 }

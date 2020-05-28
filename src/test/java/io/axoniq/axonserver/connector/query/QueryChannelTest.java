@@ -5,17 +5,21 @@ import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
 import io.axoniq.axonserver.connector.Registration;
 import io.axoniq.axonserver.connector.ResultStream;
+import io.axoniq.axonserver.grpc.SerializedObject;
 import io.axoniq.axonserver.grpc.query.QueryRequest;
 import io.axoniq.axonserver.grpc.query.QueryResponse;
+import io.axoniq.axonserver.grpc.query.QueryUpdate;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class QueryChannelTest extends AbstractAxonServerIntegrationTest {
@@ -50,7 +54,7 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
-    void testUnsubscribedHandlersDoesNotReceiveQuerys() throws Exception {
+    void testUnsubscribedHandlersDoesNotReceiveQueries() throws Exception {
         QueryChannel queryChannel = connection1.queryChannel();
         Registration registration = queryChannel.registerQueryHandler(this::mockHandler, new QueryDefinition("testQuery", "testResult"));
 
@@ -58,7 +62,9 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
 
         ResultStream<QueryResponse> result = connection2.queryChannel().query(QueryRequest.newBuilder().setQuery("testQuery").build());
 
-        assertTrue(result.nextIfAvailable(1, TimeUnit.SECONDS).hasErrorMessage());
+        assertWithin(2, TimeUnit.SECONDS, () -> {
+            assertTrue(result.nextIfAvailable(1, TimeUnit.SECONDS).hasErrorMessage());
+        });
 
         axonServerProxy.disable();
 
@@ -95,6 +101,147 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
         assertFalse(queryResponse.hasErrorMessage(),
                     () -> "Unexpected message: " + queryResponse.getErrorMessage().getMessage());
     }
+
+    @Test
+    void testSubscriptionQueryCancelledOnDisconnect() throws Exception {
+        connection2.instructionChannel().enableHeartbeat(100, 100, TimeUnit.MILLISECONDS);
+        QueryChannel queryChannel = connection1.queryChannel();
+        AtomicReference<QueryHandler.UpdateHandler> updateHandler = new AtomicReference<>();
+        queryChannel.registerQueryHandler(new QueryHandler() {
+            @Override
+            public void handle(QueryRequest query, ResponseHandler responseHandler) {
+                mockHandler(query, responseHandler);
+            }
+
+            @Override
+            public Registration registerSubscriptionQuery(QueryRequest query, UpdateHandler sendUpdate) {
+                System.out.println("XXX - UpdateHandler set to value");
+                updateHandler.set(sendUpdate);
+                return () -> {
+                    System.out.println("XXX - UpdateHandler set to null");
+                    updateHandler.set(null);
+                };
+            }
+        }, new QueryDefinition("testQuery", "testResult"));
+
+        SubscriptionQueryResult subscriptionQuery = connection2.queryChannel().subscriptionQuery(QueryRequest.newBuilder().setQuery("testQuery").build(),
+                                                                                                 SerializedObject.newBuilder().setType("update").build(),
+                                                                                                 100, 10);
+
+        assertWithin(1, TimeUnit.SECONDS, () ->
+                subscriptionQuery.initialResult().isDone()
+        );
+        assertWithin(1, TimeUnit.SECONDS, () -> assertNotNull(updateHandler.get()));
+        updateHandler.get().sendUpdate(QueryUpdate.newBuilder().build());
+
+        assertWithin(1, TimeUnit.SECONDS, () -> assertNotNull(subscriptionQuery.updates().nextIfAvailable()));
+
+        axonServerProxy.disable();
+
+        assertWithin(1, TimeUnit.SECONDS, () -> assertFalse(connection1.isConnected()));
+        assertWithin(1, TimeUnit.SECONDS, () -> assertFalse(connection2.isConnected()));
+
+        assertWithin(1, TimeUnit.SECONDS, () -> {
+            assertTrue(subscriptionQuery.updates().isClosed());
+            assertNull(updateHandler.get());
+        });
+        axonServerProxy.enable();
+
+        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
+
+        Thread.sleep(100);
+
+        assertNull(updateHandler.get());
+    }
+
+    @Test
+    void testClosingSubscriptionQueryFromSenderStopsUpdateStream() {
+        QueryChannel queryChannel = connection1.queryChannel();
+        AtomicReference<QueryHandler.UpdateHandler> updateHandler = new AtomicReference<>();
+        queryChannel.registerQueryHandler(new QueryHandler() {
+            @Override
+            public void handle(QueryRequest query, ResponseHandler responseHandler) {
+                mockHandler(query, responseHandler);
+            }
+
+            @Override
+            public Registration registerSubscriptionQuery(QueryRequest query, UpdateHandler sendUpdate) {
+                System.out.println("XXX - UpdateHandler set to value");
+                updateHandler.set(sendUpdate);
+                return () -> {
+                    System.out.println("XXX - UpdateHandler set to null");
+                    updateHandler.set(null);
+                };
+            }
+        }, new QueryDefinition("testQuery", "testResult"));
+
+        SubscriptionQueryResult subscriptionQuery = connection2.queryChannel().subscriptionQuery(QueryRequest.newBuilder().setQuery("testQuery").build(),
+                                                                                                 SerializedObject.newBuilder().setType("update").build(),
+                                                                                                 100, 10);
+
+        assertWithin(1, TimeUnit.SECONDS, () ->
+                subscriptionQuery.initialResult().isDone()
+        );
+        assertWithin(1, TimeUnit.SECONDS, () -> assertNotNull(updateHandler.get()));
+        updateHandler.get().sendUpdate(QueryUpdate.newBuilder().build());
+
+        assertWithin(1, TimeUnit.SECONDS, () -> assertNotNull(subscriptionQuery.updates().nextIfAvailable()));
+
+        subscriptionQuery.updates().close();
+
+        updateHandler.get().sendUpdate(QueryUpdate.newBuilder().build());
+
+        assertWithin(1, TimeUnit.SECONDS, () -> {
+            assertNull(subscriptionQuery.updates().nextIfAvailable());
+            assertTrue(subscriptionQuery.updates().isClosed(), "Client side update stream should have been closed");
+            assertNull(updateHandler.get(), "Expected updateHandler to have been unregistered");
+        });
+    }
+
+
+    @Test
+    void testClosingSubscriptionQueryFromProviderStopsUpdateStream() {
+        QueryChannel queryChannel = connection1.queryChannel();
+        AtomicReference<QueryHandler.UpdateHandler> updateHandler = new AtomicReference<>();
+        queryChannel.registerQueryHandler(new QueryHandler() {
+            @Override
+            public void handle(QueryRequest query, ResponseHandler responseHandler) {
+                mockHandler(query, responseHandler);
+            }
+
+            @Override
+            public Registration registerSubscriptionQuery(QueryRequest query, UpdateHandler sendUpdate) {
+                System.out.println("XXX - UpdateHandler set to value");
+                updateHandler.set(sendUpdate);
+                return () -> {
+                    System.out.println("XXX - UpdateHandler set to null");
+                    updateHandler.set(null);
+                };
+            }
+        }, new QueryDefinition("testQuery", "testResult"));
+
+        SubscriptionQueryResult subscriptionQuery = connection2.queryChannel().subscriptionQuery(QueryRequest.newBuilder().setQuery("testQuery").build(),
+                                                                                                 SerializedObject.newBuilder().setType("update").build(),
+                                                                                                 100, 10);
+
+        assertWithin(1, TimeUnit.SECONDS, () -> {
+            subscriptionQuery.initialResult().isDone();
+            assertNotNull(updateHandler.get());
+        });
+
+        updateHandler.get().sendUpdate(QueryUpdate.newBuilder().build());
+        System.out.println("Completing");
+        updateHandler.get().complete();
+
+        assertWithin(1, TimeUnit.SECONDS, () -> assertNotNull(subscriptionQuery.updates().nextIfAvailable()));
+
+        assertWithin(1, TimeUnit.SECONDS, () -> {
+            assertNull(subscriptionQuery.updates().nextIfAvailable());
+            assertTrue(subscriptionQuery.updates().isClosed(), "Expected client side to be unregistered");
+            assertNull(updateHandler.get(), "Expected UpdateHandler to be unregistered");
+        });
+    }
+
 
     private void mockHandler(QueryRequest query, QueryHandler.ResponseHandler responseHandler) {
         responseHandler.sendLastResponse(QueryResponse.newBuilder().setPayload(query.getPayload()).build());

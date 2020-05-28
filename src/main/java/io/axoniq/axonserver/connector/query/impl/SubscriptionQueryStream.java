@@ -12,10 +12,14 @@ import io.axoniq.axonserver.grpc.query.SubscriptionQuery;
 import io.axoniq.axonserver.grpc.query.SubscriptionQueryRequest;
 import io.axoniq.axonserver.grpc.query.SubscriptionQueryResponse;
 import io.grpc.stub.ClientCallStreamObserver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CompletableFuture;
 
 public class SubscriptionQueryStream extends FlowControlledStream<SubscriptionQueryResponse, SubscriptionQueryRequest> {
+
+    private static final Logger logger = LoggerFactory.getLogger(SubscriptionQueryStream.class);
 
     private final String subscriptionQueryId;
     private final CompletableFuture<QueryResponse> initialResultFuture;
@@ -60,8 +64,12 @@ public class SubscriptionQueryStream extends FlowControlledStream<SubscriptionQu
         initialResultFuture.completeExceptionally(t);
         updateBuffer.onError(t);
 
-        outboundStream().onNext(SubscriptionQueryRequest.newBuilder().setUnsubscribe(SubscriptionQuery.newBuilder().setSubscriptionIdentifier(subscriptionQueryId).build()).build());
-        outboundStream().onCompleted();
+        try {
+            outboundStream().onNext(SubscriptionQueryRequest.newBuilder().setUnsubscribe(SubscriptionQuery.newBuilder().setSubscriptionIdentifier(subscriptionQueryId).build()).build());
+            outboundStream().onCompleted();
+        } catch (Exception e) {
+            logger.debug("Cannot complete stream. Already completed.", e);
+        }
     }
 
     @Override

@@ -45,6 +45,24 @@ public class SubscriptionQueryUpdateBuffer extends AbstractBufferedStream<QueryU
     }
 
     @Override
+    public void onError(Throwable t) {
+        try {
+            super.onError(t);
+        } finally {
+            close();
+        }
+    }
+
+    @Override
+    public void onCompleted() {
+        try {
+            super.onCompleted();
+        } finally {
+            close();
+        }
+    }
+
+    @Override
     public void close() {
         if (!closed.getAndSet(true)) {
             outboundStream().onNext(SubscriptionQueryRequest.newBuilder().setUnsubscribe(SubscriptionQuery.newBuilder().setSubscriptionIdentifier(subscriptionQueryId).build()).build());

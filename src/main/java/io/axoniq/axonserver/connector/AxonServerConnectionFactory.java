@@ -43,6 +43,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -157,12 +158,15 @@ public class AxonServerConnectionFactory {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        executorService.shutdownNow();
+        if (!executorService.isTerminated()) {
+            logger.warn("Forcefully shutting down executor service.");
+            executorService.shutdownNow();
+        }
     }
 
     public static class Builder {
-        public final String applicationName;
-        public final String clientInstanceId;
+        private final String applicationName;
+        private final String clientInstanceId;
         private final Map<String, String> tags = new HashMap<>();
         private List<ServerAddress> routingServers;
         private long connectTimeout = 10000;
@@ -269,6 +273,9 @@ public class AxonServerConnectionFactory {
         }
 
         protected void validate() {
+            if (routingServers == null) {
+                routingServers = Collections.singletonList(new ServerAddress());
+            }
             if (executorService == null) {
                 executorService = new ScheduledThreadPoolExecutor(reconnectExecutorPoolsize, AxonConnectorThreadFactory.forInstanceId(clientInstanceId));
             }
@@ -287,7 +294,7 @@ public class AxonServerConnectionFactory {
 
         @Override
         public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
-            if (suppressDownloadMessage || "io.axoniq.axonserver.grpc.control.PlatformService/GetPlatformServer".equals(method.getFullMethodName())) {
+            if (!suppressDownloadMessage || "io.axoniq.axonserver.grpc.control.PlatformService/GetPlatformServer".equals(method.getFullMethodName())) {
                 return new ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
                     @Override
                     public void start(Listener<RespT> responseListener, Metadata headers) {

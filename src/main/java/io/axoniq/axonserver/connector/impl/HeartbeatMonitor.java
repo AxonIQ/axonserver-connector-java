@@ -1,5 +1,9 @@
 package io.axoniq.axonserver.connector.impl;
 
+import io.axoniq.axonserver.connector.ReplyChannel;
+import io.axoniq.axonserver.grpc.control.Heartbeat;
+import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
+import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -92,6 +96,17 @@ public class HeartbeatMonitor {
                     }
                 }
             });
+        }
+    }
+
+    public void handleIncomingBeat(PlatformOutboundInstruction msg, ReplyChannel<PlatformInboundInstruction> reply) {
+        long now = clock.millis();
+        long interval = this.interval.get();
+        nextHeartbeatTimeout.updateAndGet(current -> Math.max(now + interval, current));
+        try {
+            reply.send(PlatformInboundInstruction.newBuilder().setHeartbeat(Heartbeat.getDefaultInstance()).build());
+        } finally {
+            reply.complete();
         }
     }
 }

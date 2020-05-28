@@ -134,10 +134,7 @@ public class AxonServerManagedChannel extends ManagedChannel {
     @Override
     public ManagedChannel shutdown() {
         shutdown.set(true);
-        ManagedChannel current = activeChannel.get();
-        if (current != null) {
-            current.shutdown();
-        }
+        doIfNotNull(activeChannel.get(), ManagedChannel::shutdown);
         return this;
     }
 
@@ -148,6 +145,9 @@ public class AxonServerManagedChannel extends ManagedChannel {
 
     @Override
     public boolean isTerminated() {
+        if (!shutdown.get()) {
+            return false;
+        }
         ManagedChannel activeChannel = this.activeChannel.get();
         return activeChannel == null || activeChannel.isTerminated();
     }
@@ -155,10 +155,7 @@ public class AxonServerManagedChannel extends ManagedChannel {
     @Override
     public ManagedChannel shutdownNow() {
         shutdown.set(true);
-        ManagedChannel current = activeChannel.get();
-        if (current != null) {
-            current.shutdownNow();
-        }
+        doIfNotNull(activeChannel.get(), ManagedChannel::shutdownNow);
         return this;
     }
 

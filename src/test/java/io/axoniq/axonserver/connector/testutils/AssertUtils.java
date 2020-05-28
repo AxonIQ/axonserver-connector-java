@@ -16,6 +16,8 @@
 
 package io.axoniq.axonserver.connector.testutils;
 
+import org.junit.jupiter.api.Assertions;
+
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -36,7 +38,7 @@ public abstract class AssertUtils {
      * @param assertion a {@link Runnable} containing the assertion to succeed within the deadline
      */
     @SuppressWarnings("Duplicates")
-    public static void assertWithin(int time, TimeUnit unit, Runnable assertion) {
+    public static void assertWithin(int time, TimeUnit unit, ExceptionThrowingRunnable assertion) {
         long now = System.currentTimeMillis();
         long deadline = now + unit.toMillis(time);
         do {
@@ -47,8 +49,19 @@ public abstract class AssertUtils {
                 if (now >= deadline) {
                     throw e;
                 }
+            } catch (Exception e) {
+                if (now >= deadline) {
+                    Assertions.fail(e);
+                }
             }
             now = System.currentTimeMillis();
         } while (true);
+    }
+
+    @FunctionalInterface
+    public interface ExceptionThrowingRunnable {
+
+        void run() throws Exception;
+
     }
 }

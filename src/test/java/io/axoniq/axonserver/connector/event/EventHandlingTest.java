@@ -4,6 +4,7 @@ import io.axoniq.axonserver.connector.AbstractAxonServerIntegrationTest;
 import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
 import io.axoniq.axonserver.connector.ResultStream;
+import io.axoniq.axonserver.connector.impl.StreamClosedException;
 import io.axoniq.axonserver.connector.testutils.MessageFactory;
 import io.axoniq.axonserver.grpc.event.Confirmation;
 import io.axoniq.axonserver.grpc.event.Event;
@@ -23,6 +24,7 @@ import java.util.stream.Stream;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class EventHandlingTest extends AbstractAxonServerIntegrationTest {
@@ -169,6 +171,7 @@ public class EventHandlingTest extends AbstractAxonServerIntegrationTest {
         try (ResultStream<EventWithToken> stream = eventChannel.openStream(-1, 64)) {
             Assertions.assertNull(stream.nextIfAvailable(1, SECONDS));
             assertTrue(stream.isClosed());
+            assertThrows(StreamClosedException.class, stream::next);
         }
 
         axonServerProxy.enable();

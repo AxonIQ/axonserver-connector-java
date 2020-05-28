@@ -23,7 +23,9 @@ import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.event.AggregateEventStream;
 import io.axoniq.axonserver.connector.event.AppendEventsTransaction;
 import io.axoniq.axonserver.connector.event.EventChannel;
+import io.axoniq.axonserver.connector.instruction.ProcessorInstructionHandler;
 import io.axoniq.axonserver.grpc.SerializedObject;
+import io.axoniq.axonserver.grpc.control.EventProcessorInfo;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.EventWithToken;
 
@@ -32,6 +34,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -47,10 +50,64 @@ public class ConnectorRunner_Events {
             AxonServerConnection contextConnection = testSubject.connect("default");
 
             EventChannel channel = contextConnection.eventChannel();
+            contextConnection.instructionChannel().registerEventProcessor("TestProcessor",
+                                                                          () -> {
+                                                                              System.out.println("Info requested");
+                                                                              return EventProcessorInfo.newBuilder()
+                                                                                                       .setActiveThreads(1)
+                                                                                                       .setAvailableThreads(4)
+                                                                                                       .setRunning(true)
+                                                                                                       .setMode("Tracking")
+                                                                                                       .setProcessorName("TestProcessor")
+                                                                                                       .setTokenStoreIdentifier("Unique")
+                                                                                                       .addSegmentStatus(
+                                                                                                               EventProcessorInfo.SegmentStatus.newBuilder()
+                                                                                                                                               .setCaughtUp(false)
+                                                                                                                                               .setOnePartOf(2)
+                                                                                                                                               .setSegmentId(0)
+                                                                                                                                               .setTokenPosition(ThreadLocalRandom.current().nextInt(1, 10000))
+                                                                                                                                               .setReplaying(true)
+                                                                                                                                               .build())
+                                                                                                       .build();
+                                                                          },
+                                                                          new ProcessorInstructionHandler() {
+                                                                              @Override
+                                                                              public CompletableFuture<Boolean> releaseSegment(int segmentId) {
+                                                                                  System.out.println("Got request to release");
+                                                                                  return CompletableFuture.completedFuture(true);
+                                                                              }
+
+                                                                              @Override
+                                                                              public CompletableFuture<Boolean> splitSegment(int segmentId) {
+                                                                                  System.out.println("Got request to split " + segmentId);
+                                                                                  return CompletableFuture.completedFuture(true);
+                                                                              }
+
+                                                                              @Override
+                                                                              public CompletableFuture<Boolean> mergeSegment(int segmentId) {
+                                                                                  System.out.println("Got request to merge " + segmentId);
+                                                                                  return CompletableFuture.completedFuture(true);
+                                                                              }
+
+                                                                              @Override
+                                                                              public CompletableFuture<Void> pauseProcessor() {
+                                                                                  System.out.println("Got request to pause");
+                                                                                  return CompletableFuture.completedFuture(null);
+                                                                              }
+
+                                                                              @Override
+                                                                              public CompletableFuture<Void> startProcessor() {
+                                                                                  System.out.println("Got request to start");
+                                                                                  return CompletableFuture.completedFuture(null);
+                                                                              }
+                                                                          });
             ResultStream<EventWithToken> stream = channel.openStream(-1, 10000);
             long counter = 0;
             long t1 = System.currentTimeMillis();
-            while (stream.nextIfAvailable(1, TimeUnit.SECONDS) != null) {
+            while (true) {
+                EventWithToken eventWithToken = stream.nextIfAvailable(1, TimeUnit.SECONDS);
+                if (eventWithToken == null) break;
+                System.out.println(eventWithToken);
                 counter++;
                 long now = System.currentTimeMillis();
                 if (now - t1 > 1000) {
@@ -60,6 +117,7 @@ public class ConnectorRunner_Events {
                 }
             }
             stream.close();
+    testSubject.shutdown();
         }
 
 
