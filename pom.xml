@@ -34,8 +34,9 @@
 
         <grpc.version>1.28.1</grpc.version>
         <netty.tcnative.version>2.0.28.Final</netty.tcnative.version>
-        <axonserver.api.version>4.4-SNAPSHOT</axonserver.api.version>
         <junit.jupiter.version>5.5.2</junit.jupiter.version>
+
+        <axonserver.api.version>4.4-SNAPSHOT</axonserver.api.version>
 
         <jacoco-maven-plugin.version>0.8.5</jacoco-maven-plugin.version>
     </properties>
@@ -435,4 +436,58 @@
         </profile>
 
     </profiles>
+
+    <scm>
+        <connection>scm:git:https://github.com/AxonIQ/axonserver-connector-java.git</connection>
+        <developerConnection>scm:git:https://github.com/AxonIQ/axonserver-connector-java.git</developerConnection>
+        <url>https://github.com/AxonIQ/axon-server</url>
+        <tag>master</tag>
+    </scm>
+
+    <distributionManagement>
+        <snapshotRepository>
+            <id>axoniq-nexus</id>
+            <url>https://dev-nexus.axoniq.io/repository/products-snapshots</url>
+            <uniqueVersion>false</uniqueVersion>
+        </snapshotRepository>
+        <repository>
+            <id>axoniq-nexus</id>
+            <url>https://dev-nexus.axoniq.io/repository/products-releases</url>
+            <uniqueVersion>true</uniqueVersion>
+        </repository>
+    </distributionManagement>
+
+    <repositories>
+        <repository>
+            <id>axoniq-nexus</id>
+            <url>https://dev-nexus.axoniq.io/repository/products/</url>
+        </repository>
+        <repository>
+            <id>sonatype-snapshots</id>
+            <url>https://dev-nexus.axoniq.io/repository/sonatype-snapshots/</url>
+            <snapshots>
+                <enabled>true</enabled>
+                <checksumPolicy>fail</checksumPolicy>
+                <updatePolicy>always</updatePolicy>
+            </snapshots>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+        </repository>
+    </repositories>
+
+    <organization>
+        <name>AxonIQ BV</name>
+        <url>http://axoniq.io</url>
+    </organization>
+
+    <developers>
+        <developer>
+            <name>Allard Buijze</name>
+            <roles>
+                <role>Developer</role>
+            </roles>
+        </developer>
+    </developers>
+
 </project>

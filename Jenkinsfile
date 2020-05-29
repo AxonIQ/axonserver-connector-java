@@ -81,17 +81,19 @@ podTemplate(label: label,
                         if (relevantBranch(gitBranch, deployingBranches)) {                // Deploy artifacts to Nexus for some branches
                             slackReport = slackReport + "\nDeployed to dev-nexus"
                         }
-                    }
-                    catch (err) {
+                    } catch (err) {
                         slackReport = slackReport + "\nMaven build FAILED!"             // This means build itself failed, not 'just' tests
                         throw err
-                    }
-                    finally {
-                        junit '**/target/surefire-reports/TEST-*.xml'                   // Read the test results
-                        slackReport = slackReport + "\n" + getTestSummary()
+                    } finally {
+                        try {
+                            junit '**/target/surefire-reports/TEST-*.xml'                   // Read the test results
+                            slackReport = slackReport + "\n" + getTestSummary()
+                        } catch (err) {
+                            slackReport = slackReport + "\nNo test results found after build."
+                        }
+                        slackSend(message: slackReport, channel: "#axon-framework-github")
                     }
                 }
             }
-            slackSend(message: slackReport)
         }
     }
