@@ -76,7 +76,8 @@ podTemplate(label: label,
                     }
                     mavenTarget = "-Pcoverage " + mavenTarget
                     try {
-                        sh "mvn \${MVN_BLD} -Dmaven.test.failure.ignore ${mavenTarget} -Psonar sonar:sonar"   // Ignore test failures; we want the numbers only.
+                        // Ignore test failures; we want the numbers only.
+                        sh "mvn \${MVN_BLD} -Dmaven.test.failure.ignore ${mavenTarget} -Psonar -Dsonar.branch.name=${gitBranch} sonar:sonar"
 
                         if (relevantBranch(gitBranch, deployingBranches)) {                // Deploy artifacts to Nexus for some branches
                             slackReport = slackReport + "\nDeployed to dev-nexus"
