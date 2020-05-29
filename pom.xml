@@ -23,7 +23,7 @@
     <artifactId>axonserver-connector-java</artifactId>
     <version>4.4-SNAPSHOT</version>
 
-    <name>Connector for AxonServer</name>
+    <name>AxonServer Connector</name>
     <description>
         Connector module providing infrastructure components that connect to AxonServer.
     </description>
@@ -36,6 +36,8 @@
         <netty.tcnative.version>2.0.28.Final</netty.tcnative.version>
         <axonserver.api.version>4.4-SNAPSHOT</axonserver.api.version>
         <junit.jupiter.version>5.5.2</junit.jupiter.version>
+
+        <jacoco-maven-plugin.version>0.8.5</jacoco-maven-plugin.version>
     </properties>
 
     <dependencyManagement>
@@ -402,4 +404,35 @@
         </plugins>
     </build>
 
+    <profiles>
+
+        <profile>
+            <id>coverage</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.jacoco</groupId>
+                        <artifactId>jacoco-maven-plugin</artifactId>
+                        <version>${jacoco-maven-plugin.version}</version>
+
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>prepare-agent</goal>
+                                </goals>
+                            </execution>
+                            <execution>
+                                <id>report</id>
+                                <phase>prepare-package</phase>
+                                <goals>
+                                    <goal>report</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+    </profiles>
 </project>
