@@ -18,13 +18,13 @@ package io.axoniq.axonserver.connector;
 
 import io.axoniq.axonserver.grpc.ErrorMessage;
 
-public interface ReplyChannel<MsgOut> {
+public interface ReplyChannel<T> {
 
-    void send(MsgOut outboundMessage);
+    void send(T outboundMessage);
 
     void complete();
 
     void completeWithError(ErrorMessage errorMessage);
 
-    void completeWithError(ErrorCode errorCode, String message);
+    void completeWithError(ErrorCategory errorCategory, String message);
 }

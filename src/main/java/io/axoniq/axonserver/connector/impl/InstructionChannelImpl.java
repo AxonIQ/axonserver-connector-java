@@ -17,7 +17,7 @@
 package io.axoniq.axonserver.connector.impl;
 
 import io.axoniq.axonserver.connector.AxonServerException;
-import io.axoniq.axonserver.connector.ErrorCode;
+import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.Registration;
 import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.connector.instruction.InstructionChannel;
@@ -37,7 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -55,16 +55,16 @@ import static io.axoniq.axonserver.connector.impl.ObjectUtils.silently;
 
 public class InstructionChannelImpl extends AbstractAxonServerChannel implements InstructionChannel {
 
-    private static final Logger logger = LoggerFactory.getLogger(InstructionChannel.class);
+    private static final Logger logger = LoggerFactory.getLogger(InstructionChannelImpl.class);
     private final ClientIdentification clientIdentification;
     private final ScheduledExecutorService executor;
     private final AtomicReference<StreamObserver<PlatformInboundInstruction>> instructionDispatcher = new AtomicReference<>();
-    private final Map<PlatformOutboundInstruction.RequestCase, BiConsumer<PlatformOutboundInstruction, ReplyChannel<PlatformInboundInstruction>>> instructionHandlers = new HashMap<>();
+    private final Map<PlatformOutboundInstruction.RequestCase, BiConsumer<PlatformOutboundInstruction, ReplyChannel<PlatformInboundInstruction>>> instructionHandlers = new EnumMap<>(PlatformOutboundInstruction.RequestCase.class);
     private final HeartbeatMonitor heartbeatMonitor;
     private final Map<String, CompletableFuture<?>> awaitingAck = new ConcurrentHashMap<>();
     private final String context;
     private final Map<String, ProcessorInstructionHandler> processorInstructionHandlers = new ConcurrentHashMap<>();
-    private final Map<String, Supplier<EventProcessorInfo>> processorInfoSuppliers = new ConcurrentHashMap<String, Supplier<EventProcessorInfo>>();
+    private final Map<String, Supplier<EventProcessorInfo>> processorInfoSuppliers = new ConcurrentHashMap<>();
     private final AtomicBoolean infoSupplierActive = new AtomicBoolean();
 
     public InstructionChannelImpl(ClientIdentification clientIdentification, String context,
@@ -180,7 +180,7 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
         logger.debug("Sending instruction: {}", instruction.getRequestCase().name());
         StreamObserver<PlatformInboundInstruction> dispatcher = instructionDispatcher.get();
         if (dispatcher == null) {
-            result.completeExceptionally(new AxonServerException(ErrorCode.INSTRUCTION_EXECUTION_ERROR,
+            result.completeExceptionally(new AxonServerException(ErrorCategory.INSTRUCTION_EXECUTION_ERROR,
                                                                  "Unable to send instruction"));
         } else {
             dispatcher.onNext(instruction);

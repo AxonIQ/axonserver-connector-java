@@ -1,7 +1,7 @@
 package io.axoniq.axonserver.connector.query.impl;
 
 import io.axoniq.axonserver.connector.AxonServerException;
-import io.axoniq.axonserver.connector.ErrorCode;
+import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.impl.AbstractBufferedStream;
 import io.axoniq.axonserver.connector.impl.FlowControlledStream;
@@ -46,7 +46,7 @@ public class SubscriptionQueryStream extends FlowControlledStream<SubscriptionQu
                 updateBuffer.onCompleted();
                 break;
             case COMPLETE_EXCEPTIONALLY:
-                AxonServerException exception = new AxonServerException(ErrorCode.getFromCode(value.getCompleteExceptionally().getErrorCode()),
+                AxonServerException exception = new AxonServerException(ErrorCategory.getFromCode(value.getCompleteExceptionally().getErrorCode()),
                                                                         value.getCompleteExceptionally().getErrorMessage().getMessage());
                 updateBuffer.onError(exception);
                 if (!initialResultFuture.isDone()) {
@@ -55,6 +55,9 @@ public class SubscriptionQueryStream extends FlowControlledStream<SubscriptionQu
                 break;
             case INITIAL_RESULT:
                 initialResultFuture.complete(value.getInitialResult());
+                break;
+            default:
+                logger.info("Received unsupported message from SubscriptionQuery. It doesn't declare one of the expected types");
                 break;
         }
     }

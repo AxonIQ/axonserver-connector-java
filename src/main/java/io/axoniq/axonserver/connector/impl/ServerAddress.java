@@ -22,11 +22,11 @@ public class ServerAddress {
         this.host = host;
     }
 
-    public int grpcPort() {
+    public int getGrpcPort() {
         return grpcPort;
     }
 
-    public String hostName() {
+    public String getHostName() {
         return host;
     }
 

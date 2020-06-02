@@ -41,8 +41,8 @@ public class GrpcBufferingInterceptor implements ClientInterceptor {
     public GrpcBufferingInterceptor(int additionalBuffer) {this.additionalBuffer = additionalBuffer;}
 
     @Override
-    public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
-        ClientCall<ReqT, RespT> call = next.newCall(method, callOptions);
+    public <REQ, RESP> ClientCall<REQ, RESP> interceptCall(MethodDescriptor<REQ, RESP> method, CallOptions callOptions, Channel next) {
+        ClientCall<REQ, RESP> call = next.newCall(method, callOptions);
         if (additionalBuffer == 0 || method.getType().serverSendsOneMessage()) {
             return call;
         }
@@ -50,24 +50,19 @@ public class GrpcBufferingInterceptor implements ClientInterceptor {
 
     }
 
-    private static class AdditionalMessageRequestingCall<ReqT, RespT> extends ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT> {
+    private static class AdditionalMessageRequestingCall<REQ, RESP> extends ForwardingClientCall.SimpleForwardingClientCall<REQ, RESP> {
 
         private final int additionalBuffer;
 
-        public AdditionalMessageRequestingCall(ClientCall<ReqT, RespT> call, int additionalBuffer) {
+        public AdditionalMessageRequestingCall(ClientCall<REQ, RESP> call, int additionalBuffer) {
             super(call);
             this.additionalBuffer = additionalBuffer;
         }
 
         @Override
-        public void start(Listener<RespT> responseListener, Metadata headers) {
+        public void start(Listener<RESP> responseListener, Metadata headers) {
             super.start(responseListener, headers);
             request(additionalBuffer);
-        }
-
-        @Override
-        public void sendMessage(ReqT message) {
-            super.sendMessage(message);
         }
     }
 }

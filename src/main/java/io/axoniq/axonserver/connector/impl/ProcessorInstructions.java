@@ -1,6 +1,6 @@
 package io.axoniq.axonserver.connector.impl;
 
-import io.axoniq.axonserver.connector.ErrorCode;
+import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.connector.instruction.ProcessorInstructionHandler;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo;
@@ -90,16 +90,16 @@ public class ProcessorInstructions {
         if (handler != null) {
             task.apply(handler)
                 .whenComplete((r, e) -> {
-                    boolean success = r == null ? false : r;
+                    boolean success = r != null && r;
                     if (!success || e != null) {
-                        replyChannel.completeWithError(buildErrorMessage(ErrorCode.INSTRUCTION_EXECUTION_ERROR, "client", e));
+                        replyChannel.completeWithError(buildErrorMessage(ErrorCategory.INSTRUCTION_EXECUTION_ERROR, "client", e));
                     } else {
                         replyChannel.complete();
                     }
 
                 });
         } else {
-            replyChannel.completeWithError(ErrorCode.INSTRUCTION_EXECUTION_ERROR,
+            replyChannel.completeWithError(ErrorCategory.INSTRUCTION_EXECUTION_ERROR,
                                            "Unknown processor");
         }
     }

@@ -67,7 +67,7 @@ public abstract class AbstractAxonServerIntegrationTest {
 
     @BeforeEach
     void prepareInstance() throws IOException {
-        AxonServerUtils.purgeEventsFromAxonServer(axonServerHttpPort.hostName(), axonServerHttpPort.grpcPort());
+        AxonServerUtils.purgeEventsFromAxonServer(axonServerHttpPort.getHostName(), axonServerHttpPort.getGrpcPort());
     }
 
     public static Proxy getOrCreateProxy(ToxiproxyClient client, String proxyName, String listen, String upstream) throws IOException {

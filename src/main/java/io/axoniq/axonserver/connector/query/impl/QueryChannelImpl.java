@@ -1,6 +1,6 @@
 package io.axoniq.axonserver.connector.query.impl;
 
-import io.axoniq.axonserver.connector.ErrorCode;
+import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.Registration;
 import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.connector.ResultStream;
@@ -53,7 +53,9 @@ import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
 
 public class QueryChannelImpl extends AbstractAxonServerChannel implements QueryChannel {
 
-    private static final Logger logger = LoggerFactory.getLogger(QueryChannel.class);
+    private static final Logger logger = LoggerFactory.getLogger(QueryChannelImpl.class);
+    private static final QueryResponse TERMINAL = QueryResponse.newBuilder().setErrorCode("__TERMINAL__").build();
+
     private final AtomicReference<QueryServiceGrpc.QueryServiceStub> queryService = new AtomicReference<>();
     private final AtomicReference<StreamObserver<QueryProviderOutbound>> outboundQueryStream = new AtomicReference<>();
     private final Set<QueryDefinition> supportedQueries = new CopyOnWriteArraySet<>();
@@ -159,9 +161,9 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
     public Registration registerQueryHandler(QueryHandler handler, QueryDefinition... queryDefinitions) {
         synchronized (queryHandlerMonitor) {
             for (QueryDefinition queryDefinition : queryDefinitions) {
-                Set<QueryHandler> queryHandlers = this.queryHandlers.computeIfAbsent(queryDefinition.getQueryName(), k -> new CopyOnWriteArraySet<>());
+                this.queryHandlers.computeIfAbsent(queryDefinition.getQueryName(), k -> new CopyOnWriteArraySet<>())
+                                  .add(handler);
                 boolean firstRegistration = supportedQueries.add(queryDefinition);
-                queryHandlers.add(handler);
                 if (firstRegistration) {
                     doIfNotNull(outboundQueryStream.get(),
                                 s -> s.onNext(buildSubscribeMessage(queryDefinition.getQueryName(), queryDefinition.getResultType(), "")));
@@ -173,22 +175,20 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
             synchronized (queryHandlerMonitor) {
                 for (QueryDefinition queryDefinition : queryDefinitions) {
                     Set<QueryHandler> refs = queryHandlers.get(queryDefinition.getQueryName());
-                    if (refs != null && refs.remove(handler)) {
-                        if (refs.isEmpty()) {
-                            queryHandlers.remove(queryDefinition.getQueryName());
-                            String instructionId = UUID.randomUUID().toString();
-                            outboundQueryStream.get().onNext(
-                                    QueryProviderOutbound.newBuilder()
-                                                         .setInstructionId(instructionId)
-                                                         .setUnsubscribe(QuerySubscription.newBuilder()
-                                                                                          .setMessageId(instructionId)
-                                                                                          .setQuery(queryDefinition.getQueryName())
-                                                                                          .setResultName(queryDefinition.getResultType())
-                                                                                          .setClientId(clientIdentification.getClientId())
-                                                                                          .setComponentName(clientIdentification.getComponentName()))
-                                                         .build()
-                            );
-                        }
+                    if (refs != null && refs.remove(handler) && refs.isEmpty()) {
+                        queryHandlers.remove(queryDefinition.getQueryName());
+                        String instructionId = UUID.randomUUID().toString();
+                        outboundQueryStream.get().onNext(
+                                QueryProviderOutbound.newBuilder()
+                                                     .setInstructionId(instructionId)
+                                                     .setUnsubscribe(QuerySubscription.newBuilder()
+                                                                                      .setMessageId(instructionId)
+                                                                                      .setQuery(queryDefinition.getQueryName())
+                                                                                      .setResultName(queryDefinition.getResultType())
+                                                                                      .setClientId(clientIdentification.getClientId())
+                                                                                      .setComponentName(clientIdentification.getComponentName()))
+                                                     .build()
+                        );
                     }
                 }
             }
@@ -198,7 +198,6 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
     @Override
     public ResultStream<QueryResponse> query(QueryRequest query) {
         AbstractBufferedStream<QueryResponse, QueryRequest> results = new AbstractBufferedStream<QueryResponse, QueryRequest>(clientIdentification.getClientId(), Integer.MAX_VALUE, 10) {
-            private final QueryResponse TERMINAL = QueryResponse.newBuilder().setErrorCode("__TERMINAL__").build();
 
             @Override
             protected QueryRequest buildFlowControlMessage(FlowControl flowControl) {
@@ -253,9 +252,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
     }
 
     private void cancelAllSubscriptionQueries() {
-        subscriptionQueries.forEach((k, v) -> {
-            subscriptionQueries.remove(k).forEach(Registration::cancel);
-        });
+        subscriptionQueries.forEach((k, v) -> subscriptionQueries.remove(k).forEach(Registration::cancel));
     }
 
     @Override
@@ -272,7 +269,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
         if (handlers.isEmpty()) {
             responseHandler.sendLastResponse(QueryResponse.newBuilder()
                                                           .setRequestIdentifier(query.getMessageIdentifier())
-                                                          .setErrorCode(ErrorCode.NO_HANDLER_FOR_QUERY.errorCode())
+                                                          .setErrorCode(ErrorCategory.NO_HANDLER_FOR_QUERY.errorCode())
                                                           .setErrorMessage(ErrorMessage.newBuilder().setMessage("No handler for query").build())
                                                           .build());
         }

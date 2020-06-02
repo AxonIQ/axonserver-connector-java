@@ -53,19 +53,18 @@ class AxonServerManagedChannelTest extends AbstractAxonServerIntegrationTest {
             inv.getArgumentAt(0, Runnable.class).run();
         }).when(mockExecutor)
           .execute(any(Runnable.class));
-        localConnection = () -> NettyChannelBuilder.forAddress(axonServerAddress.hostName(), axonServerAddress.grpcPort())
-                                             .usePlaintext()
-                                             .build();
+        localConnection = () -> NettyChannelBuilder.forAddress(axonServerAddress.getHostName(), axonServerAddress.getGrpcPort())
+                                                   .usePlaintext()
+                                                   .build();
         testSubject = new AxonServerManagedChannel(asList(new ServerAddress("server1"),
                                                           new ServerAddress("server2"),
                                                           new ServerAddress("server3")),
-                                                   2000, 0, TimeUnit.MILLISECONDS, "default",
+                                                   new ReconnectConfiguration(2000, 0, true, TimeUnit.MILLISECONDS), "default",
                                                    ClientIdentification.newBuilder()
                                                                        .setClientId(UUID.randomUUID().toString())
                                                                        .setComponentName(getClass().getSimpleName())
                                                                        .build(),
                                                    mockExecutor,
-                                                   true,
                                                    (address, context) -> {
                                                        connectAttempts.add(address);
                                                        return localConnection.get();
@@ -147,13 +146,12 @@ class AxonServerManagedChannelTest extends AbstractAxonServerIntegrationTest {
         testSubject = new AxonServerManagedChannel(asList(new ServerAddress("server1"),
                                                           new ServerAddress("server2"),
                                                           new ServerAddress("server3")),
-                                                   2000, 0, TimeUnit.MILLISECONDS, "default",
+                                                   new ReconnectConfiguration(2000, 0, false, TimeUnit.MILLISECONDS), "default",
                                                    ClientIdentification.newBuilder()
                                                                        .setClientId(UUID.randomUUID().toString())
                                                                        .setComponentName(getClass().getSimpleName())
                                                                        .build(),
                                                    mockExecutor,
-                                                   false,
                                                    (address, context) -> {
                                                        connectAttempts.add(address);
                                                        return localConnection.get();

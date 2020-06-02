@@ -25,16 +25,16 @@ import org.slf4j.LoggerFactory;
 import java.lang.invoke.MethodHandles;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public abstract class FlowControlledStream<MsgIn, MsgOut> implements ClientResponseObserver<MsgOut, MsgIn> {
+public abstract class FlowControlledStream<IN, OUT> implements ClientResponseObserver<OUT, IN> {
 
     private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
     private final AtomicInteger permitsConsumed = new AtomicInteger();
     private final String clientId;
     private final int permitsBatch;
-    private final MsgOut additionalPermitsRequest;
-    private final MsgOut initialPermitsRequest;
-    private ClientCallStreamObserver<MsgOut> outboundStream;
+    private final OUT additionalPermitsRequest;
+    private final OUT initialPermitsRequest;
+    private ClientCallStreamObserver<OUT> outboundStream;
 
     public FlowControlledStream(String clientId, int permits, int permitsBatch) {
         this.clientId = clientId;
@@ -56,7 +56,7 @@ public abstract class FlowControlledStream<MsgIn, MsgOut> implements ClientRespo
         }
     }
 
-    protected abstract MsgOut buildFlowControlMessage(FlowControl flowControl);
+    protected abstract OUT buildFlowControlMessage(FlowControl flowControl);
 
     protected String clientId() {
         return clientId;
@@ -79,11 +79,11 @@ public abstract class FlowControlledStream<MsgIn, MsgOut> implements ClientRespo
     }
 
     @Override
-    public void beforeStart(ClientCallStreamObserver<MsgOut> requestStream) {
+    public void beforeStart(ClientCallStreamObserver<OUT> requestStream) {
         this.outboundStream = requestStream;
     }
 
-    protected ClientCallStreamObserver<MsgOut> outboundStream() {
+    protected ClientCallStreamObserver<OUT> outboundStream() {
         return outboundStream;
     }
 }

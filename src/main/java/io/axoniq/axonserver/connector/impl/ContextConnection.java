@@ -101,23 +101,23 @@ public class ContextConnection implements AxonServerConnection {
 
     @Override
     public CommandChannel commandChannel() {
-        CommandChannelImpl commandChannel = this.commandChannel.updateAndGet(getIfNull(() -> new CommandChannelImpl(clientIdentification, 5000, 2000, executorService, connection)));
-        return connected(commandChannel);
+        CommandChannelImpl channel = this.commandChannel.updateAndGet(getIfNull(() -> new CommandChannelImpl(clientIdentification, 5000, 2000, executorService, connection)));
+        return ensureConnected(channel);
     }
 
     @Override
     public EventChannel eventChannel() {
-        EventChannelImpl eventChannel = this.eventChannel.updateAndGet(getIfNull(() -> new EventChannelImpl(executorService, connection)));
-        return connected(eventChannel);
+        EventChannelImpl channel = this.eventChannel.updateAndGet(getIfNull(() -> new EventChannelImpl(executorService, connection)));
+        return ensureConnected(channel);
     }
 
     @Override
     public QueryChannel queryChannel() {
-        QueryChannelImpl queryChannel = this.queryChannel.updateAndGet(getIfNull(() -> new QueryChannelImpl(clientIdentification, 5000, 2000, executorService, connection)));
-        return connected(queryChannel);
+        QueryChannelImpl channel = this.queryChannel.updateAndGet(getIfNull(() -> new QueryChannelImpl(clientIdentification, 5000, 2000, executorService, connection)));
+        return ensureConnected(channel);
     }
 
-    private <T extends AbstractAxonServerChannel> T connected(T channel) {
+    private <T extends AbstractAxonServerChannel> T ensureConnected(T channel) {
         if (!channel.isConnected()) {
             ConnectivityState state = connection.getState(true);
             if (state != ConnectivityState.SHUTDOWN && state != ConnectivityState.TRANSIENT_FAILURE) {
@@ -138,7 +138,7 @@ public class ContextConnection implements AxonServerConnection {
     }
 
     public void connect() {
-        connected(instructionChannel);
+        ensureConnected(instructionChannel);
     }
 
 }

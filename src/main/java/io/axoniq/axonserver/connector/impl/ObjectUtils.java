@@ -18,6 +18,10 @@ package io.axoniq.axonserver.connector.impl;import java.util.function.Consumer;
 
 public class ObjectUtils {
 
+    private ObjectUtils() {
+        // utility class
+    }
+
     public static <T> void doIfNotNull(T instance, Consumer<T> action) {
         if (instance != null) {
             action.accept(instance);

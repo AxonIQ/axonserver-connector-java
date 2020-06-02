@@ -36,15 +36,12 @@ import io.axoniq.axonserver.grpc.event.ReadHighestSequenceNrResponse;
 import io.axoniq.axonserver.grpc.event.TrackingToken;
 import io.grpc.ManagedChannel;
 import io.grpc.stub.StreamObserver;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 
 public class EventChannelImpl extends AbstractAxonServerChannel implements EventChannel {
 
-    private static final Logger logger = LoggerFactory.getLogger(EventChannel.class);
     public static final ReadHighestSequenceNrResponse UNKNOWN_HIGHEST_SEQ = ReadHighestSequenceNrResponse.newBuilder().setToSequenceNr(-1).build();
     public static final TrackingToken NO_TOKEN_AVAILABLE = TrackingToken.newBuilder().setToken(-1).build();
     private final EventStoreGrpc.EventStoreStub eventStore;
@@ -62,6 +59,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
 
     @Override
     public void disconnect() {
+        // there is no instruction stream for the events channel
     }
 
     @Override
@@ -112,7 +110,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
     }
 
     @Override
-    public CompletableFuture<?> appendSnapshot(Event snapshotEvent) {
+    public CompletableFuture<Confirmation> appendSnapshot(Event snapshotEvent) {
         FutureStreamObserver<Confirmation> result = new FutureStreamObserver<>(Confirmation.newBuilder().setSuccess(false).build());
         eventStore.appendSnapshot(snapshotEvent, result);
         return result;

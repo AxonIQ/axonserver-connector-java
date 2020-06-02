@@ -50,21 +50,19 @@ public class AxonServerManagedChannel extends ManagedChannel {
     private final boolean forcePlatformReconnect;
 
     public AxonServerManagedChannel(List<ServerAddress> routingServers,
-                                    long connectTimeout,
-                                    long reconnectInterval, TimeUnit timeUnit,
+                                    ReconnectConfiguration reconnectConfiguration,
                                     String context,
                                     ClientIdentification clientIdentification,
                                     ScheduledExecutorService executor,
-                                    boolean forcePlatformReconnect,
                                     BiFunction<ServerAddress, String, ManagedChannel> connectionFactory) {
         this.routingServers = new ArrayList<>(routingServers);
-        this.reconnectInterval = timeUnit.toMillis(reconnectInterval);
+        this.reconnectInterval = reconnectConfiguration.getTimeUnit().toMillis(reconnectConfiguration.getReconnectInterval());
         this.context = context;
         this.clientIdentification = clientIdentification;
         this.executor = executor;
-        this.forcePlatformReconnect = forcePlatformReconnect;
+        this.forcePlatformReconnect = reconnectConfiguration.isForcePlatformReconnect();
         this.connectionFactory = connectionFactory;
-        this.connectTimeout = timeUnit.toMillis(connectTimeout);
+        this.connectTimeout = reconnectConfiguration.getTimeUnit().toMillis(reconnectConfiguration.getConnectTimeout());
         this.executor.schedule(() -> ensureConnected(true), 100, TimeUnit.MILLISECONDS);
     }
 
@@ -77,7 +75,7 @@ public class AxonServerManagedChannel extends ManagedChannel {
                         PlatformServiceGrpc.newBlockingStub(candidate)
                                            .withDeadlineAfter(connectTimeout, TimeUnit.MILLISECONDS);
                 logger.info("Requesting connection details from {}:{}",
-                            nodeInfo.hostName(), nodeInfo.grpcPort());
+                            nodeInfo.getHostName(), nodeInfo.getGrpcPort());
 
                 PlatformInfo clusterInfo = stub.getPlatformServer(clientIdentification);
                 logger.debug("Received PlatformInfo suggesting [{}] ({}:{}), {}",
@@ -86,8 +84,8 @@ public class AxonServerManagedChannel extends ManagedChannel {
                              clusterInfo.getPrimary().getGrpcPort(),
                              clusterInfo.getSameConnection() ? "allowing use of existing connection" : "requiring new connection");
                 if (clusterInfo.getSameConnection()
-                        || (clusterInfo.getPrimary().getGrpcPort() == nodeInfo.grpcPort()
-                        && clusterInfo.getPrimary().getHostName().equals(nodeInfo.hostName()))) {
+                        || (clusterInfo.getPrimary().getGrpcPort() == nodeInfo.getGrpcPort()
+                        && clusterInfo.getPrimary().getHostName().equals(nodeInfo.getHostName()))) {
                     logger.debug("Reusing existing channel");
                     connection = candidate;
                 } else {
@@ -148,8 +146,8 @@ public class AxonServerManagedChannel extends ManagedChannel {
         if (!shutdown.get()) {
             return false;
         }
-        ManagedChannel activeChannel = this.activeChannel.get();
-        return activeChannel == null || activeChannel.isTerminated();
+        ManagedChannel current = this.activeChannel.get();
+        return current == null || current.isTerminated();
     }
 
     @Override
@@ -169,7 +167,7 @@ public class AxonServerManagedChannel extends ManagedChannel {
     }
 
     @Override
-    public <RequestT, ResponseT> ClientCall<RequestT, ResponseT> newCall(MethodDescriptor<RequestT, ResponseT> methodDescriptor, CallOptions callOptions) {
+    public <REQ, RESP> ClientCall<REQ, RESP> newCall(MethodDescriptor<REQ, RESP> methodDescriptor, CallOptions callOptions) {
         ensureConnected(false);
         ManagedChannel current = activeChannel.get();
         if (current == null) {
@@ -192,11 +190,11 @@ public class AxonServerManagedChannel extends ManagedChannel {
         if (requestConnection) {
             ensureConnected(false);
         }
-        ManagedChannel value = activeChannel.get();
-        if (value == null) {
+        ManagedChannel current = activeChannel.get();
+        if (current == null) {
             return ConnectivityState.IDLE;
         }
-        ConnectivityState state = value.getState(requestConnection);
+        ConnectivityState state = current.getState(requestConnection);
         return state == ConnectivityState.SHUTDOWN ? ConnectivityState.TRANSIENT_FAILURE : state;
     }
 
@@ -256,49 +254,55 @@ public class AxonServerManagedChannel extends ManagedChannel {
             if (state == ConnectivityState.TRANSIENT_FAILURE) {
                 logger.info("Connection to AxonServer lost. Attempting to reconnect...");
             }
-            ManagedChannel newConnection = null;
-            try {
-                if (forcePlatformReconnect && current != null) {
-                    logger.debug("Shut down current connection");
-                    current.shutdown();
-                }
-                newConnection = connectChannel();
-                if (newConnection != null) {
-                    if (!activeChannel.compareAndSet(current, newConnection)) {
-                        // concurrency. We need to abandon the given connection
-                        newConnection.shutdown();
-                        return;
-                    }
-                    doIfNotNull(current, ManagedChannel::shutdown);
-
-                    logger.info("Successfully connected to {}", newConnection.authority());
-                    Runnable listener;
-                    while ((listener = connectListeners.poll()) != null) {
-                        listener.run();
-                    }
-                    nextAttemptTime.set(0);
-                    newConnection.notifyWhenStateChanged(ConnectivityState.READY, () -> {
-                        logger.debug("Connection state changed. Checking state now...");
-                        scheduleConnectionCheck(0);
-                    });
-                } else if (allowReschedule) {
-                    logger.info("Failed to get connection to AxonServer. Scheduling a reconnect in {}ms", reconnectInterval);
-                    scheduleConnectionCheck(reconnectInterval);
-                }
-            } catch (Exception e) {
-                doIfNotNull(newConnection, ManagedChannel::shutdown);
-                if (allowReschedule) {
-                    logger.info("Failed to get connection to AxonServer. Scheduling a reconnect in {}ms", reconnectInterval, e);
-                    scheduleConnectionCheck(reconnectInterval);
-                } else {
-                    logger.debug("Failed to get connection to AxonServer.");
-                }
-            }
+            createConnection(allowReschedule, current);
         } else if (allowReschedule && (state == ConnectivityState.IDLE || state == ConnectivityState.CONNECTING)) {
             logger.debug("Connection is stale {}, checking again in 50ms", state.name());
             scheduleConnectionCheck(50);
         } else {
             logger.debug("Connection seems normal. {}", state.name());
+        }
+    }
+
+    private void createConnection(boolean allowReschedule, ManagedChannel current) {
+        ManagedChannel newConnection = null;
+        try {
+            if (forcePlatformReconnect && current != null) {
+                logger.debug("Shut down current connection");
+                current.shutdown();
+            }
+            newConnection = connectChannel();
+            if (newConnection != null) {
+                if (!activeChannel.compareAndSet(current, newConnection)) {
+                    // concurrency. We need to abandon the given connection
+                    newConnection.shutdown();
+                    return;
+                }
+                doIfNotNull(current, ManagedChannel::shutdown);
+
+                if (logger.isInfoEnabled()) {
+                    logger.info("Successfully connected to {}", newConnection.authority());
+                }
+                Runnable listener;
+                while ((listener = connectListeners.poll()) != null) {
+                    listener.run();
+                }
+                nextAttemptTime.set(0);
+                newConnection.notifyWhenStateChanged(ConnectivityState.READY, () -> {
+                    logger.debug("Connection state changed. Checking state now...");
+                    scheduleConnectionCheck(0);
+                });
+            } else if (allowReschedule) {
+                logger.info("Failed to get connection to AxonServer. Scheduling a reconnect in {}ms", reconnectInterval);
+                scheduleConnectionCheck(reconnectInterval);
+            }
+        } catch (Exception e) {
+            doIfNotNull(newConnection, ManagedChannel::shutdown);
+            if (allowReschedule) {
+                logger.info("Failed to get connection to AxonServer. Scheduling a reconnect in {}ms", reconnectInterval, e);
+                scheduleConnectionCheck(reconnectInterval);
+            } else {
+                logger.debug("Failed to get connection to AxonServer.");
+            }
         }
     }
 
@@ -325,9 +329,9 @@ public class AxonServerManagedChannel extends ManagedChannel {
 
     }
 
-    private static class FailingCall<RequestT, ResponseT> extends ClientCall<RequestT, ResponseT> {
+    private static class FailingCall<REQ, RESP> extends ClientCall<REQ, RESP> {
         @Override
-        public void start(Listener<ResponseT> responseListener, Metadata headers) {
+        public void start(Listener<RESP> responseListener, Metadata headers) {
             responseListener.onClose(Status.UNAVAILABLE, null);
         }
 
@@ -347,7 +351,7 @@ public class AxonServerManagedChannel extends ManagedChannel {
         }
 
         @Override
-        public void sendMessage(RequestT message) {
+        public void sendMessage(REQ message) {
             throw new StatusRuntimeException(Status.UNAVAILABLE);
         }
     }

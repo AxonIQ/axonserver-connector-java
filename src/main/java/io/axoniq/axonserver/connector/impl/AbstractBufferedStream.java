@@ -3,17 +3,21 @@ package io.axoniq.axonserver.connector.impl;
 import io.axoniq.axonserver.connector.ResultStream;
 
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 public abstract class AbstractBufferedStream<T, R> extends FlowControlledBuffer<T, R> implements ResultStream<T> {
 
-    private volatile Runnable onAvailableCallback = () -> {};
+    public static final Runnable NO_OP = () -> {
+    };
+
+    private final AtomicReference<Runnable> onAvailableCallback = new AtomicReference<>(NO_OP);
 
     public AbstractBufferedStream(String clientId, int bufferSize, int refillBatch) {
         super(clientId, bufferSize, refillBatch);
     }
 
     @Override
-    public T next() throws InterruptedException, StreamClosedException {
+    public T next() throws InterruptedException {
         return take();
     }
 
@@ -30,19 +34,19 @@ public abstract class AbstractBufferedStream<T, R> extends FlowControlledBuffer<
     @Override
     public void onNext(T value) {
         super.onNext(value);
-        onAvailableCallback.run();
+        onAvailableCallback.get().run();
     }
 
     @Override
     public void onError(Throwable t) {
         super.onError(t);
-        onAvailableCallback.run();
+        onAvailableCallback.get().run();
     }
 
     @Override
     public void onCompleted() {
         super.onCompleted();
-        onAvailableCallback.run();
+        onAvailableCallback.get().run();
     }
 
     @Override
@@ -53,12 +57,12 @@ public abstract class AbstractBufferedStream<T, R> extends FlowControlledBuffer<
     @Override
     public void onAvailable(Runnable callback) {
         if (callback == null) {
-            onAvailableCallback = () -> {};
+            onAvailableCallback.set(NO_OP);
         } else {
-            onAvailableCallback = callback;
-        }
-        if (peek() != null) {
-            onAvailableCallback.run();
+            onAvailableCallback.set(callback);
+            if (peek() != null) {
+                callback.run();
+            }
         }
     }
 

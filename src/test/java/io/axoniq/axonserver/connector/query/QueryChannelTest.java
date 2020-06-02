@@ -115,10 +115,8 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
 
             @Override
             public Registration registerSubscriptionQuery(QueryRequest query, UpdateHandler sendUpdate) {
-                System.out.println("XXX - UpdateHandler set to value");
                 updateHandler.set(sendUpdate);
                 return () -> {
-                    System.out.println("XXX - UpdateHandler set to null");
                     updateHandler.set(null);
                 };
             }
@@ -166,10 +164,8 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
 
             @Override
             public Registration registerSubscriptionQuery(QueryRequest query, UpdateHandler sendUpdate) {
-                System.out.println("XXX - UpdateHandler set to value");
                 updateHandler.set(sendUpdate);
                 return () -> {
-                    System.out.println("XXX - UpdateHandler set to null");
                     updateHandler.set(null);
                 };
             }
@@ -211,10 +207,8 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
 
             @Override
             public Registration registerSubscriptionQuery(QueryRequest query, UpdateHandler sendUpdate) {
-                System.out.println("XXX - UpdateHandler set to value");
                 updateHandler.set(sendUpdate);
                 return () -> {
-                    System.out.println("XXX - UpdateHandler set to null");
                     updateHandler.set(null);
                 };
             }

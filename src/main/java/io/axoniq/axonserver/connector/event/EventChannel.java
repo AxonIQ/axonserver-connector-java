@@ -1,6 +1,7 @@
 package io.axoniq.axonserver.connector.event;
 
 import io.axoniq.axonserver.connector.ResultStream;
+import io.axoniq.axonserver.grpc.event.Confirmation;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.EventWithToken;
 
@@ -25,7 +26,7 @@ public interface EventChannel {
 
     AggregateEventStream openAggregateStream(String aggregateIdentifier, long initialSequence);
 
-    CompletableFuture<?> appendSnapshot(Event snapshotEvent);
+    CompletableFuture<Confirmation> appendSnapshot(Event snapshotEvent);
 
     AggregateEventStream loadSnapshots(String aggregateIdentifier, long initialSequence, long maxSequence, int maxResults);
 

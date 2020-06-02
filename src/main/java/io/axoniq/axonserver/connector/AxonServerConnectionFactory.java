@@ -20,6 +20,7 @@ import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
 import io.axoniq.axonserver.connector.impl.ContextAddingInterceptor;
 import io.axoniq.axonserver.connector.impl.ContextConnection;
 import io.axoniq.axonserver.connector.impl.GrpcBufferingInterceptor;
+import io.axoniq.axonserver.connector.impl.ReconnectConfiguration;
 import io.axoniq.axonserver.connector.impl.ServerAddress;
 import io.axoniq.axonserver.connector.impl.TokenAddingInterceptor;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
@@ -72,20 +73,17 @@ public class AxonServerConnectionFactory {
 
     private final Map<String, ContextConnection> connections = new ConcurrentHashMap<>();
     private final List<ServerAddress> routingServers;
-    private final long connectTimeout;
     private final String token;
     private final ScheduledExecutorService executorService;
     private final Function<NettyChannelBuilder, ManagedChannelBuilder<?>> connectionConfig;
-    private final boolean forcePlatformReconnect;
-    private final long reconnectInterval;
     private final boolean suppressDownloadMessage;
 
     private volatile boolean shutdown;
+    private final ReconnectConfiguration reconnectConfiguration;
 
     protected AxonServerConnectionFactory(Builder builder) {
         this.applicationName = builder.applicationName;
         this.clientInstanceId = builder.clientInstanceId;
-        this.connectTimeout = builder.connectTimeout;
         this.token = builder.token;
         this.executorService = builder.executorService;
         this.suppressDownloadMessage = builder.suppressDownloadMessage;
@@ -93,8 +91,10 @@ public class AxonServerConnectionFactory {
         this.connectionConfig = builder.sslConfig
                 .andThen(builder.keepAliveConfig)
                 .andThen(builder.otherConfig);
-        this.forcePlatformReconnect = builder.forcePlatformReconnect;
-        this.reconnectInterval = builder.reconnectInterval;
+        this.reconnectConfiguration = new ReconnectConfiguration(builder.connectTimeout,
+                                                            builder.reconnectInterval,
+                                                            builder.forcePlatformReconnect,
+                                                            TimeUnit.MILLISECONDS);
     }
 
     public static Builder forClient(String applicationName) {
@@ -127,17 +127,16 @@ public class AxonServerConnectionFactory {
 
         return new ContextConnection(clientIdentification, executorService,
                                      new AxonServerManagedChannel(routingServers,
-                                                                  connectTimeout, reconnectInterval, TimeUnit.MILLISECONDS,
-                                                                  context,
+                                                                  reconnectConfiguration, context,
                                                                   clientIdentification,
                                                                   executorService,
-                                                                  forcePlatformReconnect,
-                                                                  this::createChannel),
+                                                                  this::createChannel
+                                     ),
                                      context);
     }
 
     private ManagedChannel createChannel(ServerAddress address, String context) {
-        ManagedChannelBuilder<?> builder = connectionConfig.apply(NettyChannelBuilder.forAddress(address.hostName(), address.grpcPort()));
+        ManagedChannelBuilder<?> builder = connectionConfig.apply(NettyChannelBuilder.forAddress(address.getHostName(), address.getGrpcPort()));
 
         if (!suppressDownloadMessage) {
             builder.intercept(new DowloadInstructionInterceptor());
@@ -267,7 +266,7 @@ public class AxonServerConnectionFactory {
             return this;
         }
 
-        public Builder customize(Function<ManagedChannelBuilder<?>, ManagedChannelBuilder<?>> customization) {
+        public Builder customize(UnaryOperator<ManagedChannelBuilder<?>> customization) {
             otherConfig = otherConfig.andThen(customization);
             return this;
         }
@@ -293,12 +292,12 @@ public class AxonServerConnectionFactory {
         private volatile boolean suppressDownloadMessage = false;
 
         @Override
-        public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
+        public <REQ, RESP> ClientCall<REQ, RESP> interceptCall(MethodDescriptor<REQ, RESP> method, CallOptions callOptions, Channel next) {
             if (!suppressDownloadMessage || "io.axoniq.axonserver.grpc.control.PlatformService/GetPlatformServer".equals(method.getFullMethodName())) {
-                return new ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
+                return new ForwardingClientCall.SimpleForwardingClientCall<REQ, RESP>(next.newCall(method, callOptions)) {
                     @Override
-                    public void start(Listener<RespT> responseListener, Metadata headers) {
-                        super.start(new ForwardingClientCallListener.SimpleForwardingClientCallListener<RespT>(responseListener) {
+                    public void start(Listener<RESP> responseListener, Metadata headers) {
+                        super.start(new ForwardingClientCallListener.SimpleForwardingClientCallListener<RESP>(responseListener) {
                             @Override
                             public void onClose(Status status, Metadata trailers) {
                                 if (status.getCode() == Status.Code.UNAVAILABLE) {

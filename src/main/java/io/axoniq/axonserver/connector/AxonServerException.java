@@ -20,21 +20,21 @@ import io.axoniq.axonserver.grpc.ErrorMessage;
 
 public class AxonServerException extends RuntimeException {
 
-    private ErrorCode errorCode;
+    private final ErrorCategory errorCategory;
 
     public AxonServerException(ErrorMessage errorMessage) {
-        this(ErrorCode.getFromCode(errorMessage.getErrorCode()), errorMessage.getMessage());
+        this(ErrorCategory.getFromCode(errorMessage.getErrorCode()), errorMessage.getMessage());
     }
-    public AxonServerException(ErrorCode errorCode, String message) {
-        this(errorCode, message, null);
-    }
-
-    public AxonServerException(ErrorCode errorCode, String message, Throwable cause) {
-        super("["+errorCode.errorCode() + "] " + message, cause);
-        this.errorCode = errorCode;
+    public AxonServerException(ErrorCategory errorCategory, String message) {
+        this(errorCategory, message, null);
     }
 
-    public ErrorCode getErrorCode() {
-        return errorCode;
+    public AxonServerException(ErrorCategory errorCategory, String message, Throwable cause) {
+        super("["+ errorCategory.errorCode() + "] " + message, cause);
+        this.errorCategory = errorCategory;
+    }
+
+    public ErrorCategory getErrorCategory() {
+        return errorCategory;
     }
 }

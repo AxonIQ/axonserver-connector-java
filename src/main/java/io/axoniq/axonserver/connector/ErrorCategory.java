@@ -25,7 +25,7 @@ import static java.util.Arrays.stream;
  * @author Marc Gathier
  * @since 4.0
  */
-public enum ErrorCode {
+public enum ErrorCategory {
 
     // Generic errors processing client request
     AUTHENTICATION_TOKEN_MISSING("AXONIQ-1000"),
@@ -76,11 +76,11 @@ public enum ErrorCode {
      *
      * @param errorCode the code of the error
      */
-    ErrorCode(String errorCode) {
+    ErrorCategory(String errorCode) {
         this.errorCode = errorCode;
     }
 
-    public static ErrorCode getFromCode(String code) {
+    public static ErrorCategory getFromCode(String code) {
         return stream(values()).filter(value -> value.errorCode.equals(code)).findFirst().orElse(OTHER);
     }
 

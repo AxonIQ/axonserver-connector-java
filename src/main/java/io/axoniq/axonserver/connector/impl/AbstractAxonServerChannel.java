@@ -18,14 +18,12 @@ package io.axoniq.axonserver.connector.impl;
 
 import io.grpc.ConnectivityState;
 import io.grpc.ManagedChannel;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public abstract class AbstractAxonServerChannel {
-    private final Logger logger = LoggerFactory.getLogger(getClass());
+
     private final ScheduledExecutorService executor;
     private final ManagedChannel channel;
 

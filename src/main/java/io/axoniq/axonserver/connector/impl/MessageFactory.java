@@ -1,6 +1,6 @@
 package io.axoniq.axonserver.connector.impl;
 
-import io.axoniq.axonserver.connector.ErrorCode;
+import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.grpc.ErrorMessage;
 
 public class MessageFactory {
@@ -9,10 +9,10 @@ public class MessageFactory {
 
     }
 
-    public static ErrorMessage buildErrorMessage(ErrorCode errorCode, String client, Throwable t) {
+    public static ErrorMessage buildErrorMessage(ErrorCategory errorCategory, String client, Throwable t) {
         ErrorMessage.Builder builder = ErrorMessage.newBuilder()
                                                    .setLocation(client)
-                                                   .setErrorCode(errorCode.errorCode());
+                                                   .setErrorCode(errorCategory.errorCode());
         if (t != null) {
             builder.setMessage(extractMessage(t));
             builder.addDetails(extractMessage(t));

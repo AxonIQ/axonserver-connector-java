@@ -19,7 +19,7 @@ import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class CommandChannelTest extends AbstractAxonServerIntegrationTest {
+class CommandChannelTest extends AbstractAxonServerIntegrationTest {
 
     private AxonServerConnectionFactory connectionFactory1;
     private AxonServerConnection connection1;

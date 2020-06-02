@@ -63,18 +63,18 @@ public class HeartbeatMonitor {
     }
 
     public void pause() {
-        long interval = this.interval.get();
-        long timeout = this.timeout.get();
-        if (interval != Long.MAX_VALUE || timeout != Long.MAX_VALUE) {
+        long currentInterval = this.interval.get();
+        long currentTimeout = this.timeout.get();
+        if (currentInterval != Long.MAX_VALUE || currentTimeout != Long.MAX_VALUE) {
             taskId.incrementAndGet();
         }
     }
 
     public void resume() {
-        long interval = this.interval.get();
-        long timeout = this.timeout.get();
-        if (interval != Long.MAX_VALUE && timeout != Long.MAX_VALUE) {
-            enableHeartbeat(interval, timeout, TimeUnit.MILLISECONDS);
+        long currentInterval = this.interval.get();
+        long currentTimeout = this.timeout.get();
+        if (currentInterval != Long.MAX_VALUE && currentTimeout != Long.MAX_VALUE) {
+            enableHeartbeat(currentInterval, currentTimeout, TimeUnit.MILLISECONDS);
         }
     }
 
@@ -87,12 +87,12 @@ public class HeartbeatMonitor {
             nextHeartbeatTimeout.compareAndSet(nextTimeout, now + interval.get());
         }
         if (nextHeartbeat.getAndAccumulate(interval.get(),
-                                           (next, interval) -> next <= now ? now + interval : next) <= now) {
+                                           (next, currentInterval) -> next <= now ? now + currentInterval : next) <= now) {
             sender.get().whenComplete((r, e) -> {
                 if (e == null) {
-                    long interval = this.interval.get();
-                    if (interval != Long.MAX_VALUE) {
-                        nextHeartbeatTimeout.updateAndGet(current -> Math.max(nextTimeout + interval, current));
+                    long currentInterval = this.interval.get();
+                    if (currentInterval != Long.MAX_VALUE) {
+                        nextHeartbeatTimeout.updateAndGet(currentTimeout -> Math.max(nextTimeout + currentInterval, currentTimeout));
                     }
                 }
             });
@@ -101,8 +101,8 @@ public class HeartbeatMonitor {
 
     public void handleIncomingBeat(PlatformOutboundInstruction msg, ReplyChannel<PlatformInboundInstruction> reply) {
         long now = clock.millis();
-        long interval = this.interval.get();
-        nextHeartbeatTimeout.updateAndGet(current -> Math.max(now + interval, current));
+        long currentInterval = this.interval.get();
+        nextHeartbeatTimeout.updateAndGet(current -> Math.max(now + currentInterval, current));
         try {
             reply.send(PlatformInboundInstruction.newBuilder().setHeartbeat(Heartbeat.getDefaultInstance()).build());
         } finally {

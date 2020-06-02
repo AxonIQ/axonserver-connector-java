@@ -16,7 +16,7 @@
 
 package io.axoniq.axonserver.connector.impl;
 
-import io.axoniq.axonserver.connector.ErrorCode;
+import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.grpc.ErrorMessage;
 import io.axoniq.axonserver.grpc.InstructionAck;
@@ -29,18 +29,19 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 
-public abstract class AbstractIncomingInstructionStream<MsgIn, MsgOut> extends FlowControlledStream<MsgIn, MsgOut> {
+public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowControlledStream<IN, OUT> {
 
-    private static final InstructionAck NO_HANDLER_FOR_INSTRUCTION = InstructionAck.newBuilder().setSuccess(false)
-                                                                                   .setError(ErrorMessage.newBuilder()
-                                                                                                         .setErrorCode(ErrorCode.UNSUPPORTED_INSTRUCTION.errorCode())
-                                                                                                         .setMessage("No handler for instruction")
-                                                                                                         .build())
-                                                                                   .build();
+    private static final InstructionAck NO_HANDLER_FOR_INSTRUCTION =
+            InstructionAck.newBuilder().setSuccess(false)
+                          .setError(ErrorMessage.newBuilder()
+                                                .setErrorCode(ErrorCategory.UNSUPPORTED_INSTRUCTION.errorCode())
+                                                .setMessage("No handler for instruction")
+                                                .build())
+                          .build();
     private final Logger logger = LoggerFactory.getLogger(getClass());
     private final Consumer<Throwable> disconnectHandler;
 
-    private StreamObserver<MsgOut> instructionsForPlatform;
+    private StreamObserver<OUT> instructionsForPlatform;
 
     public AbstractIncomingInstructionStream(String clientId, int permits, int permitsBatch, Consumer<Throwable> disconnectHandler) {
         super(clientId, permits, permitsBatch);
@@ -48,8 +49,8 @@ public abstract class AbstractIncomingInstructionStream<MsgIn, MsgOut> extends F
     }
 
     @Override
-    public void onNext(MsgIn value) {
-        BiConsumer<MsgIn, ReplyChannel<MsgOut>> handler = getHandler(value);
+    public void onNext(IN value) {
+        BiConsumer<IN, ReplyChannel<OUT>> handler = getHandler(value);
         if (handler == null) {
             markConsumed();
             String instructionId = getInstructionId(value);
@@ -57,16 +58,16 @@ public abstract class AbstractIncomingInstructionStream<MsgIn, MsgOut> extends F
                 instructionsForPlatform.onNext(buildAckMessage(NO_HANDLER_FOR_INSTRUCTION));
             }
         } else {
-            ForwardingReplyChannel<MsgOut> replyChannel = new ForwardingReplyChannel<MsgOut>(getInstructionId(value), clientId(), instructionsForPlatform, this::buildAckMessage, this::markConsumed);
+            ForwardingReplyChannel<OUT> replyChannel = new ForwardingReplyChannel<>(getInstructionId(value), clientId(), instructionsForPlatform, this::buildAckMessage, this::markConsumed);
             handler.accept(value, replyChannel);
         }
     }
 
-    protected abstract MsgOut buildAckMessage(InstructionAck ack);
+    protected abstract OUT buildAckMessage(InstructionAck ack);
 
-    protected abstract String getInstructionId(MsgIn value);
+    protected abstract String getInstructionId(IN value);
 
-    protected abstract BiConsumer<MsgIn, ReplyChannel<MsgOut>> getHandler(MsgIn msgIn);
+    protected abstract BiConsumer<IN, ReplyChannel<OUT>> getHandler(IN msgIn);
 
     @Override
     public void onCompleted() {
@@ -87,11 +88,11 @@ public abstract class AbstractIncomingInstructionStream<MsgIn, MsgOut> extends F
     }
 
     @Override
-    public void beforeStart(ClientCallStreamObserver<MsgOut> requestStream) {
+    public void beforeStart(ClientCallStreamObserver<OUT> requestStream) {
         super.beforeStart(requestStream);
         this.instructionsForPlatform = requestStream;
     }
 
-    protected abstract boolean unregisterOutboundStream(StreamObserver<MsgOut> expected);
+    protected abstract boolean unregisterOutboundStream(StreamObserver<OUT> expected);
 
 }

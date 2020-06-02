@@ -26,6 +26,7 @@ import io.axoniq.axonserver.connector.event.EventChannel;
 import io.axoniq.axonserver.connector.instruction.ProcessorInstructionHandler;
 import io.axoniq.axonserver.grpc.SerializedObject;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo;
+import io.axoniq.axonserver.grpc.event.Confirmation;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.EventWithToken;
 
@@ -176,7 +177,7 @@ public class ConnectorRunner_Events {
                     AppendEventsTransaction tx = channel.startAppendEventsTransaction();
 //                    for (int i = 0; i < 10; i++) {
                     if (c != 0 && c % 50 == 0) {
-                        CompletableFuture<?> snapshot = channel.appendSnapshot(buildEvent(aggregateIdentifier, c));
+                        CompletableFuture<Confirmation> snapshot = channel.appendSnapshot(buildEvent(aggregateIdentifier, c));
                         snapshot.get();
                     }
                         tx.appendEvent(buildEvent(aggregateIdentifier, c));

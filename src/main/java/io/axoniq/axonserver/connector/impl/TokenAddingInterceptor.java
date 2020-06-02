@@ -41,14 +41,14 @@ public class TokenAddingInterceptor implements ClientInterceptor {
     }
 
     @Override
-    public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> methodDescriptor,
-                                                               CallOptions callOptions,
-                                                               Channel channel) {
-        return new ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(
+    public <REQ, RESP> ClientCall<REQ, RESP> interceptCall(MethodDescriptor<REQ, RESP> methodDescriptor,
+                                                           CallOptions callOptions,
+                                                           Channel channel) {
+        return new ForwardingClientCall.SimpleForwardingClientCall<REQ, RESP>(
                 channel.newCall(methodDescriptor, callOptions)
         ) {
             @Override
-            public void start(Listener<RespT> responseListener, Metadata headers) {
+            public void start(Listener<RESP> responseListener, Metadata headers) {
                 if (token != null) {
                     headers.put(ACCESS_TOKEN_KEY, token);
                 }

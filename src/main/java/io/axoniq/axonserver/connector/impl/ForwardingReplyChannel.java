@@ -1,6 +1,6 @@
 package io.axoniq.axonserver.connector.impl;
 
-import io.axoniq.axonserver.connector.ErrorCode;
+import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.grpc.ErrorMessage;
 import io.axoniq.axonserver.grpc.InstructionAck;
@@ -9,19 +9,19 @@ import io.grpc.stub.StreamObserver;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
-public class ForwardingReplyChannel<MsgOut> implements ReplyChannel<MsgOut> {
+public class ForwardingReplyChannel<T> implements ReplyChannel<T> {
 
     private final String instructionId;
     private final String clientId;
-    private final StreamObserver<MsgOut> stream;
-    private final Function<InstructionAck, MsgOut> ackBuilder;
+    private final StreamObserver<T> stream;
+    private final Function<InstructionAck, T> ackBuilder;
     private final Runnable onConsumed;
     private final AtomicBoolean completed = new AtomicBoolean();
 
     public ForwardingReplyChannel(String instructionId,
                                   String clientId,
-                                  StreamObserver<MsgOut> stream,
-                                  Function<InstructionAck, MsgOut> ackBuilder,
+                                  StreamObserver<T> stream,
+                                  Function<InstructionAck, T> ackBuilder,
                                   Runnable onConsumed) {
         this.instructionId = instructionId;
         this.clientId = clientId;
@@ -31,7 +31,7 @@ public class ForwardingReplyChannel<MsgOut> implements ReplyChannel<MsgOut> {
     }
 
     @Override
-    public void send(MsgOut outboundMessage) {
+    public void send(T outboundMessage) {
         stream.onNext(outboundMessage);
     }
 
@@ -58,9 +58,9 @@ public class ForwardingReplyChannel<MsgOut> implements ReplyChannel<MsgOut> {
     }
 
     @Override
-    public void completeWithError(ErrorCode errorCode, String message) {
+    public void completeWithError(ErrorCategory errorCategory, String message) {
         completeWithError(ErrorMessage.newBuilder()
-                                      .setErrorCode(errorCode.errorCode())
+                                      .setErrorCode(errorCategory.errorCode())
                                       .setLocation(clientId)
                                       .setMessage(message)
                                       .build());

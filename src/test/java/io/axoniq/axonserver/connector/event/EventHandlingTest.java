@@ -27,7 +27,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class EventHandlingTest extends AbstractAxonServerIntegrationTest {
+class EventHandlingTest extends AbstractAxonServerIntegrationTest {
 
     private AxonServerConnectionFactory client1;
     private AxonServerConnection connection1;

@@ -17,7 +17,7 @@
 package io.axoniq.axonserver.connector.command.impl;
 
 import io.axoniq.axonserver.connector.AxonServerException;
-import io.axoniq.axonserver.connector.ErrorCode;
+import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.Registration;
 import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.connector.command.CommandChannel;
@@ -57,7 +57,7 @@ import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
 
 public class CommandChannelImpl extends AbstractAxonServerChannel implements CommandChannel {
 
-    private static final Logger logger = LoggerFactory.getLogger(CommandChannel.class);
+    private static final Logger logger = LoggerFactory.getLogger(CommandChannelImpl.class);
     private final AtomicReference<CommandServiceGrpc.CommandServiceStub> commandService = new AtomicReference<>();
     private final AtomicReference<StreamObserver<CommandProviderOutbound>> outboundCommandStream = new AtomicReference<>();
     private final ClientIdentification clientIdentification;
@@ -83,7 +83,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
         commandHandlers.getOrDefault(command.getName(), c -> noHandlerForCommand())
                        .apply(command)
                        .exceptionally(e -> CommandResponse.newBuilder()
-                                                          .setErrorCode(ErrorCode.COMMAND_EXECUTION_ERROR.errorCode())
+                                                          .setErrorCode(ErrorCategory.COMMAND_EXECUTION_ERROR.errorCode())
                                                           .setErrorMessage(ErrorMessage.newBuilder().setMessage(e.getMessage()).build())
                                                           .build())
                        .thenApply(CommandResponse::newBuilder)
@@ -95,7 +95,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
 
     private CompletableFuture<CommandResponse> noHandlerForCommand() {
         CompletableFuture<CommandResponse> r = new CompletableFuture<>();
-        r.completeExceptionally(new AxonServerException(ErrorCode.NO_HANDLER_FOR_COMMAND, "No handler for command"));
+        r.completeExceptionally(new AxonServerException(ErrorCategory.NO_HANDLER_FOR_COMMAND, "No handler for command"));
         return r;
     }
 
@@ -215,9 +215,9 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
             // error thrown when Netty is out of buffer space to send this command
             // unfortunately, the API doesn't allow us to detect this prior to sending
             // TODO - Use a backpressure mechanism when this error occurs, instead of failing directly
-            response.completeExceptionally(new AxonServerException(ErrorCode.COMMAND_DISPATCH_ERROR, "Unable to buffer message for dispatching", e));
+            response.completeExceptionally(new AxonServerException(ErrorCategory.COMMAND_DISPATCH_ERROR, "Unable to buffer message for dispatching", e));
         } catch (Exception e) {
-            response.completeExceptionally(new AxonServerException(ErrorCode.COMMAND_DISPATCH_ERROR, "An error occurred while attempting to dispatch a message", e));
+            response.completeExceptionally(new AxonServerException(ErrorCategory.COMMAND_DISPATCH_ERROR, "An error occurred while attempting to dispatch a message", e));
         }
         return response;
     }
@@ -240,7 +240,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
         @Override
         public void onError(Throwable t) {
             if (!response.isDone()) {
-                response.completeExceptionally(new AxonServerException(ErrorCode.COMMAND_DISPATCH_ERROR,
+                response.completeExceptionally(new AxonServerException(ErrorCategory.COMMAND_DISPATCH_ERROR,
                                                                        "Received exception while dispatching command",
                                                                        t));
             }
@@ -249,7 +249,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
         @Override
         public void onCompleted() {
             if (!response.isDone()) {
-                response.completeExceptionally(new AxonServerException(ErrorCode.COMMAND_DISPATCH_ERROR,
+                response.completeExceptionally(new AxonServerException(ErrorCategory.COMMAND_DISPATCH_ERROR,
                                                                        "Reply completed without result"));
             }
         }
