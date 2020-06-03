@@ -173,8 +173,8 @@ class AxonServerManagedChannelTest extends AbstractAxonServerIntegrationTest {
             assertNotNull(nextConnectTask);
         });
 
-        connectAttempts.clear();
         axonServerProxy.enable();
+        connectAttempts.clear();
 
         assertWithin(1, TimeUnit.SECONDS, () -> {
             if (nextConnectTask != null) {
