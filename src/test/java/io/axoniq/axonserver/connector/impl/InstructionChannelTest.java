@@ -38,6 +38,8 @@ class InstructionChannelTest extends AbstractAxonServerIntegrationTest {
     void connectionRecoveredByHeartbeat() throws Exception {
         client = AxonServerConnectionFactory.forClient(getClass().getSimpleName())
                                             .routingServers(axonServerAddress)
+                                            .connectTimeout(2000, TimeUnit.MILLISECONDS)
+                                            .reconnectInterval(500, TimeUnit.MILLISECONDS)
                                             .build();
         AxonServerConnection connection1 = client.connect("default");
         connection1.instructionChannel().enableHeartbeat(500, 500, TimeUnit.MILLISECONDS);
@@ -53,11 +55,11 @@ class InstructionChannelTest extends AbstractAxonServerIntegrationTest {
 
         Timeout connectionIssue = axonServerProxy.toxics().timeout("bad_connection", ToxicDirection.DOWNSTREAM, Long.MAX_VALUE);
 
-        assertWithin(2, TimeUnit.SECONDS, () -> assertFalse(connection1.isConnected()));
+        assertWithin(4, TimeUnit.SECONDS, () -> assertFalse(connection1.isConnected()));
 
         connectionIssue.remove();
 
-        assertWithin(2, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
+        assertWithin(4, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
     }
 
     @Test
