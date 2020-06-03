@@ -29,31 +29,34 @@ import io.grpc.MethodDescriptor;
  * @author Marc Gathier
  * @since 4.0
  */
-public class ContextAddingInterceptor implements ClientInterceptor {
+public class HeaderAttachingInterceptor<T> implements ClientInterceptor {
 
-    private static final Metadata.Key<String> CONTEXT_TOKEN_KEY =
-            Metadata.Key.of("AxonIQ-Context", Metadata.ASCII_STRING_MARSHALLER);
+    private final Metadata.Key<T> header;
+    private final T value;
 
-    private final String token;
-
-    public ContextAddingInterceptor(String token) {
-        this.token = token;
+    public HeaderAttachingInterceptor(Metadata.Key<T> header, T value) {
+        this.header = header;
+        this.value = value;
     }
 
     @Override
     public <REQ, RESP> ClientCall<REQ, RESP> interceptCall(MethodDescriptor<REQ, RESP> methodDescriptor,
                                                            CallOptions callOptions,
                                                            Channel channel) {
-        return new ForwardingClientCall.SimpleForwardingClientCall<REQ, RESP>(
-                channel.newCall(methodDescriptor, callOptions)
-        ) {
-            @Override
-            public void start(Listener<RESP> responseListener, Metadata headers) {
-                if (token != null) {
-                    headers.put(CONTEXT_TOKEN_KEY, token);
-                }
-                super.start(responseListener, headers);
-            }
-        };
+        ClientCall<REQ, RESP> call = channel.newCall(methodDescriptor, callOptions);
+        return value == null ? call : new HeaderAttachedCall<>(call);
+    }
+
+    private class HeaderAttachedCall<REQ, RESP> extends ForwardingClientCall.SimpleForwardingClientCall<REQ, RESP> {
+
+        public HeaderAttachedCall(ClientCall<REQ, RESP> call) {
+            super(call);
+        }
+
+        @Override
+        public void start(Listener<RESP> responseListener, Metadata headers) {
+            headers.put(header, value);
+            super.start(responseListener, headers);
+        }
     }
 }

@@ -17,12 +17,12 @@
 package io.axoniq.axonserver.connector;
 
 import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
-import io.axoniq.axonserver.connector.impl.ContextAddingInterceptor;
 import io.axoniq.axonserver.connector.impl.ContextConnection;
 import io.axoniq.axonserver.connector.impl.GrpcBufferingInterceptor;
+import io.axoniq.axonserver.connector.impl.HeaderAttachingInterceptor;
+import io.axoniq.axonserver.connector.impl.Headers;
 import io.axoniq.axonserver.connector.impl.ReconnectConfiguration;
 import io.axoniq.axonserver.connector.impl.ServerAddress;
-import io.axoniq.axonserver.connector.impl.TokenAddingInterceptor;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
@@ -105,7 +105,6 @@ public class AxonServerConnectionFactory {
         return new AxonServerConnectionFactory.Builder(applicationName, clientInstanceId);
     }
 
-
     public AxonServerConnection connect(String context) {
         if (shutdown) {
             throw new IllegalStateException("Connector is already shut down");
@@ -143,9 +142,9 @@ public class AxonServerConnectionFactory {
         }
 
         return builder.intercept(new GrpcBufferingInterceptor(50),
-                                  new ContextAddingInterceptor(context),
-                                  new TokenAddingInterceptor(token)
-                ).build();
+                                 new HeaderAttachingInterceptor<>(Headers.CONTEXT, context),
+                                 new HeaderAttachingInterceptor<>(Headers.ACCESS_TOKEN, token))
+                      .build();
     }
 
     public void shutdown() {
