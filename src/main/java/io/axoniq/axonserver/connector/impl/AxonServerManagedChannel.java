@@ -242,7 +242,9 @@ public class AxonServerManagedChannel extends ManagedChannel {
         long deadline = nextAttemptTime.getAndUpdate(d -> d > now ? d : now + reconnectInterval);
         if (deadline > now) {
             if (allowReschedule) {
-                scheduleConnectionCheck(Math.min(500, deadline - now));
+                long timeLeft = Math.min(500, deadline - now);
+                logger.debug("Reconnect timeout still enforced. Scheduling a new connection check in {}ms", timeLeft);
+                scheduleConnectionCheck(timeLeft);
             }
             return;
         }

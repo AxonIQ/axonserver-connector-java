@@ -63,7 +63,9 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
         ResultStream<QueryResponse> result = connection2.queryChannel().query(QueryRequest.newBuilder().setQuery("testQuery").build());
 
         assertWithin(2, TimeUnit.SECONDS, () -> {
-            assertTrue(result.nextIfAvailable(1, TimeUnit.SECONDS).hasErrorMessage());
+            QueryResponse queryResponse = result.nextIfAvailable(1, TimeUnit.SECONDS);
+            assertNotNull(queryResponse);
+            assertTrue(queryResponse.hasErrorMessage());
         });
 
         axonServerProxy.disable();
@@ -194,7 +196,6 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
         });
     }
 
-
     @Test
     void testClosingSubscriptionQueryFromProviderStopsUpdateStream() {
         QueryChannel queryChannel = connection1.queryChannel();
@@ -224,14 +225,15 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
         });
 
         updateHandler.get().sendUpdate(QueryUpdate.newBuilder().build());
-        System.out.println("Completing");
         updateHandler.get().complete();
 
-        assertWithin(1, TimeUnit.SECONDS, () -> assertNotNull(subscriptionQuery.updates().nextIfAvailable()));
+        ResultStream<QueryUpdate> updates = subscriptionQuery.updates();
+        assertWithin(1, TimeUnit.SECONDS, () -> assertNotNull(updates.nextIfAvailable()));
+
+        assertNull(updates.nextIfAvailable());
 
         assertWithin(1, TimeUnit.SECONDS, () -> {
-            assertNull(subscriptionQuery.updates().nextIfAvailable());
-            assertTrue(subscriptionQuery.updates().isClosed(), "Expected client side to be unregistered");
+            assertTrue(updates.isClosed(), "Expected client side to be unregistered");
             assertNull(updateHandler.get(), "Expected UpdateHandler to be unregistered");
         });
     }

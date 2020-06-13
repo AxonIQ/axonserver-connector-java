@@ -21,7 +21,6 @@ import java.util.function.Supplier;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyLong;
@@ -165,10 +164,8 @@ class AxonServerManagedChannelTest extends AbstractAxonServerIntegrationTest {
         axonServerProxy.disable();
 
         assertWithin(1, TimeUnit.SECONDS, () -> {
-            // by requesting a connection, we force a FAILURE - AxonServer is down
             ConnectivityState state = testSubject.getState(true);
-            assertNotEquals(ConnectivityState.READY, state);
-            assertNotEquals(ConnectivityState.SHUTDOWN, state);
+            assertEquals(ConnectivityState.TRANSIENT_FAILURE, state);
             // we also want to wait for the next reconnect task to be scheduled, to avoid race conditions later on
             assertNotNull(nextConnectTask);
         });
@@ -177,10 +174,14 @@ class AxonServerManagedChannelTest extends AbstractAxonServerIntegrationTest {
         connectAttempts.clear();
 
         assertWithin(1, TimeUnit.SECONDS, () -> {
+            // because we want the test to re-attempt in quick succession, we must avoid underlying connect backoff
+            testSubject.resetConnectBackoff();
             if (nextConnectTask != null) {
                 // keep looping the connect cycle
                 nextConnectTask.run();
             }
+            // because we want the test to re-attempt in quick succession, we must avoid underlying connect backoff
+            testSubject.resetConnectBackoff();
             assertEquals(ConnectivityState.READY, testSubject.getState(true));
         });
         assertEquals(Collections.emptyList(), connectAttempts);
