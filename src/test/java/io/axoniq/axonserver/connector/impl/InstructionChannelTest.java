@@ -17,6 +17,7 @@ import org.testcontainers.shaded.okhttp3.Request;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -137,7 +138,7 @@ class InstructionChannelTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
-    void testMoveSegmentInstructionIsPickedUpByHandler() {
+    void testMoveSegmentInstructionIsPickedUpByHandler() throws Exception {
         client = AxonServerConnectionFactory.forClient(getClass().getSimpleName())
                                             .routingServers(axonServerAddress)
                                             .build();
@@ -145,12 +146,20 @@ class InstructionChannelTest extends AbstractAxonServerIntegrationTest {
         StubProcessorInstructionHandler instructionHandler = new StubProcessorInstructionHandler();
         AtomicReference<EventProcessorInfo> processorInfo = new AtomicReference<>(buildEventProcessorInfo(true));
 
-        connection1.instructionChannel().registerEventProcessor("testProcessor", processorInfo::get,
+        CountDownLatch cdl = new CountDownLatch(1);
+
+        connection1.instructionChannel().registerEventProcessor("testProcessor", () -> {
+                                                                    cdl.countDown();
+                                                                    return processorInfo.get();
+                                                                },
                                                                 instructionHandler);
 
+        // we wait for AxonServer to request data, which is an acknowledgement that the processor was registered.
+        cdl.await(3, TimeUnit.SECONDS);
 
-        assertWithin(2, TimeUnit.SECONDS, () -> {
-            sendToAxonServer(Request.Builder::patch, "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/segments/0/move?context=default&target=foo");
+        sendToAxonServer(Request.Builder::patch, "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/segments/0/move?context=default&target=foo");
+
+        assertWithin(1, TimeUnit.SECONDS, () -> {
             assertTrue(instructionHandler.instructions.contains("release0"));
         });
     }

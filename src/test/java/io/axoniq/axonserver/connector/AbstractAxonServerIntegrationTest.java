@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import eu.rekawek.toxiproxy.Proxy;
 import eu.rekawek.toxiproxy.ToxiproxyClient;
+import eu.rekawek.toxiproxy.model.Toxic;
 import io.axoniq.axonserver.connector.impl.ServerAddress;
 import io.axoniq.axonserver.connector.testutils.AxonServerUtils;
 import org.junit.jupiter.api.BeforeAll;
@@ -67,6 +68,9 @@ public abstract class AbstractAxonServerIntegrationTest {
 
     @BeforeEach
     void prepareInstance() throws IOException {
+        for (Toxic toxic : axonServerProxy.toxics().getAll()) {
+            toxic.remove();
+        }
         AxonServerUtils.purgeEventsFromAxonServer(axonServerHttpPort.getHostName(), axonServerHttpPort.getGrpcPort());
     }
 
