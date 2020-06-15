@@ -58,7 +58,7 @@ public class HeartbeatMonitor {
         if (task == taskId.get()) {
             // heartbeats should not be considered valid when a change was made
             checkBeat();
-            executor.schedule(() -> checkAndReschedule(task), 500, TimeUnit.MILLISECONDS);
+            executor.schedule(() -> checkAndReschedule(task), Math.min(interval.get(), 500), TimeUnit.MILLISECONDS);
         }
     }
 
@@ -93,6 +93,9 @@ public class HeartbeatMonitor {
                     long currentInterval = this.interval.get();
                     if (currentInterval != Long.MAX_VALUE) {
                         nextHeartbeatTimeout.updateAndGet(currentTimeout -> Math.max(nextTimeout + currentInterval, currentTimeout));
+                        logger.debug("Heartbeat Acknowledgement received. Extending timeout with {}ms", currentInterval);
+                    } else if (logger.isDebugEnabled()) {
+                        logger.debug("Heartbeat Acknowledgment received.");
                     }
                 }
             });
