@@ -1,5 +1,6 @@
 package io.axoniq.axonserver.connector.impl;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -58,6 +59,11 @@ class HeartbeatMonitorTest {
     private void elapseTime(long millis) {
         now += millis;
         HeartbeatMonitor.clock = Clock.fixed(Instant.ofEpochMilli(now), ZoneOffset.UTC);
+    }
+
+    @AfterAll
+    static void cleanUp() {
+        HeartbeatMonitor.clock = Clock.systemUTC();
     }
 
     @Test
