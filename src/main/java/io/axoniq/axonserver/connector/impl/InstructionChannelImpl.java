@@ -177,7 +177,7 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
     private CompletableFuture<Void> sendInstruction(PlatformInboundInstruction instruction) {
         CompletableFuture<Void> result = new CompletableFuture<>();
         awaitingAck.put(instruction.getInstructionId(), result);
-        logger.debug("Sending instruction: {}", instruction.getRequestCase().name());
+        logger.debug("Sending instruction: {} {}", instruction.getRequestCase().name(), instruction.getInstructionId());
         StreamObserver<PlatformInboundInstruction> dispatcher = instructionDispatcher.get();
         if (dispatcher == null) {
             result.completeExceptionally(new AxonServerException(ErrorCategory.INSTRUCTION_EXECUTION_ERROR,

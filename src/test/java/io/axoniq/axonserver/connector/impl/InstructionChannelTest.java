@@ -45,8 +45,8 @@ class InstructionChannelTest extends AbstractAxonServerIntegrationTest {
     void connectionRecoveredByHeartbeat() throws Exception {
         client = AxonServerConnectionFactory.forClient(getClass().getSimpleName())
                                             .routingServers(axonServerAddress)
-                                            .connectTimeout(2000, TimeUnit.MILLISECONDS)
-                                            .reconnectInterval(500, TimeUnit.MILLISECONDS)
+                                            .connectTimeout(500, TimeUnit.MILLISECONDS)
+                                            .reconnectInterval(10, TimeUnit.MILLISECONDS)
                                             .build();
         AxonServerConnection connection1 = client.connect("default");
         connection1.instructionChannel().enableHeartbeat(500, 500, TimeUnit.MILLISECONDS);

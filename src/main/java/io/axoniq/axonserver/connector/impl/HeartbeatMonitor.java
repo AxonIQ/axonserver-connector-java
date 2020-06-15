@@ -58,7 +58,9 @@ public class HeartbeatMonitor {
         if (task == taskId.get()) {
             // heartbeats should not be considered valid when a change was made
             checkBeat();
-            executor.schedule(() -> checkAndReschedule(task), Math.min(interval.get(), 500), TimeUnit.MILLISECONDS);
+            long delay = Math.min(interval.get(), 500);
+            logger.debug("Heartbeat status checked. Scheduling next heartbeat verification in {}ms", delay);
+            executor.schedule(() -> checkAndReschedule(task), delay, TimeUnit.MILLISECONDS);
         }
     }
 
