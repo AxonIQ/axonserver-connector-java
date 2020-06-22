@@ -126,9 +126,7 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
             @Override
             public Registration registerSubscriptionQuery(QueryRequest query, UpdateHandler sendUpdate) {
                 updateHandler.set(sendUpdate);
-                return () -> {
-                    updateHandler.set(null);
-                };
+                return () -> updateHandler.set(null);
             }
         }, new QueryDefinition("testQuery", "testResult"));
 

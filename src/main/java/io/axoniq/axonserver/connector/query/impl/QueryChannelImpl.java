@@ -178,7 +178,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
                     if (refs != null && refs.remove(handler) && refs.isEmpty()) {
                         queryHandlers.remove(queryDefinition.getQueryName());
                         String instructionId = UUID.randomUUID().toString();
-                        outboundQueryStream.get().onNext(
+                        doIfNotNull(outboundQueryStream.get(), s -> s.onNext(
                                 QueryProviderOutbound.newBuilder()
                                                      .setInstructionId(instructionId)
                                                      .setUnsubscribe(QuerySubscription.newBuilder()
@@ -188,7 +188,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
                                                                                       .setClientId(clientIdentification.getClientId())
                                                                                       .setComponentName(clientIdentification.getComponentName()))
                                                      .build()
-                        );
+                        ));
                     }
                 }
             }
@@ -364,7 +364,6 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
         @Override
         protected boolean unregisterOutboundStream(StreamObserver<QueryProviderOutbound> expected) {
             if (outboundQueryStream.compareAndSet(expected, null)) {
-                // TODO - Do update handlers need to be unregistered when disconnections occur?
                 cancelAllSubscriptionQueries();
                 return true;
             }
