@@ -61,7 +61,7 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
     private final AtomicReference<StreamObserver<PlatformInboundInstruction>> instructionDispatcher = new AtomicReference<>();
     private final Map<PlatformOutboundInstruction.RequestCase, BiConsumer<PlatformOutboundInstruction, ReplyChannel<PlatformInboundInstruction>>> instructionHandlers = new EnumMap<>(PlatformOutboundInstruction.RequestCase.class);
     private final HeartbeatMonitor heartbeatMonitor;
-    private final Map<String, CompletableFuture<?>> awaitingAck = new ConcurrentHashMap<>();
+    private final Map<String, CompletableFuture<InstructionAck>> awaitingAck = new ConcurrentHashMap<>();
     private final String context;
     private final Map<String, ProcessorInstructionHandler> processorInstructionHandlers = new ConcurrentHashMap<>();
     private final Map<String, Supplier<EventProcessorInfo>> processorInfoSuppliers = new ConcurrentHashMap<>();
@@ -91,7 +91,7 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
             logger.info("Not connecting - connection already present");
         } else {
             PlatformServiceGrpc.PlatformServiceStub platformServiceStub = PlatformServiceGrpc.newStub(channel);
-            PlatformOutboundInstructionHandler responseObserver = new PlatformOutboundInstructionHandler(clientIdentification.getClientId(), 0, 0, e -> scheduleReconnect());
+            PlatformOutboundInstructionHandler responseObserver = new PlatformOutboundInstructionHandler(clientIdentification.getClientId(), 0, 0, this::handleDisconnect);
             logger.debug("Opening instruction stream");
             StreamObserver<PlatformInboundInstruction> instructionsForPlatform = platformServiceStub.openStream(responseObserver);
             StreamObserver<PlatformInboundInstruction> previous = instructionDispatcher.getAndSet(instructionsForPlatform);
@@ -107,6 +107,19 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
             }
         }
 
+    }
+
+    private void handleDisconnect(Throwable cause) {
+        failOpenInstructions(cause);
+        scheduleReconnect();
+    }
+
+    private void failOpenInstructions(Throwable cause) {
+        while (!awaitingAck.isEmpty()) {
+            awaitingAck.keySet().forEach(k -> {
+                doIfNotNull(awaitingAck.remove(k), cf -> cf.completeExceptionally(cause));
+            });
+        }
     }
 
     @Override
@@ -163,27 +176,33 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
         heartbeatMonitor.disableHeartbeat();
     }
 
-    public CompletableFuture<Void> sendProcessorInfo(EventProcessorInfo processorInfo) {
+    public CompletableFuture<InstructionAck> sendProcessorInfo(EventProcessorInfo processorInfo) {
         return sendInstruction(PlatformInboundInstruction.newBuilder().setEventProcessorInfo(processorInfo).build());
     }
 
-    public CompletableFuture<Void> sendHeartBeat() {
+    public CompletableFuture<InstructionAck> sendHeartBeat() {
         if (!isConnected()) {
             return CompletableFuture.completedFuture(null);
         }
-        return sendInstruction(PlatformInboundInstruction.newBuilder().setInstructionId(UUID.randomUUID().toString()).setHeartbeat(Heartbeat.newBuilder()).build());
+        return sendInstruction(PlatformInboundInstruction.newBuilder().setInstructionId(UUID.randomUUID().toString()).setHeartbeat(Heartbeat.getDefaultInstance()).build());
     }
 
-    private CompletableFuture<Void> sendInstruction(PlatformInboundInstruction instruction) {
-        CompletableFuture<Void> result = new CompletableFuture<>();
-        awaitingAck.put(instruction.getInstructionId(), result);
+    private CompletableFuture<InstructionAck> sendInstruction(PlatformInboundInstruction instruction) {
+        CompletableFuture<InstructionAck> result = new CompletableFuture<>();
         logger.debug("Sending instruction: {} {}", instruction.getRequestCase().name(), instruction.getInstructionId());
         StreamObserver<PlatformInboundInstruction> dispatcher = instructionDispatcher.get();
         if (dispatcher == null) {
             result.completeExceptionally(new AxonServerException(ErrorCategory.INSTRUCTION_EXECUTION_ERROR,
                                                                  "Unable to send instruction"));
         } else {
-            dispatcher.onNext(instruction);
+            awaitingAck.put(instruction.getInstructionId(), result);
+            try {
+                dispatcher.onNext(instruction);
+            } catch (Exception e) {
+                awaitingAck.remove(instruction.getInstructionId());
+                result.completeExceptionally(e);
+                dispatcher.onError(e);
+            }
         } return result;
     }
 
@@ -216,7 +235,11 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
         @Override
         protected boolean unregisterOutboundStream(StreamObserver<PlatformInboundInstruction> expected) {
             heartbeatMonitor.pause();
-            return instructionDispatcher.compareAndSet(expected, null);
+            boolean disconnected = instructionDispatcher.compareAndSet(expected, null);
+            if (disconnected) {
+                failOpenInstructions(new AxonServerException(ErrorCategory.INSTRUCTION_ACK_ERROR, "Disconnected from AxonServer before receiving instruction ACK"));
+            }
+            return disconnected;
         }
 
         @Override
@@ -231,9 +254,9 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
         public void accept(PlatformOutboundInstruction ackMessage, ReplyChannel<PlatformInboundInstruction> replyChannel) {
             String instructionId = ackMessage.getAck().getInstructionId();
             logger.info("Received ACK for {}", instructionId);
-            CompletableFuture<?> handle = awaitingAck.remove(instructionId);
+            CompletableFuture<InstructionAck> handle = awaitingAck.remove(instructionId);
             if (handle != null) {
-                handle.complete(null);
+                handle.complete(ackMessage.getAck());
             }
         }
     }
