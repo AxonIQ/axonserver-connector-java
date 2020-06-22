@@ -1,6 +1,5 @@
 package io.axoniq.axonserver.connector.impl;
 
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -8,12 +7,11 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public abstract class FlowControlledBuffer<T, R> extends FlowControlledStream<T, R> {
 
-    private final BlockingQueue<T> buffer;
+    private final BlockingQueue<T> buffer = new LinkedBlockingQueue<>();
     private final AtomicReference<Throwable> errorResult = new AtomicReference<>();
 
     public FlowControlledBuffer(String clientId, int bufferSize, int refillBatch) {
         super(clientId, bufferSize, refillBatch);
-        this.buffer = (bufferSize > Integer.MAX_VALUE >> 1) ? new LinkedBlockingQueue<>() : new ArrayBlockingQueue<>(bufferSize + 1);
     }
 
     protected abstract T terminalMessage();
