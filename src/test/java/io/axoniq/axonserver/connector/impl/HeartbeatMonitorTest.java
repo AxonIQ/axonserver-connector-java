@@ -1,5 +1,6 @@
 package io.axoniq.axonserver.connector.impl;
 
+import io.axoniq.axonserver.grpc.InstructionAck;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,7 +14,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -28,7 +28,6 @@ import static org.mockito.Mockito.mock;
 class HeartbeatMonitorTest {
 
     private ScheduledExecutorService executor;
-    private Supplier<CompletableFuture<?>> mockSender;
     private List<CompletableFuture<?>> scheduledBeats = new CopyOnWriteArrayList<>();
     private Runnable nextCheckBeat;
     private long now;
@@ -45,8 +44,8 @@ class HeartbeatMonitorTest {
             return null;
         }).when(executor).schedule(any(Runnable.class), anyLong(), any(TimeUnit.class));
         doAnswer(inv -> nextCheckBeat = () -> {nextCheckBeat = null ; inv.getArgumentAt(0, Runnable.class).run();}).when(executor).execute(any(Runnable.class));
-        mockSender = () -> {
-            CompletableFuture<?> newBeat = new CompletableFuture<>();
+        HeartbeatSender mockSender = () -> {
+            CompletableFuture<InstructionAck> newBeat = new CompletableFuture<>();
             scheduledBeats.add(newBeat);
             return newBeat;
         };

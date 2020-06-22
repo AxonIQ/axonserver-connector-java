@@ -8,21 +8,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Clock;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Supplier;
 
 public class HeartbeatMonitor {
 
     private static final Logger logger = LoggerFactory.getLogger(HeartbeatMonitor.class);
+    private static final PlatformInboundInstruction HEARTBEAT_MESSAGE = PlatformInboundInstruction.newBuilder().setHeartbeat(Heartbeat.getDefaultInstance()).build();
 
     static Clock clock = Clock.systemUTC();
 
     private final ScheduledExecutorService executor;
-    private final Supplier<CompletableFuture<?>> sender;
+    private final HeartbeatSender sender;
     private final Runnable onHeartbeatMissed;
     private final AtomicLong nextHeartbeatTimeout = new AtomicLong();
     private final AtomicLong nextHeartbeat = new AtomicLong();
@@ -31,7 +30,7 @@ public class HeartbeatMonitor {
     private final AtomicInteger taskId = new AtomicInteger();
 
     public HeartbeatMonitor(ScheduledExecutorService executor,
-                            Supplier<CompletableFuture<?>> heartbeatSender,
+                            HeartbeatSender heartbeatSender,
                             Runnable onHeartbeatMissed) {
         this.executor = executor;
         this.sender = heartbeatSender;
@@ -88,9 +87,8 @@ public class HeartbeatMonitor {
             onHeartbeatMissed.run();
             nextHeartbeatTimeout.compareAndSet(nextTimeout, now + interval.get());
         }
-        if (nextHeartbeat.getAndAccumulate(interval.get(),
-                                           (next, currentInterval) -> next <= now ? now + currentInterval : next) <= now) {
-            sender.get().whenComplete((r, e) -> {
+        if (planNextBeat(now, interval.get())) {
+            sender.sendHeartbeat().whenComplete((r, e) -> {
                 if (e == null) {
                     long currentInterval = this.interval.get();
                     if (currentInterval != Long.MAX_VALUE) {
@@ -104,12 +102,27 @@ public class HeartbeatMonitor {
         }
     }
 
+    /**
+     * Calculates the time for the next heartbeat based on the most recent heartbeat time and the interval, indicating
+     * whether the time has been reached to send a heartbeat message.
+     *
+     * @param currentTime The current timestamp
+     * @param interval The interval at which heart
+     * @return whether or not the time for a new heartbeat has elapsed
+     */
+    private boolean planNextBeat(long currentTime, long interval) {
+        return nextHeartbeat.getAndAccumulate(interval,
+                                              (next, currentInterval) -> next <= currentTime ? currentTime + currentInterval : next) <= currentTime;
+    }
+
     public void handleIncomingBeat(PlatformOutboundInstruction msg, ReplyChannel<PlatformInboundInstruction> reply) {
         long now = clock.millis();
         long currentInterval = this.interval.get();
+        // receiving a heartbeat from Server is equivalent to receiving an acknowledgement
+        planNextBeat(now, currentInterval);
         nextHeartbeatTimeout.updateAndGet(current -> Math.max(now + currentInterval, current));
         try {
-            reply.send(PlatformInboundInstruction.newBuilder().setHeartbeat(Heartbeat.getDefaultInstance()).build());
+            reply.send(HEARTBEAT_MESSAGE);
         } finally {
             reply.complete();
         }
