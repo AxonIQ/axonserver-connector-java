@@ -23,6 +23,7 @@ import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.connector.command.CommandChannel;
 import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
 import io.axoniq.axonserver.connector.impl.AbstractIncomingInstructionStream;
+import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
 import io.axoniq.axonserver.connector.impl.ObjectUtils;
 import io.axoniq.axonserver.grpc.ErrorMessage;
 import io.axoniq.axonserver.grpc.FlowControl;
@@ -37,7 +38,6 @@ import io.axoniq.axonserver.grpc.command.CommandResponse;
 import io.axoniq.axonserver.grpc.command.CommandServiceGrpc;
 import io.axoniq.axonserver.grpc.command.CommandSubscription;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
-import io.grpc.ManagedChannel;
 import io.grpc.stub.StreamObserver;
 import io.netty.util.internal.OutOfDirectMemoryError;
 import org.slf4j.Logger;
@@ -66,16 +66,19 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
     private final ConcurrentMap<CommandProviderInbound.RequestCase, BiConsumer<CommandProviderInbound, ReplyChannel<CommandProviderOutbound>>> handlers = new ConcurrentHashMap<>();
     private final int permits;
     private final int permitsBatch;
+    private final CommandServiceGrpc.CommandServiceStub commandServiceStub;
 
     public CommandChannelImpl(ClientIdentification clientIdentification,
                               int permits, int permitsBatch,
-                              ScheduledExecutorService executor, ManagedChannel channel) {
+                              ScheduledExecutorService executor,
+                              AxonServerManagedChannel channel) {
         super(executor, channel);
         this.clientIdentification = clientIdentification;
         this.permits = permits;
         this.permitsBatch = permitsBatch;
-        handlers.put(CommandProviderInbound.RequestCase.COMMAND, this::handleIncomingCommand);
-        handlers.put(CommandProviderInbound.RequestCase.ACK, this::handleAck);
+        this.handlers.put(CommandProviderInbound.RequestCase.COMMAND, this::handleIncomingCommand);
+        this.handlers.put(CommandProviderInbound.RequestCase.ACK, this::handleAck);
+        this.commandServiceStub = CommandServiceGrpc.newStub(channel);
     }
 
     private void handleIncomingCommand(CommandProviderInbound message, ReplyChannel<CommandProviderOutbound> outbound) {
@@ -113,12 +116,11 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
     }
 
     @Override
-    public synchronized void connect(ManagedChannel channel) {
+    public synchronized void connect() {
         if (outboundCommandStream.get() != null) {
             // we're already connected on this channel
             return;
         }
-        CommandServiceGrpc.CommandServiceStub commandServiceStub = CommandServiceGrpc.newStub(channel);
         IncomingCommandStream responseObserver = new IncomingCommandStream(clientIdentification.getClientId(),
                                                                            permits, permitsBatch,
                                                                            this::onConnectionError);

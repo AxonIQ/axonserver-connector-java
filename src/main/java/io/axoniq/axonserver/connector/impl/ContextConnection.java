@@ -26,7 +26,6 @@ import io.axoniq.axonserver.connector.query.QueryChannel;
 import io.axoniq.axonserver.connector.query.impl.QueryChannelImpl;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
 import io.grpc.ConnectivityState;
-import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
 
 import java.util.Optional;
@@ -46,7 +45,7 @@ public class ContextConnection implements AxonServerConnection {
     private final AtomicReference<EventChannelImpl> eventChannel = new AtomicReference<>();
     private final AtomicReference<QueryChannelImpl> queryChannel = new AtomicReference<>();
     private final ScheduledExecutorService executorService;
-    private final ManagedChannel connection;
+    private final AxonServerManagedChannel connection;
 
     public ContextConnection(ClientIdentification clientIdentification,
                              ScheduledExecutorService executorService,
@@ -122,12 +121,12 @@ public class ContextConnection implements AxonServerConnection {
             ConnectivityState state = connection.getState(true);
             if (state != ConnectivityState.SHUTDOWN && state != ConnectivityState.TRANSIENT_FAILURE) {
                 try {
-                    channel.connect(connection);
+                    channel.connect();
                 } catch (StatusRuntimeException e) {
-                    connection.notifyWhenStateChanged(state, () -> channel.connect(connection));
+                    connection.notifyWhenStateChanged(state, channel::connect);
                 }
             } else {
-                connection.notifyWhenStateChanged(state, () -> channel.connect(connection));
+                connection.notifyWhenStateChanged(state, channel::connect);
             }
         }
         return channel;

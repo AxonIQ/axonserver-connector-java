@@ -17,7 +17,6 @@
 package io.axoniq.axonserver.connector.impl;
 
 import io.grpc.ConnectivityState;
-import io.grpc.ManagedChannel;
 
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -25,10 +24,10 @@ import java.util.concurrent.TimeUnit;
 public abstract class AbstractAxonServerChannel {
 
     private final ScheduledExecutorService executor;
-    private final ManagedChannel channel;
+    private final AxonServerManagedChannel channel;
 
     public AbstractAxonServerChannel(ScheduledExecutorService executor,
-                                     ManagedChannel axonServerManagedChannel) {
+                                     AxonServerManagedChannel axonServerManagedChannel) {
         this.executor = executor;
         this.channel = axonServerManagedChannel;
     }
@@ -37,14 +36,14 @@ public abstract class AbstractAxonServerChannel {
         executor.schedule(() -> {
             ConnectivityState connectivityState = channel.getState(false);
             if (connectivityState == ConnectivityState.READY) {
-                connect(channel);
+                connect();
             } else {
                 scheduleReconnect();
             }
         }, 500, TimeUnit.MILLISECONDS);
     }
 
-    public abstract void connect(ManagedChannel channel);
+    public abstract void connect();
 
     public abstract void disconnect();
 

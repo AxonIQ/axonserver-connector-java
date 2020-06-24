@@ -31,7 +31,6 @@ import io.axoniq.axonserver.grpc.control.Heartbeat;
 import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformServiceGrpc;
-import io.grpc.ManagedChannel;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,6 +65,7 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
     private final Map<String, ProcessorInstructionHandler> processorInstructionHandlers = new ConcurrentHashMap<>();
     private final Map<String, Supplier<EventProcessorInfo>> processorInfoSuppliers = new ConcurrentHashMap<>();
     private final AtomicBoolean infoSupplierActive = new AtomicBoolean();
+    private final PlatformServiceGrpc.PlatformServiceStub platformServiceStub;
 
     public InstructionChannelImpl(ClientIdentification clientIdentification, String context,
                                   ScheduledExecutorService executor, AxonServerManagedChannel channel) {
@@ -82,15 +82,15 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
         this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.PAUSE_EVENT_PROCESSOR, i -> ProcessorInstructions.pauseHandler(processorInstructionHandlers));
         this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.RELEASE_SEGMENT, i -> ProcessorInstructions.releaseSegmentHandler(processorInstructionHandlers));
         this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.REQUEST_EVENT_PROCESSOR_INFO, i -> ProcessorInstructions.requestInfoHandler(processorInfoSuppliers));
+        platformServiceStub = PlatformServiceGrpc.newStub(channel);
     }
 
     @Override
-    public synchronized void connect(ManagedChannel channel) {
+    public synchronized void connect() {
         StreamObserver<PlatformInboundInstruction> existing = instructionDispatcher.get();
         if (existing != null) {
             logger.info("Not connecting - connection already present");
         } else {
-            PlatformServiceGrpc.PlatformServiceStub platformServiceStub = PlatformServiceGrpc.newStub(channel);
             PlatformOutboundInstructionHandler responseObserver = new PlatformOutboundInstructionHandler(clientIdentification.getClientId(), 0, 0, this::handleDisconnect);
             logger.debug("Opening instruction stream");
             StreamObserver<PlatformInboundInstruction> instructionsForPlatform = platformServiceStub.openStream(responseObserver);
@@ -116,9 +116,9 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
 
     private void failOpenInstructions(Throwable cause) {
         while (!awaitingAck.isEmpty()) {
-            awaitingAck.keySet().forEach(k -> {
-                doIfNotNull(awaitingAck.remove(k), cf -> cf.completeExceptionally(cause));
-            });
+            awaitingAck.keySet()
+                       .forEach(k -> doIfNotNull(awaitingAck.remove(k),
+                                                 cf -> cf.completeExceptionally(cause)));
         }
     }
 

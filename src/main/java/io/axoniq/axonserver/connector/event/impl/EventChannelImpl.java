@@ -21,6 +21,7 @@ import io.axoniq.axonserver.connector.event.AggregateEventStream;
 import io.axoniq.axonserver.connector.event.AppendEventsTransaction;
 import io.axoniq.axonserver.connector.event.EventChannel;
 import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
+import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
 import io.axoniq.axonserver.connector.impl.FutureStreamObserver;
 import io.axoniq.axonserver.grpc.event.Confirmation;
 import io.axoniq.axonserver.grpc.event.Event;
@@ -34,7 +35,6 @@ import io.axoniq.axonserver.grpc.event.GetTokenAtRequest;
 import io.axoniq.axonserver.grpc.event.ReadHighestSequenceNrRequest;
 import io.axoniq.axonserver.grpc.event.ReadHighestSequenceNrResponse;
 import io.axoniq.axonserver.grpc.event.TrackingToken;
-import io.grpc.ManagedChannel;
 import io.grpc.stub.StreamObserver;
 
 import java.util.concurrent.CompletableFuture;
@@ -47,13 +47,13 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
     private final EventStoreGrpc.EventStoreStub eventStore;
     // guarded by -this-
 
-    public EventChannelImpl(ScheduledExecutorService executor, ManagedChannel channel) {
+    public EventChannelImpl(ScheduledExecutorService executor, AxonServerManagedChannel channel) {
         super(executor, channel);
         eventStore = EventStoreGrpc.newStub(channel);
     }
 
     @Override
-    public synchronized void connect(ManagedChannel channel) {
+    public synchronized void connect() {
         // there is no instruction stream for the events channel
     }
 

@@ -7,6 +7,7 @@ import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
 import io.axoniq.axonserver.connector.impl.AbstractBufferedStream;
 import io.axoniq.axonserver.connector.impl.AbstractIncomingInstructionStream;
+import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
 import io.axoniq.axonserver.connector.impl.ObjectUtils;
 import io.axoniq.axonserver.connector.query.QueryChannel;
 import io.axoniq.axonserver.connector.query.QueryDefinition;
@@ -29,7 +30,6 @@ import io.axoniq.axonserver.grpc.query.QueryUpdateComplete;
 import io.axoniq.axonserver.grpc.query.SubscriptionQuery;
 import io.axoniq.axonserver.grpc.query.SubscriptionQueryRequest;
 import io.axoniq.axonserver.grpc.query.SubscriptionQueryResponse;
-import io.grpc.ManagedChannel;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,11 +69,12 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
     // monitor for modification access to queryHandlers collection
     private final Object queryHandlerMonitor = new Object();
     private final Map<String, Set<Registration>> subscriptionQueries = new ConcurrentHashMap<>();
+    private final QueryServiceGrpc.QueryServiceStub queryServiceStub;
 
     public QueryChannelImpl(ClientIdentification clientIdentification,
                             int permits, int permitsBatch,
                             ScheduledExecutorService executor,
-                            ManagedChannel channel) {
+                            AxonServerManagedChannel channel) {
         super(executor, channel);
         this.clientIdentification = clientIdentification;
         this.permits = permits;
@@ -83,6 +84,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
         instructionHandlers.put(SubscriptionQueryRequest.RequestCase.GET_INITIAL_RESULT, this::getInitialResult);
         instructionHandlers.put(SubscriptionQueryRequest.RequestCase.SUBSCRIBE, this::subscribeToQueryUpdates);
         instructionHandlers.put(SubscriptionQueryRequest.RequestCase.UNSUBSCRIBE, this::unsubscribeToQueryUpdates);
+        queryServiceStub = QueryServiceGrpc.newStub(channel);
     }
 
     private void handleAck(QueryProviderInbound query, ReplyChannel<QueryProviderOutbound> result) {
@@ -121,12 +123,11 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
     }
 
     @Override
-    public void connect(ManagedChannel channel) {
+    public void connect() {
         if (outboundQueryStream.get() != null) {
             // we're already connected on this channel
             return;
         }
-        QueryServiceGrpc.QueryServiceStub queryServiceStub = QueryServiceGrpc.newStub(channel);
         IncomingQueryInstructionStream responseObserver = new IncomingQueryInstructionStream(clientIdentification.getClientId(),
                                                                                              permits, permitsBatch,
                                                                                              e -> scheduleReconnect());
