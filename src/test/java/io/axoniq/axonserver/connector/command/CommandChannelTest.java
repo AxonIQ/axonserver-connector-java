@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
+import static io.axoniq.axonserver.connector.impl.ObjectUtils.silently;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -32,7 +33,7 @@ class CommandChannelTest extends AbstractAxonServerIntegrationTest {
         connectionFactory1 = AxonServerConnectionFactory.forClient(getClass().getSimpleName(),
                                                                    "client1")
                                                         .routingServers(axonServerAddress)
-                                                        .forcePlatformReconnect(false)
+                                                        .forceReconnectViaRoutingServers(false)
                                                         .reconnectInterval(500, TimeUnit.MILLISECONDS)
                                                         .build();
         connection1 = connectionFactory1.connect("default");
@@ -41,7 +42,7 @@ class CommandChannelTest extends AbstractAxonServerIntegrationTest {
                                                                    "client2")
                                                         .routingServers(axonServerAddress)
                                                         .reconnectInterval(500, TimeUnit.MILLISECONDS)
-                                                        .forcePlatformReconnect(false)
+                                                        .forceReconnectViaRoutingServers(false)
                                                         .build();
 
         connection2 = connectionFactory2.connect("default");
@@ -49,8 +50,8 @@ class CommandChannelTest extends AbstractAxonServerIntegrationTest {
 
     @AfterEach
     void tearDown() {
-        connectionFactory1.shutdown();
-        connectionFactory2.shutdown();
+        silently(connectionFactory1, AxonServerConnectionFactory::shutdown);
+        silently(connectionFactory2, AxonServerConnectionFactory::shutdown);
     }
 
     @Test

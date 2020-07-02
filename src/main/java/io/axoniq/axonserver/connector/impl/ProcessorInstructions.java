@@ -1,6 +1,7 @@
 package io.axoniq.axonserver.connector.impl;
 
 import io.axoniq.axonserver.connector.ErrorCategory;
+import io.axoniq.axonserver.connector.InstructionHandler;
 import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.connector.instruction.ProcessorInstructionHandler;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo;
@@ -9,7 +10,6 @@ import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
 
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -20,7 +20,7 @@ public class ProcessorInstructions {
     private ProcessorInstructions() {
     }
 
-    public static BiConsumer<PlatformOutboundInstruction, ReplyChannel<PlatformInboundInstruction>> mergeHandler(Map<String, ProcessorInstructionHandler> instructionHandlers) {
+    public static InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> mergeHandler(Map<String, ProcessorInstructionHandler> instructionHandlers) {
         return (instruction, replyChannel) -> {
             String processorName = instruction.getMergeEventProcessorSegment().getProcessorName();
             int segmentId = instruction.getMergeEventProcessorSegment().getSegmentIdentifier();
@@ -30,7 +30,7 @@ public class ProcessorInstructions {
         };
     }
 
-    public static BiConsumer<PlatformOutboundInstruction, ReplyChannel<PlatformInboundInstruction>> splitHandler(Map<String, ProcessorInstructionHandler> instructionHandlers) {
+    public static InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> splitHandler(Map<String, ProcessorInstructionHandler> instructionHandlers) {
         return (instruction, replyChannel) -> {
             String processorName = instruction.getSplitEventProcessorSegment().getProcessorName();
             int segmentId = instruction.getSplitEventProcessorSegment().getSegmentIdentifier();
@@ -41,7 +41,7 @@ public class ProcessorInstructions {
 
     }
 
-    public static BiConsumer<PlatformOutboundInstruction, ReplyChannel<PlatformInboundInstruction>> startHandler(Map<String, ProcessorInstructionHandler> instructionHandlers) {
+    public static InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> startHandler(Map<String, ProcessorInstructionHandler> instructionHandlers) {
         return (instruction, replyChannel) -> {
             String processorName = instruction.getStartEventProcessor().getProcessorName();
             executeAndReply(replyChannel,
@@ -50,7 +50,7 @@ public class ProcessorInstructions {
         };
     }
 
-    public static BiConsumer<PlatformOutboundInstruction, ReplyChannel<PlatformInboundInstruction>> pauseHandler(Map<String, ProcessorInstructionHandler> instructionHandlers) {
+    public static InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> pauseHandler(Map<String, ProcessorInstructionHandler> instructionHandlers) {
         return (instruction, replyChannel) -> {
             String processorName = instruction.getPauseEventProcessor().getProcessorName();
             executeAndReply(replyChannel,
@@ -59,7 +59,7 @@ public class ProcessorInstructions {
         };
     }
 
-    public static BiConsumer<PlatformOutboundInstruction, ReplyChannel<PlatformInboundInstruction>> releaseSegmentHandler(Map<String, ProcessorInstructionHandler> instructionHandlers) {
+    public static InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> releaseSegmentHandler(Map<String, ProcessorInstructionHandler> instructionHandlers) {
         return (instruction, replyChannel) -> {
             String processorName = instruction.getReleaseSegment().getProcessorName();
             int segmentId = instruction.getReleaseSegment().getSegmentIdentifier();
@@ -70,7 +70,7 @@ public class ProcessorInstructions {
         };
     }
 
-    public static BiConsumer<PlatformOutboundInstruction, ReplyChannel<PlatformInboundInstruction>> requestInfoHandler(Map<String, Supplier<EventProcessorInfo>> infoSuppliers) {
+    public static InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> requestInfoHandler(Map<String, Supplier<EventProcessorInfo>> infoSuppliers) {
         return (instruction, replyChannel) -> {
             String instructionId = instruction.getInstructionId();
             String processorName = instruction.getRequestEventProcessorInfo().getProcessorName();

@@ -1,5 +1,6 @@
 package io.axoniq.axonserver.connector.query;
 
+import com.google.protobuf.ByteString;
 import io.axoniq.axonserver.connector.AbstractAxonServerIntegrationTest;
 import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
@@ -138,7 +139,8 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
                 subscriptionQuery.initialResult().isDone()
         );
         assertWithin(1, TimeUnit.SECONDS, () -> assertNotNull(updateHandler.get()));
-        updateHandler.get().sendUpdate(QueryUpdate.newBuilder().build());
+
+        updateHandler.get().sendUpdate(QueryUpdate.newBuilder().setPayload(SerializedObject.newBuilder().setType(String.class.getName()).setData(ByteString.copyFromUtf8("Hello")).build()).build());
 
         assertWithin(1, TimeUnit.SECONDS, () -> assertNotNull(subscriptionQuery.updates().nextIfAvailable()));
 

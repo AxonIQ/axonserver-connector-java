@@ -47,7 +47,8 @@ public class SubscriptionQueryStream extends FlowControlledStream<SubscriptionQu
                 break;
             case COMPLETE_EXCEPTIONALLY:
                 AxonServerException exception = new AxonServerException(ErrorCategory.getFromCode(value.getCompleteExceptionally().getErrorCode()),
-                                                                        value.getCompleteExceptionally().getErrorMessage().getMessage());
+                                                                        value.getCompleteExceptionally().getErrorMessage().getMessage(),
+                                                                        value.getCompleteExceptionally().getClientId());
                 updateBuffer.onError(exception);
                 if (!initialResultFuture.isDone()) {
                     initialResultFuture.completeExceptionally(exception);

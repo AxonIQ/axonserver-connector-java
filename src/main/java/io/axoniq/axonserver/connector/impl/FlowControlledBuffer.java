@@ -58,17 +58,13 @@ public abstract class FlowControlledBuffer<T, R> extends FlowControlledStream<T,
     }
 
     protected T take() throws InterruptedException {
-        T taken = validate(buffer.take());
+        T taken = validate(buffer.take(), false);
         markConsumed();
         return taken;
     }
 
     protected T peek() {
         return validate(buffer.peek(), true);
-    }
-
-    private T validate(T peek) {
-        return validate(peek, false);
     }
 
     private T validate(T peek, boolean nullOnTerminal) {

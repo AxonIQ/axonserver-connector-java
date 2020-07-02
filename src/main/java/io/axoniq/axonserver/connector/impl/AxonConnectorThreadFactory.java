@@ -1,4 +1,4 @@
-package io.axoniq.axonserver.connector;
+package io.axoniq.axonserver.connector.impl;
 
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;

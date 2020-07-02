@@ -14,12 +14,22 @@
  * limitations under the License.
  */
 
-package io.axoniq.axonserver.connector.impl;import java.util.function.Consumer;
+package io.axoniq.axonserver.connector.impl;
+
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Consumer;
 
 public class ObjectUtils {
 
     private ObjectUtils() {
         // utility class
+    }
+
+    public static <T> T nonNullOrDefault(T instance, T ifNull) {
+        if (instance == null) {
+            return ifNull;
+        }
+        return instance;
     }
 
     public static <T> void doIfNotNull(T instance, Consumer<T> action) {
@@ -37,4 +47,13 @@ public class ObjectUtils {
             }
         }
     }
+
+    public static String randomHex(int length) {
+        StringBuilder sb = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            sb.append(Integer.toString(ThreadLocalRandom.current().nextInt(0, 16), 16));
+        }
+        return sb.toString();
+    }
+
 }

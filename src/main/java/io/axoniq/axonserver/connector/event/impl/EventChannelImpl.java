@@ -16,17 +16,16 @@
 
 package io.axoniq.axonserver.connector.event.impl;
 
-import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.event.AggregateEventStream;
 import io.axoniq.axonserver.connector.event.AppendEventsTransaction;
 import io.axoniq.axonserver.connector.event.EventChannel;
+import io.axoniq.axonserver.connector.event.EventStream;
 import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
 import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
 import io.axoniq.axonserver.connector.impl.FutureStreamObserver;
 import io.axoniq.axonserver.grpc.event.Confirmation;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.EventStoreGrpc;
-import io.axoniq.axonserver.grpc.event.EventWithToken;
 import io.axoniq.axonserver.grpc.event.GetAggregateEventsRequest;
 import io.axoniq.axonserver.grpc.event.GetAggregateSnapshotsRequest;
 import io.axoniq.axonserver.grpc.event.GetFirstTokenRequest;
@@ -85,8 +84,8 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
     }
 
     @Override
-    public ResultStream<EventWithToken> openStream(long token, int bufferSize, int refillBatch) {
-        BufferedEventStream buffer = new BufferedEventStream(Math.max(64, bufferSize), Math.max(16, Math.min(bufferSize, refillBatch)));
+    public EventStream openStream(long token, int bufferSize, int refillBatch, boolean forceReadFromLeader) {
+        BufferedEventStream buffer = new BufferedEventStream(token, Math.max(64, bufferSize), Math.max(16, Math.min(bufferSize, refillBatch)), forceReadFromLeader);
         //noinspection ResultOfMethodCallIgnored
         eventStore.listEvents(buffer);
         buffer.enableFlowControl();
@@ -102,10 +101,11 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
     }
 
     @Override
-    public AggregateEventStream openAggregateStream(String aggregateIdentifier, long initialSequence) {
+    public AggregateEventStream openAggregateStream(String aggregateIdentifier, long initialSequence, long maxSequence) {
         return doGetAggregateStream(GetAggregateEventsRequest.newBuilder()
                                                              .setAggregateId(aggregateIdentifier)
                                                              .setInitialSequence(initialSequence)
+                                                             .setMaxSequence(maxSequence)
                                                              .build());
     }
 

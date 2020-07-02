@@ -17,7 +17,7 @@
 package io.axoniq.axonserver.connector.impl;
 
 import io.axoniq.axonserver.connector.ErrorCategory;
-import io.axoniq.axonserver.connector.ReplyChannel;
+import io.axoniq.axonserver.connector.InstructionHandler;
 import io.axoniq.axonserver.grpc.ErrorMessage;
 import io.axoniq.axonserver.grpc.InstructionAck;
 import io.grpc.stub.ClientCallStreamObserver;
@@ -25,7 +25,6 @@ import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 
@@ -50,7 +49,7 @@ public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowCon
 
     @Override
     public void onNext(IN value) {
-        BiConsumer<IN, ReplyChannel<OUT>> handler = getHandler(value);
+        InstructionHandler<IN, OUT> handler = getHandler(value);
         if (handler == null) {
             markConsumed();
             String instructionId = getInstructionId(value);
@@ -59,7 +58,7 @@ public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowCon
             }
         } else {
             ForwardingReplyChannel<OUT> replyChannel = new ForwardingReplyChannel<>(getInstructionId(value), clientId(), instructionsForPlatform, this::buildAckMessage, this::markConsumed);
-            handler.accept(value, replyChannel);
+            handler.handle(value, replyChannel);
         }
     }
 
@@ -67,7 +66,7 @@ public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowCon
 
     protected abstract String getInstructionId(IN value);
 
-    protected abstract BiConsumer<IN, ReplyChannel<OUT>> getHandler(IN msgIn);
+    protected abstract InstructionHandler<IN, OUT> getHandler(IN msgIn);
 
     @Override
     public void onCompleted() {

@@ -1,6 +1,7 @@
 package io.axoniq.axonserver.connector.query.impl;
 
 import io.axoniq.axonserver.connector.ErrorCategory;
+import io.axoniq.axonserver.connector.InstructionHandler;
 import io.axoniq.axonserver.connector.Registration;
 import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.connector.ResultStream;
@@ -46,7 +47,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
@@ -60,7 +60,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
     private final AtomicReference<StreamObserver<QueryProviderOutbound>> outboundQueryStream = new AtomicReference<>();
     private final Set<QueryDefinition> supportedQueries = new CopyOnWriteArraySet<>();
     private final ConcurrentMap<String, Set<QueryHandler>> queryHandlers = new ConcurrentHashMap<>();
-    private final ConcurrentMap<Enum<?>, BiConsumer<QueryProviderInbound, ReplyChannel<QueryProviderOutbound>>> instructionHandlers = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Enum<?>, InstructionHandler<QueryProviderInbound, QueryProviderOutbound>> instructionHandlers = new ConcurrentHashMap<>();
 
     private final ClientIdentification clientIdentification;
     private final int permits;
@@ -355,7 +355,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
         }
 
         @Override
-        protected BiConsumer<QueryProviderInbound, ReplyChannel<QueryProviderOutbound>> getHandler(QueryProviderInbound request) {
+        protected InstructionHandler<QueryProviderInbound, QueryProviderOutbound> getHandler(QueryProviderInbound request) {
             if (request.getRequestCase() == QueryProviderInbound.RequestCase.SUBSCRIPTION_QUERY_REQUEST) {
                 return instructionHandlers.get(request.getSubscriptionQueryRequest().getRequestCase());
             }

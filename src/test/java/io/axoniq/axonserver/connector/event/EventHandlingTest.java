@@ -176,7 +176,7 @@ class EventHandlingTest extends AbstractAxonServerIntegrationTest {
 
         axonServerProxy.enable();
 
-        assertWithin(1, SECONDS, () -> assertTrue(connection1.isReady()));
+        assertWithin(2, SECONDS, () -> assertTrue(connection1.isReady()));
 
         try (ResultStream<EventWithToken> stream = eventChannel.openStream(-1, 64)) {
             Assertions.assertNotNull(stream.nextIfAvailable(5, SECONDS));

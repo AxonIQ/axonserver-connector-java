@@ -3,7 +3,6 @@ package io.axoniq.axonserver.connector.impl;
 import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.grpc.control.Heartbeat;
 import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
-import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -115,7 +114,7 @@ public class HeartbeatMonitor {
                                               (next, currentInterval) -> next <= currentTime ? currentTime + currentInterval : next) <= currentTime;
     }
 
-    public void handleIncomingBeat(PlatformOutboundInstruction msg, ReplyChannel<PlatformInboundInstruction> reply) {
+    public void handleIncomingBeat(ReplyChannel<PlatformInboundInstruction> reply) {
         long now = clock.millis();
         long currentInterval = this.interval.get();
         // receiving a heartbeat from Server is equivalent to receiving an acknowledgement

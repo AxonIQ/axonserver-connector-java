@@ -43,10 +43,10 @@ public abstract class FlowControlledStream<IN, OUT> implements ClientResponseObs
                                                                            .setPermits(permitsBatch)
                                                                            .setClientId(clientId)
                                                                            .build());
-        this.initialPermitsRequest = buildFlowControlMessage(FlowControl.newBuilder()
-                                                                        .setPermits(permits)
-                                                                        .setClientId(clientId)
-                                                                        .build());
+        this.initialPermitsRequest = buildInitialFlowControlMessage(FlowControl.newBuilder()
+                                                                               .setPermits(permits)
+                                                                               .setClientId(clientId)
+                                                                               .build());
     }
 
     public void enableFlowControl() {
@@ -57,6 +57,10 @@ public abstract class FlowControlledStream<IN, OUT> implements ClientResponseObs
     }
 
     protected abstract OUT buildFlowControlMessage(FlowControl flowControl);
+
+    protected OUT buildInitialFlowControlMessage(FlowControl flowControl) {
+        return buildFlowControlMessage(flowControl);
+    }
 
     protected String clientId() {
         return clientId;

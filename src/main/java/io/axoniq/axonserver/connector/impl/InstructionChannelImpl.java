@@ -18,10 +18,10 @@ package io.axoniq.axonserver.connector.impl;
 
 import io.axoniq.axonserver.connector.AxonServerException;
 import io.axoniq.axonserver.connector.ErrorCategory;
+import io.axoniq.axonserver.connector.InstructionHandler;
 import io.axoniq.axonserver.connector.Registration;
 import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.connector.instruction.InstructionChannel;
-import io.axoniq.axonserver.connector.instruction.InstructionHandler;
 import io.axoniq.axonserver.connector.instruction.ProcessorInstructionHandler;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.InstructionAck;
@@ -45,7 +45,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -58,7 +57,7 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
     private final ClientIdentification clientIdentification;
     private final ScheduledExecutorService executor;
     private final AtomicReference<StreamObserver<PlatformInboundInstruction>> instructionDispatcher = new AtomicReference<>();
-    private final Map<PlatformOutboundInstruction.RequestCase, BiConsumer<PlatformOutboundInstruction, ReplyChannel<PlatformInboundInstruction>>> instructionHandlers = new EnumMap<>(PlatformOutboundInstruction.RequestCase.class);
+    private final Map<PlatformOutboundInstruction.RequestCase, InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction>> instructionHandlers = new EnumMap<>(PlatformOutboundInstruction.RequestCase.class);
     private final HeartbeatMonitor heartbeatMonitor;
     private final Map<String, CompletableFuture<InstructionAck>> awaitingAck = new ConcurrentHashMap<>();
     private final String context;
@@ -75,7 +74,7 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
         this.executor = executor;
         heartbeatMonitor = new HeartbeatMonitor(executor, this::sendHeartBeat, channel::forceReconnect);
         this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.ACK, i -> new AckHandler());
-        this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.HEARTBEAT, i -> heartbeatMonitor::handleIncomingBeat);
+        this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.HEARTBEAT, i -> (msg, reply) -> heartbeatMonitor.handleIncomingBeat(reply));
         this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.MERGE_EVENT_PROCESSOR_SEGMENT, i -> ProcessorInstructions.mergeHandler(processorInstructionHandlers));
         this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.SPLIT_EVENT_PROCESSOR_SEGMENT, i -> ProcessorInstructions.splitHandler(processorInstructionHandlers));
         this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.START_EVENT_PROCESSOR, i -> ProcessorInstructions.startHandler(processorInstructionHandlers));
@@ -193,7 +192,8 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
         StreamObserver<PlatformInboundInstruction> dispatcher = instructionDispatcher.get();
         if (dispatcher == null) {
             result.completeExceptionally(new AxonServerException(ErrorCategory.INSTRUCTION_EXECUTION_ERROR,
-                                                                 "Unable to send instruction"));
+                                                                 "Unable to send instruction",
+                                                                 clientIdentification.getClientId()));
         } else {
             awaitingAck.put(instruction.getInstructionId(), result);
             try {
@@ -228,7 +228,7 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
         }
 
         @Override
-        protected BiConsumer<PlatformOutboundInstruction, ReplyChannel<PlatformInboundInstruction>> getHandler(PlatformOutboundInstruction platformOutboundInstruction) {
+        protected InstructionHandler getHandler(PlatformOutboundInstruction platformOutboundInstruction) {
             return instructionHandlers.get(platformOutboundInstruction.getRequestCase());
         }
 
@@ -237,7 +237,9 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
             heartbeatMonitor.pause();
             boolean disconnected = instructionDispatcher.compareAndSet(expected, null);
             if (disconnected) {
-                failOpenInstructions(new AxonServerException(ErrorCategory.INSTRUCTION_ACK_ERROR, "Disconnected from AxonServer before receiving instruction ACK"));
+                failOpenInstructions(new AxonServerException(ErrorCategory.INSTRUCTION_ACK_ERROR,
+                                                             "Disconnected from AxonServer before receiving instruction ACK",
+                                                             clientId()));
             }
             return disconnected;
         }
@@ -248,10 +250,10 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
         }
     }
 
-    private class AckHandler implements InstructionHandler {
+    private class AckHandler implements InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> {
 
         @Override
-        public void accept(PlatformOutboundInstruction ackMessage, ReplyChannel<PlatformInboundInstruction> replyChannel) {
+        public void handle(PlatformOutboundInstruction ackMessage, ReplyChannel<PlatformInboundInstruction> replyChannel) {
             String instructionId = ackMessage.getAck().getInstructionId();
             logger.info("Received ACK for {}", instructionId);
             CompletableFuture<InstructionAck> handle = awaitingAck.remove(instructionId);

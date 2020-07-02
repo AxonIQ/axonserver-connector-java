@@ -14,15 +14,21 @@
  * limitations under the License.
  */
 
-package io.axoniq.axonserver.connector.instruction;
+package io.axoniq.axonserver.connector;
 
-import io.axoniq.axonserver.connector.ReplyChannel;
-import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
-import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
-
-import java.util.function.BiConsumer;
-
+/**
+ * Interface describing a component that is capable of handling instructions coming from AxonServer.
+ */
 @FunctionalInterface
-public interface InstructionHandler extends BiConsumer<PlatformOutboundInstruction, ReplyChannel<PlatformInboundInstruction>> {
+public interface InstructionHandler<I, R> {
+
+    /**
+     * Handle the given {@code instruction}, using {@code replyChannel} to acknowledge the instruction and reply to
+     * AxonServer.
+     *
+     * @param instruction  the instruction to handle
+     * @param replyChannel the channel onto which replies and acknowledgements to send
+     */
+    void handle(I instruction, ReplyChannel<R> replyChannel);
 
 }

@@ -16,6 +16,7 @@
 
 package io.axoniq.axonserver.connector;
 
+import io.axoniq.axonserver.connector.impl.AxonConnectorThreadFactory;
 import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
 import io.axoniq.axonserver.connector.impl.ContextConnection;
 import io.axoniq.axonserver.connector.impl.GrpcBufferingInterceptor;
@@ -37,24 +38,27 @@ import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.netty.NettyChannelBuilder;
 import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
+
+import static io.axoniq.axonserver.connector.impl.ObjectUtils.randomHex;
 
 /**
  * The component which manages all the connections which an Axon client can establish with an Axon Server instance.
@@ -68,7 +72,7 @@ public class AxonServerConnectionFactory {
     private static final Logger logger = LoggerFactory.getLogger(AxonServerConnectionFactory.class);
     private static final String CONNECTOR_VERSION = "4.4";
     private final Map<String, String> tags = new HashMap<>();
-    private final String applicationName;
+    private final String componentName;
     private final String clientInstanceId;
 
     private final Map<String, ContextConnection> connections = new ConcurrentHashMap<>();
@@ -81,8 +85,11 @@ public class AxonServerConnectionFactory {
     private volatile boolean shutdown;
     private final ReconnectConfiguration reconnectConfiguration;
 
+    /**
+     * @param builder
+     */
     protected AxonServerConnectionFactory(Builder builder) {
-        this.applicationName = builder.applicationName;
+        this.componentName = builder.componentName;
         this.clientInstanceId = builder.clientInstanceId;
         this.token = builder.token;
         this.executorService = builder.executorService;
@@ -92,19 +99,54 @@ public class AxonServerConnectionFactory {
                 .andThen(builder.keepAliveConfig)
                 .andThen(builder.otherConfig);
         this.reconnectConfiguration = new ReconnectConfiguration(builder.connectTimeout,
-                                                            builder.reconnectInterval,
-                                                            builder.forcePlatformReconnect,
-                                                            TimeUnit.MILLISECONDS);
+                                                                 builder.reconnectInterval,
+                                                                 builder.forceReconnectViaRoutingServers,
+                                                                 TimeUnit.MILLISECONDS);
     }
 
-    public static Builder forClient(String applicationName) {
-        return forClient(applicationName, UUID.randomUUID().toString());
+    /**
+     * Returns a builder to configure a ConnectionFactory instance for the given {@code componentName}.
+     * <p>
+     * A unique clientInstanceId will be generated for this component. The componentName is used in monitoring
+     * information and should be the same only for instances of the same application or component.
+     *
+     * @param componentName The name of the component connecting to AxonServer
+     *
+     * @return a builder instance for further configuration of the connector
+     * @see #forClient(String, String)
+     */
+    public static Builder forClient(String componentName) {
+        return forClient(componentName, componentName + randomHex(8));
     }
 
-    public static Builder forClient(String applicationName, String clientInstanceId) {
-        return new AxonServerConnectionFactory.Builder(applicationName, clientInstanceId);
+
+    /**
+     * Returns a builder to configure a ConnectionFactory instance for the given {@code componentName} and
+     * {@code clientInstanceId}.
+     * <p>
+     * The clientInstanceId MUST be a unique value across all instances that connect to AxonServer. The componentName
+     * is used in monitoring information and should be the same only for instances of the same application or component.
+     * <p>
+     * Where possible, it is preferable that the {@code clientInstanceId} remains the same across restarts of a
+     * component instance.
+     *
+     * @param componentName    The name of the component connecting to AxonServer
+     * @param clientInstanceId The unique instance identifier for this instance of the component
+     *
+     * @return a builder instance for further configuration of the connector
+     * @see #forClient(String)
+     */
+    public static Builder forClient(String componentName, String clientInstanceId) {
+        return new AxonServerConnectionFactory.Builder(componentName, clientInstanceId);
     }
 
+    /**
+     * Connects to the given {@code context} using the settings defined in this ConnectionFactory.
+     *
+     * @param context The name of the context to connect to
+     *
+     * @return a Connection allowing interaction with the mentioned context
+     */
     public AxonServerConnection connect(String context) {
         if (shutdown) {
             throw new IllegalStateException("Connector is already shut down");
@@ -119,7 +161,7 @@ public class AxonServerConnectionFactory {
         ClientIdentification clientIdentification =
                 ClientIdentification.newBuilder()
                                     .setClientId(clientInstanceId)
-                                    .setComponentName(applicationName)
+                                    .setComponentName(componentName)
                                     .putAllTags(tags)
                                     .setVersion(CONNECTOR_VERSION)
                                     .build();
@@ -138,7 +180,7 @@ public class AxonServerConnectionFactory {
         ManagedChannelBuilder<?> builder = connectionConfig.apply(NettyChannelBuilder.forAddress(address.getHostName(), address.getGrpcPort()));
 
         if (!suppressDownloadMessage) {
-            builder.intercept(new DowloadInstructionInterceptor());
+            builder.intercept(new DownloadInstructionInterceptor(System.out));
         }
 
         return builder.intercept(new GrpcBufferingInterceptor(50),
@@ -147,6 +189,15 @@ public class AxonServerConnectionFactory {
                       .build();
     }
 
+    /**
+     * Shuts down the connector, disconnecting from all contexts.
+     * To reconnect after calling this method, a new instance of the ConnectionFactory needs to be created.
+     * <p>
+     * In case where regular reconnection is required, consider using {@link AxonServerConnection#disconnect()}
+     * on the connections created by this factory instead.
+     *
+     * @see AxonServerConnection#disconnect()
+     */
     public void shutdown() {
         shutdown = true;
         connections.forEach((k, conn) -> conn.disconnect());
@@ -162,8 +213,16 @@ public class AxonServerConnectionFactory {
         }
     }
 
+    /**
+     * Builder for AxonServerConnectionFactory instances. The methods on this class allow for configuration of the
+     * {@link AxonServerConnectionFactory} instance used to connect to an AxonServer (cluster).
+     * <p>
+     * This class is not intended to be instantiated directly, but rather through
+     * {@link AxonServerConnectionFactory#forClient(String)} or {@link AxonServerConnectionFactory#forClient(String,
+     * String)}.
+     */
     public static class Builder {
-        private final String applicationName;
+        private final String componentName;
         private final String clientInstanceId;
         private final Map<String, String> tags = new HashMap<>();
         private List<ServerAddress> routingServers;
@@ -174,63 +233,182 @@ public class AxonServerConnectionFactory {
         private Function<NettyChannelBuilder, NettyChannelBuilder> sslConfig = NettyChannelBuilder::usePlaintext;
         private Function<NettyChannelBuilder, NettyChannelBuilder> keepAliveConfig = UnaryOperator.identity();
         private Function<ManagedChannelBuilder<?>, ManagedChannelBuilder<?>> otherConfig = UnaryOperator.identity();
-        private boolean forcePlatformReconnect = true;
+        private boolean forceReconnectViaRoutingServers = true;
         private long reconnectInterval = 2000;
-        private int reconnectExecutorPoolsize = 2;
+        private int executorPoolSize = 2;
 
-        public Builder(String applicationName, String clientInstanceId) {
-            this.applicationName = applicationName;
+        /**
+         * Initializes a builder with the mandatory parameters: the {@code componentName} and {@code clientInstanceId}.
+         *
+         * @param componentName
+         * @param clientInstanceId
+         */
+        protected Builder(String componentName, String clientInstanceId) {
+            this.componentName = componentName;
             this.clientInstanceId = clientInstanceId;
         }
 
+        /**
+         * Provides the addresses of the AxonServer instances used to set up the initial connection. Ideally, these are
+         * all the known <em>admin</em> nodes of the AxonServer Cluster to connect with.
+         * <p>
+         * The addresses are tried in the order provided, until one send a successful reply.
+         * <p>
+         * Defaults to "localhost:8024".
+         *
+         * @param serverAddresses The addresses to try to set up the initial connection with.
+         *
+         * @return this builder for further configuration
+         */
         public Builder routingServers(ServerAddress... serverAddresses) {
             suppressDownloadMessage = true;
             this.routingServers = new ArrayList<>(Arrays.asList(serverAddresses));
             return this;
         }
 
+        /**
+         * Sets the amount of time to wait in between attempts to connect to AxonServer. A single attempt involves
+         * connecting to each of the configured routing Servers (see {@link #routingServers(ServerAddress...)}).
+         * <p>
+         * Defaults to 2 seconds.
+         *
+         * @param interval The amount of time to wait in between connection attempts
+         * @param timeUnit The unit in which the interval is expressed
+         *
+         * @return this builder for further configuration
+         */
         public Builder reconnectInterval(long interval, TimeUnit timeUnit) {
             this.reconnectInterval = timeUnit.toMillis(interval);
             return this;
         }
 
+        /**
+         * Sets the timeout within which a connection has to be established with an AxonServer instance.
+         * <p>
+         * Defaults to 10 seconds.
+         *
+         * @param timeout  The amount of time to wait for a connection to be established
+         * @param timeUnit The unit in which the timout is expressed
+         *
+         * @return this builder for further configuration
+         */
         public Builder connectTimeout(long timeout, TimeUnit timeUnit) {
             this.connectTimeout = timeUnit.toMillis(timeout);
             return this;
         }
 
-        public Builder clientTags(Map<String, String> additionalTags) {
-            this.tags.putAll(additionalTags);
+        /**
+         * Configures the given {@code additionalClientTags} which describe this client. Any existing tags with the
+         * same
+         * key as any of the additional tags provided, will be overwritten.
+         * <p>
+         * Tags are used to locate the best matching AxonServer instance to connect with. The instance with the most
+         * matching Tags (both key and value must be equal) will be selected.
+         * <p>
+         * By default, no tags are defined.
+         *
+         * @param additionalClientTags additional tags that define this client component
+         *
+         * @return this builder for further configuration
+         */
+        public Builder clientTags(Map<String, String> additionalClientTags) {
+            this.tags.putAll(additionalClientTags);
             return this;
         }
 
+        /**
+         * Configures an additional Tag with given {@code key} and {@code value} which describes this client. Any
+         * existing tags with the same key will be overwritten.
+         * <p>
+         * Tags are used to locate the best matching AxonServer instance to connect with. The instance with the most
+         * matching Tags (both key and value must be equal) will be selected.
+         * <p>
+         * By default, no tags are defined.
+         *
+         * @param key   the key of the Tag to configure
+         * @param value the value of the Tag to configure
+         *
+         * @return this builder for further configuration
+         */
         public Builder clientTag(String key, String value) {
             this.tags.put(key, value);
             return this;
         }
 
+        /**
+         * Defines the token used to authorize activity from this component on AxonServer.
+         * <p>
+         * Defaults to not using a Token. Defining a Token is mandatory when token-based authentication is enabled on
+         * AxonServer.
+         *
+         * @param token The token to which the required authorizations have been assigned.
+         *
+         * @return this builder for further configuration
+         */
         public Builder token(String token) {
             this.token = token;
             return this;
         }
 
+        /**
+         * Configures the use of Transport Layer Security (TLS) using the default settings from the JVM.
+         * <p>
+         * Defaults to not using TLS.
+         *
+         * @return this builder for further configuration
+         * @see #useTransportSecurity(SslContext)
+         */
         public Builder useTransportSecurity() {
             sslConfig = NettyChannelBuilder::useTransportSecurity;
             return this;
         }
 
+        /**
+         * Configures the use of Transport Layer Security (TLS) using the settings from the given {@code sslContext}.
+         * <p>
+         * Defaults to not using TLS.
+         *
+         * @param sslContext The context defining TLS parameters
+         *
+         * @return this builder for further configuration
+         * @see SslContextBuilder#forClient()
+         */
         public Builder useTransportSecurity(SslContext sslContext) {
             sslConfig = cb -> cb.sslContext(sslContext);
             return this;
         }
 
-        public Builder forcePlatformReconnect(boolean forcePlatformReconnect) {
-            this.forcePlatformReconnect = forcePlatformReconnect;
+        /**
+         * Indicates whether the connector should always reconnect via the Routing Servers. When {@code true}, the
+         * connector will contact the Routing Servers for a new destination each time a connection is dropped. When
+         * {@code false} (default), the connector will first attempt to re-establish a connection to the node is was
+         * previously connected to. When that fails, only then will it contact the Routing Servers.
+         * <p>
+         * Default to {@code false}, causing the connector to first reattempt connecting to the previously connected
+         * AxonServer instance.
+         *
+         * @param forceReconnectViaRoutingServers whether to force a reconnect to the Cluster via the RoutingServers.
+         *
+         * @return this builder for further configuration
+         */
+        public Builder forceReconnectViaRoutingServers(boolean forceReconnectViaRoutingServers) {
+            this.forceReconnectViaRoutingServers = forceReconnectViaRoutingServers;
             return this;
         }
 
-        public Builder reconnectorThreadPoolSize(int poolSize) {
-            this.reconnectExecutorPoolsize = poolSize;
+        /**
+         * Defines the number of Threads that should be used for Connection Management activities by this connector.
+         * This includes activities related to connecting to AxonServer, setting up instruction streams, sending and
+         * validating heartbeats, etc.
+         * <p>
+         * Defaults to 2.
+         *
+         * @param poolSize The number of threads to assign to Connection related activities.
+         *
+         * @return this builder for further configuration
+         */
+        public Builder threadPoolSize(int poolSize) {
+            this.executorPoolSize = poolSize;
             return this;
         }
 
@@ -243,15 +421,14 @@ public class AxonServerConnectionFactory {
          * considered dead.
          * <p>
          * Clients must receive permission from the service owner before enabling this option. Keepalives can increase
-         * the
-         * load on services and are commonly "invisible" making it hard to notice when they are causing excessive load.
-         * Clients are strongly encouraged to use only as small of a value as necessary.
+         * the load on services and are commonly "invisible" making it hard to notice when they are causing excessive
+         * load. Clients are strongly encouraged to use only as small of a value as necessary.
          *
          * @param interval time without read activity before sending a keepalive ping
          * @param timeout  the time waiting for read activity after sending a keepalive ping
          * @param timeUnit the unit in which the interval and timeout are expressed
          *
-         * @return this instance
+         * @return this builder for further configuration
          */
         public Builder usingKeepAlive(long interval, long timeout, TimeUnit timeUnit, boolean keepAliveWithoutCalls) {
             keepAliveConfig = cb -> cb.keepAliveTime(interval, timeUnit)
@@ -260,25 +437,57 @@ public class AxonServerConnectionFactory {
             return this;
         }
 
+        /**
+         * Sets the maximum size for inbound messages. Requests receiving messages larger than the threshold will be
+         * cancelled.
+         * <p>
+         * Default to 4 MiB.
+         *
+         * @param bytes The number of bytes to limit inbound message to
+         *
+         * @return this builder for further configuration
+         */
         public Builder maxInboundMessageSize(int bytes) {
             otherConfig = otherConfig.andThen(cb -> cb.maxInboundMessageSize(bytes));
             return this;
         }
 
+        /**
+         * Registers the given {@code customization}, which configures the underling {@link ManagedChannelBuilder} used
+         * to set up connections to AxonServer.
+         * <p>
+         * This method may be used in case none of the operations on this Builder provide support for the required
+         * feature.
+         *
+         * @param customization A function defining the customization to make on the ManagedChannelBuilder
+         *
+         * @return this builder for further configuration
+         */
         public Builder customize(UnaryOperator<ManagedChannelBuilder<?>> customization) {
             otherConfig = otherConfig.andThen(customization);
             return this;
         }
 
+        /**
+         * Validates the state of the builder, setting defaults where necessary.
+         * <p>
+         * This method is protected to allow overriding by subclasses. Subclasses are recommended to call this method
+         * as part of their own validation process.
+         */
         protected void validate() {
             if (routingServers == null) {
                 routingServers = Collections.singletonList(new ServerAddress());
             }
             if (executorService == null) {
-                executorService = new ScheduledThreadPoolExecutor(reconnectExecutorPoolsize, AxonConnectorThreadFactory.forInstanceId(clientInstanceId));
+                executorService = new ScheduledThreadPoolExecutor(executorPoolSize, AxonConnectorThreadFactory.forInstanceId(clientInstanceId));
             }
         }
 
+        /**
+         * Builds an {@link AxonServerConnectionFactory} using the setting defined in this builder instance.
+         *
+         * @return a fully configured AxonServerConnectionFactory, ready to set up connections to AxonServer
+         */
         public AxonServerConnectionFactory build() {
             validate();
             return new AxonServerConnectionFactory(this);
@@ -286,13 +495,18 @@ public class AxonServerConnectionFactory {
 
     }
 
-    private static class DowloadInstructionInterceptor implements ClientInterceptor {
+    private static class DownloadInstructionInterceptor implements ClientInterceptor {
 
+        private final OutputStream out;
         private volatile boolean suppressDownloadMessage = false;
+
+        public DownloadInstructionInterceptor(OutputStream out) {
+            this.out = out;
+        }
 
         @Override
         public <REQ, RESP> ClientCall<REQ, RESP> interceptCall(MethodDescriptor<REQ, RESP> method, CallOptions callOptions, Channel next) {
-            if (!suppressDownloadMessage || "io.axoniq.axonserver.grpc.control.PlatformService/GetPlatformServer".equals(method.getFullMethodName())) {
+            if (!suppressDownloadMessage && "io.axoniq.axonserver.grpc.control.PlatformService/GetPlatformServer".equals(method.getFullMethodName())) {
                 return new ForwardingClientCall.SimpleForwardingClientCall<REQ, RESP>(next.newCall(method, callOptions)) {
                     @Override
                     public void start(Listener<RESP> responseListener, Metadata headers) {
@@ -319,7 +533,7 @@ public class AxonServerConnectionFactory {
                     byte[] buffer = new byte[1024];
                     int read;
                     while (in != null && (read = in.read(buffer, 0, 1024)) >= 0) {
-                        System.out.write(buffer, 0, read);
+                        out.write(buffer, 0, read);
                     }
                 } catch (IOException e) {
                     logger.debug("Unable to write download advice. You're on your own now.", e);
