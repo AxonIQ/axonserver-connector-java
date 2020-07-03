@@ -180,6 +180,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
     private void sendUnsubscribe(String commandName) {
         outboundCommandStream.get().onNext(
                 CommandProviderOutbound.newBuilder()
+                                       // TODO - Use instruction id and track with CompletableFuture
                                        .setUnsubscribe(CommandSubscription.newBuilder()
                                                                           .setCommand(commandName)
                                                                           .setClientId(clientIdentification.getClientId())
@@ -215,9 +216,6 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
 
 
         try {
-            if (commandServiceStub == null) {
-                throw new IllegalStateException("CommandChannel is not connected.");
-            }
             commandServiceStub.dispatch(toSend.build(), new CommandResponseHandler(clientIdentification.getClientId(), response));
         } catch (OutOfDirectMemoryError e) {
             // error thrown when Netty is out of buffer space to send this command

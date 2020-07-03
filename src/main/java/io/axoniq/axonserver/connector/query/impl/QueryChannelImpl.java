@@ -56,7 +56,6 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
     private static final Logger logger = LoggerFactory.getLogger(QueryChannelImpl.class);
     private static final QueryResponse TERMINAL = QueryResponse.newBuilder().setErrorCode("__TERMINAL__").build();
 
-    private final AtomicReference<QueryServiceGrpc.QueryServiceStub> queryService = new AtomicReference<>();
     private final AtomicReference<StreamObserver<QueryProviderOutbound>> outboundQueryStream = new AtomicReference<>();
     private final Set<QueryDefinition> supportedQueries = new CopyOnWriteArraySet<>();
     private final ConcurrentMap<String, Set<QueryHandler>> queryHandlers = new ConcurrentHashMap<>();
@@ -123,7 +122,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
     }
 
     @Override
-    public void connect() {
+    public synchronized void connect() {
         if (outboundQueryStream.get() != null) {
             // we're already connected on this channel
             return;
@@ -138,12 +137,8 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
         supportedQueries.forEach(k -> newValue.onNext(buildSubscribeMessage(k.getQueryName(), k.getResultType(), UUID.randomUUID().toString())));
         responseObserver.enableFlowControl();
 
-
         logger.info("QueryChannel connected, {} query types registered", queryHandlers.size());
         ObjectUtils.silently(previous, StreamObserver::onCompleted);
-
-        queryService.getAndSet(queryServiceStub);
-
     }
 
     private QueryProviderOutbound buildSubscribeMessage(String queryName, String resultName, String instructionId) {
@@ -215,7 +210,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
                 // this is a one-way stream. No need to close it.
             }
         };
-        queryService.get().query(query, results);
+        queryServiceStub.query(query, results);
         return results;
     }
 
@@ -224,7 +219,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
         String subscriptionId = UUID.randomUUID().toString();
         CompletableFuture<QueryResponse> initialResultFuture = new CompletableFuture<>();
         SubscriptionQueryStream subscriptionStream = new SubscriptionQueryStream(subscriptionId, initialResultFuture, QueryChannelImpl.this.clientIdentification.getClientId(), bufferSize, fetchSize);
-        StreamObserver<SubscriptionQueryRequest> upstream = queryService.get().subscription(subscriptionStream);
+        StreamObserver<SubscriptionQueryRequest> upstream = queryServiceStub.subscription(subscriptionStream);
         subscriptionStream.enableFlowControl();
         upstream.onNext(SubscriptionQueryRequest.newBuilder().setSubscribe(SubscriptionQuery.newBuilder().setQueryRequest(query).setSubscriptionIdentifier(subscriptionId).setUpdateResponseType(updateResponseType).build()).build());
         return new SubscriptionQueryResult() {
@@ -234,7 +229,12 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
             @Override
             public CompletableFuture<QueryResponse> initialResult() {
                 if (!initialResultFuture.isDone() && !initialResultRequested.getAndSet(true)) {
-                    upstream.onNext(SubscriptionQueryRequest.newBuilder().setGetInitialResult(SubscriptionQuery.newBuilder().setQueryRequest(query).setSubscriptionIdentifier(subscriptionId).build()).build());
+                    upstream.onNext(SubscriptionQueryRequest.newBuilder()
+                                                            .setGetInitialResult(
+                                                                    SubscriptionQuery.newBuilder()
+                                                                                     .setQueryRequest(query)
+                                                                                     .setSubscriptionIdentifier(subscriptionId))
+                                                            .build());
                 }
                 return initialResultFuture;
             }

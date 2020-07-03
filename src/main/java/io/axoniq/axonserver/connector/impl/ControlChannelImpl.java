@@ -90,7 +90,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
         if (existing != null) {
             logger.info("Not connecting - connection already present");
         } else {
-            PlatformOutboundInstructionHandler responseObserver = new PlatformOutboundInstructionHandler(clientIdentification.getClientId(), 0, 0, this::handleDisconnect);
+            PlatformOutboundInstructionHandler responseObserver = new PlatformOutboundInstructionHandler(clientIdentification.getClientId(), this::handleDisconnect);
             logger.debug("Opening instruction stream");
             StreamObserver<PlatformInboundInstruction> instructionsForPlatform = platformServiceStub.openStream(responseObserver);
             StreamObserver<PlatformInboundInstruction> previous = instructionDispatcher.getAndSet(instructionsForPlatform);
@@ -213,8 +213,8 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
 
     private class PlatformOutboundInstructionHandler extends AbstractIncomingInstructionStream<PlatformOutboundInstruction, PlatformInboundInstruction> {
 
-        public PlatformOutboundInstructionHandler(String clientId, int permits, int permitsBatch, Consumer<Throwable> disconnectHandler) {
-            super(clientId, permits, permitsBatch, disconnectHandler);
+        public PlatformOutboundInstructionHandler(String clientId, Consumer<Throwable> disconnectHandler) {
+            super(clientId, 0, 0, disconnectHandler);
         }
 
         @Override

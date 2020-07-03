@@ -77,9 +77,9 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
     public CompletableFuture<Long> findHighestSequence(String aggregateId) {
         FutureStreamObserver<ReadHighestSequenceNrResponse> result = new FutureStreamObserver<>(UNKNOWN_HIGHEST_SEQ);
         eventStore.readHighestSequenceNr(ReadHighestSequenceNrRequest.newBuilder()
-                                                                           .setAggregateId(aggregateId)
-                                                                           .build(),
-                                               result);
+                                                                     .setAggregateId(aggregateId)
+                                                                     .build(),
+                                         result);
         return result.thenApply(ReadHighestSequenceNrResponse::getToSequenceNr);
     }
 
