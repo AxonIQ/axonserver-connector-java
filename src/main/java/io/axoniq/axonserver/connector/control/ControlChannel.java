@@ -1,4 +1,4 @@
-package io.axoniq.axonserver.connector.instruction;
+package io.axoniq.axonserver.connector.control;
 
 import io.axoniq.axonserver.connector.InstructionHandler;
 import io.axoniq.axonserver.connector.Registration;
@@ -10,9 +10,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 /**
- * Communication channel for interactions with AxonServer related to system instructions and statistics.
+ * Communication channel for interactions with AxonServer related to control messages and statistics.
  */
-public interface InstructionChannel {
+public interface ControlChannel {
 
     /**
      * Registers the given {@code instructionHandler} to handle a given {@code type} of instruction. Any previous

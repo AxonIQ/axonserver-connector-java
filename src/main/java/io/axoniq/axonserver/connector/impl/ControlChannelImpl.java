@@ -21,8 +21,8 @@ import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.InstructionHandler;
 import io.axoniq.axonserver.connector.Registration;
 import io.axoniq.axonserver.connector.ReplyChannel;
-import io.axoniq.axonserver.connector.instruction.InstructionChannel;
-import io.axoniq.axonserver.connector.instruction.ProcessorInstructionHandler;
+import io.axoniq.axonserver.connector.control.ControlChannel;
+import io.axoniq.axonserver.connector.control.ProcessorInstructionHandler;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
@@ -51,9 +51,9 @@ import java.util.function.Supplier;
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.silently;
 
-public class InstructionChannelImpl extends AbstractAxonServerChannel implements InstructionChannel {
+public class ControlChannelImpl extends AbstractAxonServerChannel implements ControlChannel {
 
-    private static final Logger logger = LoggerFactory.getLogger(InstructionChannelImpl.class);
+    private static final Logger logger = LoggerFactory.getLogger(ControlChannelImpl.class);
     private final ClientIdentification clientIdentification;
     private final ScheduledExecutorService executor;
     private final AtomicReference<StreamObserver<PlatformInboundInstruction>> instructionDispatcher = new AtomicReference<>();
@@ -66,8 +66,8 @@ public class InstructionChannelImpl extends AbstractAxonServerChannel implements
     private final AtomicBoolean infoSupplierActive = new AtomicBoolean();
     private final PlatformServiceGrpc.PlatformServiceStub platformServiceStub;
 
-    public InstructionChannelImpl(ClientIdentification clientIdentification, String context,
-                                  ScheduledExecutorService executor, AxonServerManagedChannel channel) {
+    public ControlChannelImpl(ClientIdentification clientIdentification, String context,
+                              ScheduledExecutorService executor, AxonServerManagedChannel channel) {
         super(executor, channel);
         this.clientIdentification = clientIdentification;
         this.context = context;

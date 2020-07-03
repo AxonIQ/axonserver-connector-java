@@ -1,8 +1,8 @@
 package io.axoniq.axonserver.connector;
 
 import io.axoniq.axonserver.connector.command.CommandChannel;
+import io.axoniq.axonserver.connector.control.ControlChannel;
 import io.axoniq.axonserver.connector.event.EventChannel;
-import io.axoniq.axonserver.connector.instruction.InstructionChannel;
 import io.axoniq.axonserver.connector.query.QueryChannel;
 
 /**
@@ -42,11 +42,11 @@ public interface AxonServerConnection {
     void disconnect();
 
     /**
-     * Returns the channel on which platform instructions can be sent and received
+     * Returns the channel on which platform control messages can be sent and received
      *
      * @return the channel for platform instruction
      */
-    InstructionChannel instructionChannel();
+    ControlChannel controlChannel();
 
     /**
      * Returns the channel on which Command related interactions can be performed with AxonServer.

@@ -115,7 +115,7 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
 
     @Test
     void testSubscriptionQueryCancelledOnDisconnect() throws Exception {
-        connection2.instructionChannel().enableHeartbeat(100, 100, TimeUnit.MILLISECONDS);
+        connection2.controlChannel().enableHeartbeat(100, 100, TimeUnit.MILLISECONDS);
         QueryChannel queryChannel = connection1.queryChannel();
         AtomicReference<QueryHandler.UpdateHandler> updateHandler = new AtomicReference<>();
         queryChannel.registerQueryHandler(new QueryHandler() {

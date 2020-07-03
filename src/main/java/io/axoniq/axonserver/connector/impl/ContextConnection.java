@@ -19,9 +19,9 @@ package io.axoniq.axonserver.connector.impl;
 import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.command.CommandChannel;
 import io.axoniq.axonserver.connector.command.impl.CommandChannelImpl;
+import io.axoniq.axonserver.connector.control.ControlChannel;
 import io.axoniq.axonserver.connector.event.EventChannel;
 import io.axoniq.axonserver.connector.event.impl.EventChannelImpl;
-import io.axoniq.axonserver.connector.instruction.InstructionChannel;
 import io.axoniq.axonserver.connector.query.QueryChannel;
 import io.axoniq.axonserver.connector.query.impl.QueryChannelImpl;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
@@ -40,7 +40,7 @@ import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
 public class ContextConnection implements AxonServerConnection {
 
     private final ClientIdentification clientIdentification;
-    private final InstructionChannelImpl instructionChannel;
+    private final ControlChannelImpl controlChannel;
     private final AtomicReference<CommandChannelImpl> commandChannel = new AtomicReference<>();
     private final AtomicReference<EventChannelImpl> eventChannel = new AtomicReference<>();
     private final AtomicReference<QueryChannelImpl> queryChannel = new AtomicReference<>();
@@ -54,7 +54,7 @@ public class ContextConnection implements AxonServerConnection {
         this.clientIdentification = clientIdentification;
         this.executorService = executorService;
         this.connection = connection;
-        this.instructionChannel = new InstructionChannelImpl(clientIdentification, context, executorService, connection);
+        this.controlChannel = new ControlChannelImpl(clientIdentification, context, executorService, connection);
     }
 
     @Override
@@ -68,7 +68,7 @@ public class ContextConnection implements AxonServerConnection {
                 && Optional.ofNullable(commandChannel.get()).map(CommandChannelImpl::isConnected).orElse(true)
                 && Optional.ofNullable(queryChannel.get()).map(QueryChannelImpl::isConnected).orElse(true)
                 && Optional.ofNullable(eventChannel.get()).map(EventChannelImpl::isConnected).orElse(true)
-                && instructionChannel.isConnected();
+                && controlChannel.isConnected();
     }
 
     @Override
@@ -78,7 +78,7 @@ public class ContextConnection implements AxonServerConnection {
 
     @Override
     public void disconnect() {
-        doIfNotNull(instructionChannel, InstructionChannelImpl::disconnect);
+        doIfNotNull(controlChannel, ControlChannelImpl::disconnect);
         doIfNotNull(commandChannel.get(), CommandChannelImpl::disconnect);
         doIfNotNull(queryChannel.get(), QueryChannelImpl::disconnect);
         doIfNotNull(eventChannel.get(), EventChannelImpl::disconnect);
@@ -94,8 +94,8 @@ public class ContextConnection implements AxonServerConnection {
     }
 
     @Override
-    public InstructionChannel instructionChannel() {
-        return instructionChannel;
+    public ControlChannel controlChannel() {
+        return controlChannel;
     }
 
     @Override
@@ -137,7 +137,7 @@ public class ContextConnection implements AxonServerConnection {
     }
 
     public void connect() {
-        ensureConnected(instructionChannel);
+        ensureConnected(controlChannel);
     }
 
 }

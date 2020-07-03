@@ -1,4 +1,4 @@
-package io.axoniq.axonserver.connector.instruction;
+package io.axoniq.axonserver.connector.control;
 
 import java.util.concurrent.CompletableFuture;
 

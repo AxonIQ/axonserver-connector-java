@@ -20,10 +20,10 @@ import com.google.protobuf.ByteString;
 import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
 import io.axoniq.axonserver.connector.ResultStream;
+import io.axoniq.axonserver.connector.control.ProcessorInstructionHandler;
 import io.axoniq.axonserver.connector.event.AggregateEventStream;
 import io.axoniq.axonserver.connector.event.AppendEventsTransaction;
 import io.axoniq.axonserver.connector.event.EventChannel;
-import io.axoniq.axonserver.connector.instruction.ProcessorInstructionHandler;
 import io.axoniq.axonserver.grpc.SerializedObject;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo;
 import io.axoniq.axonserver.grpc.event.Confirmation;
@@ -51,8 +51,8 @@ public class ConnectorRunner_Events {
             AxonServerConnection contextConnection = testSubject.connect("default");
 
             EventChannel channel = contextConnection.eventChannel();
-            contextConnection.instructionChannel().registerEventProcessor("TestProcessor",
-                                                                          () -> {
+            contextConnection.controlChannel().registerEventProcessor("TestProcessor",
+                                                                      () -> {
                                                                               System.out.println("Info requested");
                                                                               return EventProcessorInfo.newBuilder()
                                                                                                        .setActiveThreads(1)

@@ -6,7 +6,7 @@ import eu.rekawek.toxiproxy.model.toxic.Timeout;
 import io.axoniq.axonserver.connector.AbstractAxonServerIntegrationTest;
 import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
-import io.axoniq.axonserver.connector.instruction.ProcessorInstructionHandler;
+import io.axoniq.axonserver.connector.control.ProcessorInstructionHandler;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -31,10 +31,10 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-class InstructionChannelTest extends AbstractAxonServerIntegrationTest {
+class ControlChannelTest extends AbstractAxonServerIntegrationTest {
 
     private AxonServerConnectionFactory client;
-    private static final Logger logger = LoggerFactory.getLogger(InstructionChannelTest.class);
+    private static final Logger logger = LoggerFactory.getLogger(ControlChannelTest.class);
 
     @AfterEach
     void tearDown() {
@@ -49,7 +49,7 @@ class InstructionChannelTest extends AbstractAxonServerIntegrationTest {
                                             .reconnectInterval(10, TimeUnit.MILLISECONDS)
                                             .build();
         AxonServerConnection connection1 = client.connect("default");
-        connection1.instructionChannel().enableHeartbeat(500, 500, TimeUnit.MILLISECONDS);
+        connection1.controlChannel().enableHeartbeat(500, 500, TimeUnit.MILLISECONDS);
 
         assertWithin(2, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
         logger.info("Connection status is READY");
@@ -82,8 +82,8 @@ class InstructionChannelTest extends AbstractAxonServerIntegrationTest {
         AxonServerConnection connection1 = client.connect("default");
         ProcessorInstructionHandler instructionHandler = mock(ProcessorInstructionHandler.class);
         AtomicReference<EventProcessorInfo> processorInfo = new AtomicReference<>(buildEventProcessorInfo(true));
-        connection1.instructionChannel().registerEventProcessor("testProcessor", processorInfo::get,
-                                                                instructionHandler);
+        connection1.controlChannel().registerEventProcessor("testProcessor", processorInfo::get,
+                                                            instructionHandler);
 
         assertWithin(1, TimeUnit.SECONDS, () -> {
             JsonElement response = getFromAxonServer("/v1/components/" + getClass().getSimpleName() + "/processors?context=default");
@@ -100,8 +100,8 @@ class InstructionChannelTest extends AbstractAxonServerIntegrationTest {
         ProcessorInstructionHandler instructionHandler = mock(ProcessorInstructionHandler.class);
         AtomicReference<EventProcessorInfo> processorInfo = new AtomicReference<>(buildEventProcessorInfo(true));
 
-        connection1.instructionChannel().registerEventProcessor("testProcessor", processorInfo::get,
-                                                                instructionHandler);
+        connection1.controlChannel().registerEventProcessor("testProcessor", processorInfo::get,
+                                                            instructionHandler);
 
         assertWithin(1, TimeUnit.SECONDS, () -> {
             sendToAxonServer(Request.Builder::patch, "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/pause?context=default");
@@ -126,8 +126,8 @@ class InstructionChannelTest extends AbstractAxonServerIntegrationTest {
         ProcessorInstructionHandler instructionHandler = mock(ProcessorInstructionHandler.class);
         AtomicReference<EventProcessorInfo> processorInfo = new AtomicReference<>(buildEventProcessorInfo(true));
 
-        connection1.instructionChannel().registerEventProcessor("testProcessor", processorInfo::get,
-                                                                instructionHandler);
+        connection1.controlChannel().registerEventProcessor("testProcessor", processorInfo::get,
+                                                            instructionHandler);
 
 
         assertWithin(2, TimeUnit.SECONDS, () -> sendToAxonServer(Request.Builder::patch, "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/segments/merge?context=default"));
@@ -148,11 +148,11 @@ class InstructionChannelTest extends AbstractAxonServerIntegrationTest {
 
         CountDownLatch cdl = new CountDownLatch(1);
 
-        connection1.instructionChannel().registerEventProcessor("testProcessor", () -> {
+        connection1.controlChannel().registerEventProcessor("testProcessor", () -> {
                                                                     cdl.countDown();
                                                                     return processorInfo.get();
                                                                 },
-                                                                instructionHandler);
+                                                            instructionHandler);
 
         // we wait for AxonServer to request data, which is an acknowledgement that the processor was registered.
         cdl.await(3, TimeUnit.SECONDS);
