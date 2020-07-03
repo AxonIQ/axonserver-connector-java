@@ -116,7 +116,7 @@ public class AxonServerConnectionFactory {
      * @see #forClient(String, String)
      */
     public static Builder forClient(String componentName) {
-        return forClient(componentName, componentName + randomHex(8));
+        return forClient(componentName, componentName + "_" + randomHex(8));
     }
 
 
