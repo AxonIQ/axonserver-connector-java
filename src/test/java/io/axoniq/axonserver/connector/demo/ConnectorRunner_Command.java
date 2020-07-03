@@ -113,7 +113,7 @@ public class ConnectorRunner_Command {
                         logger.info("Handled another 10000 in {} ms", now - previous);
                     }
                     return handle(command);
-                }, "test");
+                }, 100, "test");
 
                 new Scanner(System.in).nextLine();
             } finally {

@@ -13,16 +13,19 @@ import java.util.function.Function;
 public interface CommandChannel {
 
     /**
-     * Registers the given {@code handler} to handle incoming commands with given {@code commandNames}. If handlers
-     * had already been registered for any of the  given command names, this registration replaces the existing one for
-     * those command names. Other commands remain unaffected.
+     * Registers the given {@code handler} to handle incoming commands with given {@code commandNames}, using the given
+     * {@code loadFactor}. If handlers had already been registered for any of the  given command names, this
+     * registration replaces the existing one for those command names. Other commands remain unaffected.
      *
      * @param handler      The handler to handle incoming commands with
+     * @param loadFactor   The relative load factor for this handler
      * @param commandNames The names of the commands to register the handler for
      *
      * @return a registration which allows the command handlers to be unregistered.
      */
-    Registration registerCommandHandler(Function<Command, CompletableFuture<CommandResponse>> handler, String... commandNames);
+    Registration registerCommandHandler(Function<Command, CompletableFuture<CommandResponse>> handler,
+                                        int loadFactor,
+                                        String... commandNames);
 
     /**
      * Sends the give Command to AxonServer for routing to an appropriate handler.

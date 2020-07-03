@@ -127,7 +127,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
 
         StreamObserver<CommandProviderOutbound> previous = outboundCommandStream.getAndSet(newValue);
 
-        commandHandlers.keySet().forEach(k -> newValue.onNext(buildSubscribeMessage(k, "")));
+        commandHandlers.keySet().forEach(k -> newValue.onNext(buildSubscribeMessage(k, "", 100)));
         responseObserver.enableFlowControl();
 
 
@@ -158,13 +158,13 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
     }
 
     @Override
-    public Registration registerCommandHandler(Function<Command, CompletableFuture<CommandResponse>> handler, String... commandNames) {
+    public Registration registerCommandHandler(Function<Command, CompletableFuture<CommandResponse>> handler, int loadFactor, String... commandNames) {
         for (String commandName : commandNames) {
             commandHandlers.put(commandName, handler);
             logger.info("Registered handler for command {}", commandName);
             String instructionId = UUID.randomUUID().toString();
             doIfNotNull(outboundCommandStream.get(),
-                        s -> s.onNext(buildSubscribeMessage(commandName, instructionId)));
+                        s -> s.onNext(buildSubscribeMessage(commandName, instructionId, loadFactor)));
         }
         return () -> unsubscribe(handler, commandNames);
     }
@@ -188,7 +188,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
         );
     }
 
-    private CommandProviderOutbound buildSubscribeMessage(String commandName, String instructionId) {
+    private CommandProviderOutbound buildSubscribeMessage(String commandName, String instructionId, int loadFactor) {
         return CommandProviderOutbound.newBuilder()
                                       .setInstructionId(instructionId)
                                       .setSubscribe(CommandSubscription.newBuilder()
@@ -196,7 +196,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
                                                                        .setCommand(commandName)
                                                                        .setClientId(clientIdentification.getClientId())
                                                                        .setComponentName(clientIdentification.getComponentName())
-                                                                       .setLoadFactor(100))
+                                                                       .setLoadFactor(loadFactor))
                                       .build();
     }
 

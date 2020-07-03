@@ -57,7 +57,7 @@ class CommandChannelTest extends AbstractAxonServerIntegrationTest {
     @Test
     void testUnsubscribedHandlersDoesNotReceiveCommands() throws Exception {
         CommandChannel commandChannel = connection1.commandChannel();
-        Registration registration = commandChannel.registerCommandHandler(this::mockHandler, "testCommand");
+        Registration registration = commandChannel.registerCommandHandler(this::mockHandler, 100, "testCommand");
 
         registration.cancel();
 
@@ -81,7 +81,7 @@ class CommandChannelTest extends AbstractAxonServerIntegrationTest {
     @Test
     void testSubscribedHandlersReconnectAfterConnectionFailure() throws Exception {
         CommandChannel commandChannel = connection1.commandChannel();
-        commandChannel.registerCommandHandler(this::mockHandler, "testCommand");
+        commandChannel.registerCommandHandler(this::mockHandler, 100, "testCommand");
 
         axonServerProxy.disable();
 
@@ -103,7 +103,7 @@ class CommandChannelTest extends AbstractAxonServerIntegrationTest {
     @Test
     void testDispatchCommandOnDisconnectReturnsError() throws Exception {
         CommandChannel commandChannel = connection1.commandChannel();
-        commandChannel.registerCommandHandler(this::mockHandler, "testCommand");
+        commandChannel.registerCommandHandler(this::mockHandler, 100, "testCommand");
 
         axonServerProxy.disable();
 
