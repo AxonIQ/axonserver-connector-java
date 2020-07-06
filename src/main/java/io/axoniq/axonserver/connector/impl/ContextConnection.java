@@ -140,4 +140,7 @@ public class ContextConnection implements AxonServerConnection {
         ensureConnected(controlChannel);
     }
 
+    public AxonServerManagedChannel getManagedChannel() {
+        return connection;
+    }
 }

@@ -2,10 +2,13 @@ package io.axoniq.axonserver.connector.control;
 
 import io.axoniq.axonserver.connector.InstructionHandler;
 import io.axoniq.axonserver.connector.Registration;
+import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo;
 import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
+import io.axoniq.axonserver.grpc.event.Confirmation;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
@@ -70,4 +73,5 @@ public interface ControlChannel {
      */
     void disableHeartbeat();
 
+    CompletableFuture<InstructionAck> sendInstruction(PlatformInboundInstruction instruction);
 }

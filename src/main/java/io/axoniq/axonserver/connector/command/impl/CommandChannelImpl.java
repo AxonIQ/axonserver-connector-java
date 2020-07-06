@@ -171,6 +171,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
 
     private void unsubscribe(Function<Command, CompletableFuture<CommandResponse>> handler, String... commandNames) {
         for (String commandName : commandNames) {
+            // TODO - Remove command handler only after sending the unsubsribe message and receiving successful ACK
             if (commandHandlers.remove(commandName, handler)) {
                 sendUnsubscribe(commandName);
             }
@@ -199,6 +200,13 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
                                                                        .setComponentName(clientIdentification.getComponentName())
                                                                        .setLoadFactor(loadFactor))
                                       .build();
+    }
+
+    @Override
+    public CompletableFuture<?> prepareDisconnect() {
+        this.commandHandlers.keySet().forEach(this::sendUnsubscribe);
+        // TODO: Wait for ACKs in CompletableFuture
+        return CompletableFuture.completedFuture(null);
     }
 
     @Override

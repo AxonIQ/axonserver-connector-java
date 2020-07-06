@@ -35,4 +35,6 @@ public interface CommandChannel {
      * @return a CompletableFuture providing the result of command execution
      */
     CompletableFuture<CommandResponse> sendCommand(Command command);
+
+    CompletableFuture<?> prepareDisconnect();
 }

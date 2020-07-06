@@ -186,7 +186,8 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
         return sendInstruction(PlatformInboundInstruction.newBuilder().setInstructionId(UUID.randomUUID().toString()).setHeartbeat(Heartbeat.getDefaultInstance()).build());
     }
 
-    private CompletableFuture<InstructionAck> sendInstruction(PlatformInboundInstruction instruction) {
+    @Override
+    public CompletableFuture<InstructionAck> sendInstruction(PlatformInboundInstruction instruction) {
         CompletableFuture<InstructionAck> result = new CompletableFuture<>();
         logger.debug("Sending instruction: {} {}", instruction.getRequestCase().name(), instruction.getInstructionId());
         StreamObserver<PlatformInboundInstruction> dispatcher = instructionDispatcher.get();

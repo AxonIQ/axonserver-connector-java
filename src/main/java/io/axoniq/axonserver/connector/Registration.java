@@ -1,5 +1,7 @@
 package io.axoniq.axonserver.connector;
 
+import java.util.concurrent.CompletableFuture;
+
 /**
  * Interface describing a registration that can be cancelled.
  */
