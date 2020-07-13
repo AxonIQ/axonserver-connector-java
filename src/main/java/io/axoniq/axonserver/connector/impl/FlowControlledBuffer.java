@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2010-2020. Axon Framework
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,7 +80,7 @@ public abstract class FlowControlledBuffer<T, R> extends FlowControlledStream<T,
     }
 
     protected T peek() {
-        return validate(buffer.peek(), true);
+        return validate(buffer.peek(), false);
     }
 
     private T validate(T peek, boolean nullOnTerminal) {

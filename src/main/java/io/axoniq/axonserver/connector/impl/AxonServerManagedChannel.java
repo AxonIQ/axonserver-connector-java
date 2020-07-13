@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2010-2020. Axon Framework
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,6 +64,7 @@ public class AxonServerManagedChannel extends ManagedChannel {
     private final Queue<Runnable> connectListeners = new LinkedBlockingQueue<>();
     private final AtomicLong nextAttemptTime = new AtomicLong();
     private final boolean forcePlatformReconnect;
+    private final AtomicReference<Exception> lastConnectException = new AtomicReference<>();
 
     public AxonServerManagedChannel(List<ServerAddress> routingServers,
                                     ReconnectConfiguration reconnectConfiguration,
@@ -117,8 +118,10 @@ public class AxonServerManagedChannel extends ManagedChannel {
                     );
                 }
                 suppressErrors.set(false);
+                lastConnectException.set(null);
                 break;
             } catch (StatusRuntimeException sre) {
+                lastConnectException.set(sre);
                 shutdownNow(candidate);
                 if (!suppressErrors.getAndSet(true)) {
                     logger.warn(
@@ -208,7 +211,11 @@ public class AxonServerManagedChannel extends ManagedChannel {
         }
         ManagedChannel current = activeChannel.get();
         if (current == null) {
-            return ConnectivityState.IDLE;
+            if (lastConnectException.get() == null) {
+                return ConnectivityState.IDLE;
+            } else {
+                return ConnectivityState.TRANSIENT_FAILURE;
+            }
         }
         ConnectivityState state = current.getState(requestConnection);
         return state == ConnectivityState.SHUTDOWN ? ConnectivityState.TRANSIENT_FAILURE : state;
