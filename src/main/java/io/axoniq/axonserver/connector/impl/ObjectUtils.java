@@ -48,6 +48,10 @@ public class ObjectUtils {
         }
     }
 
+    public static boolean hasLength(String s) {
+        return s != null && !s.isEmpty();
+    }
+
     public static String randomHex(int length) {
         StringBuilder sb = new StringBuilder(length);
         for (int i = 0; i < length; i++) {

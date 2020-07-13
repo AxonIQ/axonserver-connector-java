@@ -31,6 +31,7 @@ import io.axoniq.axonserver.grpc.SerializedObject;
 import io.axoniq.axonserver.grpc.query.QueryRequest;
 import io.axoniq.axonserver.grpc.query.QueryResponse;
 import io.axoniq.axonserver.grpc.query.QueryUpdate;
+import io.axoniq.axonserver.grpc.query.SubscriptionQuery;
 
 import java.util.Scanner;
 import java.util.concurrent.Executors;
@@ -96,12 +97,12 @@ public class ConnectorRunner_SubscriptionQuery {
                 }
 
                 @Override
-                public Registration registerSubscriptionQuery(QueryRequest query, UpdateHandler sendUpdate) {
+                public Registration registerSubscriptionQuery(SubscriptionQuery query, UpdateHandler updateHandler) {
                     System.out.println("Subscription arrived. Sending 5 messages and closing it....");
                     AtomicBoolean running = new AtomicBoolean(true);
                     Runnable sendIt = () -> {
                         if (running.get()) {
-                            sendUpdate.sendUpdate(QueryUpdate.newBuilder().setPayload(query.getPayload()).build());
+                            updateHandler.sendUpdate(QueryUpdate.newBuilder().setPayload(query.getQueryRequest().getPayload()).build());
                         }
                     };
                     ScheduledFuture<?> task = executor.scheduleWithFixedDelay(sendIt, 1, 1, TimeUnit.SECONDS);

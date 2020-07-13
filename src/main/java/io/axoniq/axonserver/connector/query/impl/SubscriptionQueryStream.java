@@ -5,6 +5,7 @@ import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.impl.AbstractBufferedStream;
 import io.axoniq.axonserver.connector.impl.FlowControlledStream;
+import io.axoniq.axonserver.connector.impl.SynchronizedRequestStream;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.query.QueryResponse;
 import io.axoniq.axonserver.grpc.query.QueryUpdate;
@@ -83,8 +84,9 @@ public class SubscriptionQueryStream extends FlowControlledStream<SubscriptionQu
 
     @Override
     public void beforeStart(ClientCallStreamObserver<SubscriptionQueryRequest> requestStream) {
-        super.beforeStart(requestStream);
-        updateBuffer.beforeStart(requestStream);
+        SynchronizedRequestStream<SubscriptionQueryRequest> synchronizedRequestStream = new SynchronizedRequestStream<>(requestStream);
+        super.beforeStart(synchronizedRequestStream);
+        updateBuffer.beforeStart(synchronizedRequestStream);
     }
 
     @Override

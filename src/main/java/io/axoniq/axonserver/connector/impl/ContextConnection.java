@@ -50,11 +50,12 @@ public class ContextConnection implements AxonServerConnection {
     public ContextConnection(ClientIdentification clientIdentification,
                              ScheduledExecutorService executorService,
                              AxonServerManagedChannel connection,
+                             long processorInfoUpdateFrequency,
                              String context) {
         this.clientIdentification = clientIdentification;
         this.executorService = executorService;
         this.connection = connection;
-        this.controlChannel = new ControlChannelImpl(clientIdentification, context, executorService, connection);
+        this.controlChannel = new ControlChannelImpl(clientIdentification, context, executorService, connection, processorInfoUpdateFrequency);
     }
 
     @Override

@@ -14,4 +14,5 @@ public interface QueryChannel {
 
     Registration registerQueryHandler(QueryHandler handler, QueryDefinition... queryTypes);
 
+    void prepareDisconnect();
 }

@@ -36,5 +36,5 @@ public interface CommandChannel {
      */
     CompletableFuture<CommandResponse> sendCommand(Command command);
 
-    CompletableFuture<?> prepareDisconnect();
+    CompletableFuture<Void> prepareDisconnect();
 }

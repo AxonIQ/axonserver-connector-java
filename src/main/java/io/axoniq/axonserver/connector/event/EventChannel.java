@@ -17,6 +17,14 @@ public interface EventChannel {
      */
     AppendEventsTransaction startAppendEventsTransaction();
 
+    default CompletableFuture<Confirmation> appendEvents(Event... events) {
+        AppendEventsTransaction tx = startAppendEventsTransaction();
+        for (Event event : events) {
+            tx.appendEvent(event);
+        }
+        return tx.commit();
+    }
+
     /**
      * Find the highest sequence number (i.e. the sequence number of the most recent event) for an aggregate with given
      * {@code aggregateId}.
@@ -42,7 +50,7 @@ public interface EventChannel {
      * The stream of Events starts immediately upon the invocation of this method, making the first messages available
      * for consumption as soon as they have arrived from AxonServer.
      *
-     * @param token      The token representing the position to start the stream
+     * @param token      The token representing the position to start the stream, or {@code -1} to start from beginning
      * @param bufferSize The number of events to buffer locally
      *
      * @return the Stream for consuming the requested Events
@@ -65,7 +73,7 @@ public interface EventChannel {
      * The stream of Events starts immediately upon the invocation of this method, making the first messages available
      * for consumption as soon as they have arrived from AxonServer.
      *
-     * @param token      The token representing the position to start the stream
+     * @param token      The token representing the position to start the stream, or {@code -1} to start from beginning
      * @param bufferSize The number of events to buffer locally
      *
      * @return the Stream for consuming the requested Events
@@ -88,7 +96,7 @@ public interface EventChannel {
      * The stream of Events starts immediately upon the invocation of this method, making the first messages available
      * for consumption as soon as they have arrived from AxonServer.
      *
-     * @param token      The token representing the position to start the stream
+     * @param token      The token representing the position to start the stream, or {@code -1} to start from beginning
      * @param bufferSize The number of events to buffer locally
      *
      * @return the Stream for consuming the requested Events
@@ -221,7 +229,7 @@ public interface EventChannel {
     CompletableFuture<Long> getLastToken();
 
     /**
-     * Retrieves the Token referring to the most first Event in the Event store. Using this token to open a stream will
+     * Retrieves the Token referring to the first Event in the Event store. Using this token to open a stream will
      * yield all events that available in the event store.
      *
      * @return a completable future resolving the Token of the first (i.e. oldest) event

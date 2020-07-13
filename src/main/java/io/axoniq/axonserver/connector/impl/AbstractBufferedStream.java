@@ -27,7 +27,7 @@ public abstract class AbstractBufferedStream<T, R> extends FlowControlledBuffer<
     }
 
     @Override
-    public T nextIfAvailable(int timeout, TimeUnit unit) throws InterruptedException {
+    public T nextIfAvailable(long timeout, TimeUnit unit) throws InterruptedException {
         return tryTake(timeout, unit);
     }
 

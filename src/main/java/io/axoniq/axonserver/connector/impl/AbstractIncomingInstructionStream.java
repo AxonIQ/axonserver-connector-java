@@ -88,8 +88,13 @@ public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowCon
 
     @Override
     public void beforeStart(ClientCallStreamObserver<OUT> requestStream) {
-        super.beforeStart(requestStream);
-        this.instructionsForPlatform = requestStream;
+        SynchronizedRequestStream<OUT> synchronizedRequestStream = new SynchronizedRequestStream<>(requestStream);
+        super.beforeStart(synchronizedRequestStream);
+        this.instructionsForPlatform = synchronizedRequestStream;
+    }
+
+    public StreamObserver<OUT> getInstructionsForPlatform() {
+        return outboundStream();
     }
 
     protected abstract boolean unregisterOutboundStream(StreamObserver<OUT> expected);

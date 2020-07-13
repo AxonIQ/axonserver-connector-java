@@ -7,6 +7,8 @@ import io.axoniq.axonserver.connector.control.ProcessorInstructionHandler;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo;
 import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -16,6 +18,8 @@ import java.util.function.Supplier;
 import static io.axoniq.axonserver.connector.impl.MessageFactory.buildErrorMessage;
 
 public class ProcessorInstructions {
+
+    private static final Logger logger = LoggerFactory.getLogger(ProcessorInstructions.class);
 
     private ProcessorInstructions() {
     }

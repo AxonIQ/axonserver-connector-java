@@ -11,6 +11,7 @@ import java.util.function.Function;
 
 public class ForwardingReplyChannel<T> implements ReplyChannel<T> {
 
+    private final AtomicBoolean ackSent = new AtomicBoolean(false);
     private final String instructionId;
     private final String clientId;
     private final StreamObserver<T> stream;
@@ -36,25 +37,36 @@ public class ForwardingReplyChannel<T> implements ReplyChannel<T> {
     }
 
     @Override
-    public void complete() {
-        if (instructionId != null && !instructionId.isEmpty()) {
+    public void sendAck() {
+        if (instructionId != null
+                && !instructionId.isEmpty()
+                && ackSent.compareAndSet(false, true)) {
             stream.onNext(ackBuilder.apply(InstructionAck.newBuilder().setInstructionId(instructionId).setSuccess(true).build()));
         }
+    }
+
+    @Override
+    public void complete() {
+        sendAck();
         markConsumed();
     }
 
     @Override
     public void completeWithError(ErrorMessage errorMessage) {
-        if (instructionId != null && !instructionId.isEmpty()) {
-            InstructionAck.Builder ack = InstructionAck.newBuilder()
-                                                       .setInstructionId(instructionId)
-                                                       .setSuccess(false);
-            if (errorMessage != null) {
-                ack.setError(errorMessage);
-            }
-            stream.onNext(ackBuilder.apply(ack.build()));
-        }
+        sendNack(errorMessage);
         markConsumed();
+    }
+
+    @Override
+    public void sendNack(ErrorMessage errorMessage) {
+        if (instructionId != null && !instructionId.isEmpty() && ackSent.compareAndSet(false, true)) {
+            InstructionAck ack = InstructionAck.newBuilder()
+                                               .setInstructionId(instructionId)
+                                               .setError(errorMessage == null ? ErrorMessage.getDefaultInstance() : errorMessage)
+                                               .setSuccess(false)
+                                               .build();
+            stream.onNext(ackBuilder.apply(ack));
+        }
     }
 
     @Override

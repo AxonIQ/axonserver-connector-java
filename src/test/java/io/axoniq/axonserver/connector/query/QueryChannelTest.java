@@ -10,6 +10,7 @@ import io.axoniq.axonserver.grpc.SerializedObject;
 import io.axoniq.axonserver.grpc.query.QueryRequest;
 import io.axoniq.axonserver.grpc.query.QueryResponse;
 import io.axoniq.axonserver.grpc.query.QueryUpdate;
+import io.axoniq.axonserver.grpc.query.SubscriptionQuery;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.RepeatedTest;
@@ -117,7 +118,7 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
     void testSubscriptionQueryCancelledOnDisconnect() throws Exception {
         connection2.controlChannel().enableHeartbeat(100, 100, TimeUnit.MILLISECONDS);
         QueryChannel queryChannel = connection1.queryChannel();
-        AtomicReference<QueryHandler.UpdateHandler> updateHandler = new AtomicReference<>();
+        AtomicReference<QueryHandler.UpdateHandler> updateHandlerRef = new AtomicReference<>();
         queryChannel.registerQueryHandler(new QueryHandler() {
             @Override
             public void handle(QueryRequest query, ResponseHandler responseHandler) {
@@ -125,9 +126,9 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
             }
 
             @Override
-            public Registration registerSubscriptionQuery(QueryRequest query, UpdateHandler sendUpdate) {
-                updateHandler.set(sendUpdate);
-                return () -> updateHandler.set(null);
+            public Registration registerSubscriptionQuery(SubscriptionQuery query, UpdateHandler updateHandler) {
+                updateHandlerRef.set(updateHandler);
+                return () -> updateHandlerRef.set(null);
             }
         }, new QueryDefinition("testQuery", "testResult"));
 
@@ -138,9 +139,9 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
         assertWithin(1, TimeUnit.SECONDS, () ->
                 subscriptionQuery.initialResult().isDone()
         );
-        assertWithin(1, TimeUnit.SECONDS, () -> assertNotNull(updateHandler.get()));
+        assertWithin(1, TimeUnit.SECONDS, () -> assertNotNull(updateHandlerRef.get()));
 
-        updateHandler.get().sendUpdate(QueryUpdate.newBuilder().setPayload(SerializedObject.newBuilder().setType(String.class.getName()).setData(ByteString.copyFromUtf8("Hello")).build()).build());
+        updateHandlerRef.get().sendUpdate(QueryUpdate.newBuilder().setPayload(SerializedObject.newBuilder().setType(String.class.getName()).setData(ByteString.copyFromUtf8("Hello")).build()).build());
 
         assertWithin(1, TimeUnit.SECONDS, () -> assertNotNull(subscriptionQuery.updates().nextIfAvailable()));
 
@@ -151,7 +152,7 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
 
         assertWithin(1, TimeUnit.SECONDS, () -> {
             assertTrue(subscriptionQuery.updates().isClosed());
-            assertNull(updateHandler.get());
+            assertNull(updateHandlerRef.get());
         });
         axonServerProxy.enable();
 
@@ -159,13 +160,13 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
 
         Thread.sleep(100);
 
-        assertNull(updateHandler.get());
+        assertNull(updateHandlerRef.get());
     }
 
     @RepeatedTest(20)
     void testClosingSubscriptionQueryFromSenderStopsUpdateStream() throws InterruptedException, TimeoutException, ExecutionException {
         QueryChannel queryChannel = connection1.queryChannel();
-        AtomicReference<QueryHandler.UpdateHandler> updateHandler = new AtomicReference<>();
+        AtomicReference<QueryHandler.UpdateHandler> updateHandlerRef = new AtomicReference<>();
         String subscriptionId = UUID.randomUUID().toString();
         queryChannel.registerQueryHandler(new QueryHandler() {
             @Override
@@ -175,16 +176,16 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
             }
 
             @Override
-            public Registration registerSubscriptionQuery(QueryRequest query, UpdateHandler sendUpdate) {
+            public Registration registerSubscriptionQuery(SubscriptionQuery query, UpdateHandler updateHandler) {
                 logger.info("Registering update handler for subscription query");
-                if (!subscriptionId.equals(query.getMessageIdentifier())) {
+                if (!subscriptionId.equals(query.getQueryRequest().getMessageIdentifier())) {
                     logger.warn("Received old subscription query. Ignoring");
                     return null;
                 }
-                updateHandler.set(sendUpdate);
+                updateHandlerRef.set(updateHandler);
                 return () -> {
                     logger.info("Clearing update handler");
-                    updateHandler.set(null);
+                    updateHandlerRef.set(null);
                 };
             }
         }, new QueryDefinition("testQuery", "testResult"));
@@ -201,27 +202,27 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
 
         assertEquals(subscriptionId, subscriptionQuery.initialResult().get(1, TimeUnit.SECONDS)
                                                       .getRequestIdentifier());
-        assertWithin(1, TimeUnit.SECONDS, () -> assertNotNull(updateHandler.get()));
+        assertWithin(1, TimeUnit.SECONDS, () -> assertNotNull(updateHandlerRef.get()));
         logger.info("Sending update");
-        updateHandler.get().sendUpdate(QueryUpdate.newBuilder().build());
+        updateHandlerRef.get().sendUpdate(QueryUpdate.newBuilder().build());
 
         assertWithin(2, TimeUnit.SECONDS, () -> assertNotNull(subscriptionQuery.updates().nextIfAvailable()));
 
         subscriptionQuery.updates().close();
 
-        updateHandler.get().sendUpdate(QueryUpdate.newBuilder().build());
+        updateHandlerRef.get().sendUpdate(QueryUpdate.newBuilder().build());
 
         assertWithin(1, TimeUnit.SECONDS, () -> {
             assertNull(subscriptionQuery.updates().nextIfAvailable());
             assertTrue(subscriptionQuery.updates().isClosed(), "Client side update stream should have been closed");
-            assertNull(updateHandler.get(), "Expected updateHandler to have been unregistered");
+            assertNull(updateHandlerRef.get(), "Expected updateHandler to have been unregistered");
         });
     }
 
     @Test
     void testClosingSubscriptionQueryFromProviderStopsUpdateStream() throws InterruptedException {
         QueryChannel queryChannel = connection1.queryChannel();
-        AtomicReference<QueryHandler.UpdateHandler> updateHandler = new AtomicReference<>();
+        AtomicReference<QueryHandler.UpdateHandler> updateHandlerRef = new AtomicReference<>();
         String subscriptionId = UUID.randomUUID().toString();
         queryChannel.registerQueryHandler(new QueryHandler() {
             @Override
@@ -230,13 +231,13 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
             }
 
             @Override
-            public Registration registerSubscriptionQuery(QueryRequest query, UpdateHandler sendUpdate) {
-                if (!subscriptionId.equals(query.getMessageIdentifier())) {
+            public Registration registerSubscriptionQuery(SubscriptionQuery query, UpdateHandler updateHandler) {
+                if (!subscriptionId.equals(query.getQueryRequest().getMessageIdentifier())) {
                     return null;
                 }
-                updateHandler.set(sendUpdate);
+                updateHandlerRef.set(updateHandler);
                 return () -> {
-                    updateHandler.set(null);
+                    updateHandlerRef.set(null);
                 };
             }
         }, new QueryDefinition("testQuery", "testResult"));
@@ -248,11 +249,11 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
                                                                                                  100, 10);
 
         assertWithin(1, TimeUnit.SECONDS, () -> {
-            assertNotNull(updateHandler.get());
+            assertNotNull(updateHandlerRef.get());
         });
 
-        updateHandler.get().sendUpdate(QueryUpdate.newBuilder().build());
-        updateHandler.get().complete();
+        updateHandlerRef.get().sendUpdate(QueryUpdate.newBuilder().build());
+        updateHandlerRef.get().complete();
 
         ResultStream<QueryUpdate> updates = subscriptionQuery.updates();
         assertWithin(1, TimeUnit.SECONDS, () -> assertNotNull(updates.nextIfAvailable()));
@@ -261,7 +262,7 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
 
         assertWithin(1, TimeUnit.SECONDS, () -> {
             assertTrue(updates.isClosed(), "Expected client side to be unregistered");
-            assertNull(updateHandler.get(), "Expected UpdateHandler to be unregistered");
+            assertNull(updateHandlerRef.get(), "Expected UpdateHandler to be unregistered");
         });
     }
 

@@ -46,6 +46,7 @@ class ControlChannelTest extends AbstractAxonServerIntegrationTest {
         client = AxonServerConnectionFactory.forClient(getClass().getSimpleName())
                                             .routingServers(axonServerAddress)
                                             .connectTimeout(1500, TimeUnit.MILLISECONDS)
+                                            .processorInfoUpdateFrequency(500, TimeUnit.MILLISECONDS)
                                             .reconnectInterval(10, TimeUnit.MILLISECONDS)
                                             .build();
         AxonServerConnection connection1 = client.connect("default");

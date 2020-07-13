@@ -24,6 +24,8 @@ import java.util.stream.Stream;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -169,9 +171,9 @@ class EventHandlingTest extends AbstractAxonServerIntegrationTest {
         }
 
         try (ResultStream<EventWithToken> stream = eventChannel.openStream(-1, 64)) {
+            assertThrows(StreamClosedException.class, stream::next);
             Assertions.assertNull(stream.nextIfAvailable(1, SECONDS));
             assertTrue(stream.isClosed());
-            assertThrows(StreamClosedException.class, stream::next);
         }
 
         axonServerProxy.enable();
@@ -182,5 +184,41 @@ class EventHandlingTest extends AbstractAxonServerIntegrationTest {
             Assertions.assertNotNull(stream.nextIfAvailable(5, SECONDS));
             Assertions.assertFalse(stream.isClosed());
         }
+    }
+
+    @Test
+    void testSubscribeUsingInitialToken() throws InterruptedException {
+        EventChannel eventChannel = connection1.eventChannel();
+        EventChannel publishingEventChannel = connection2.eventChannel();
+
+        publishingEventChannel.appendEvents(MessageFactory.createEvent("event1"),
+                                            MessageFactory.createEvent("event2"));
+
+        EventStream actual = eventChannel.openStream(-1, 10);
+        assertEquals("event1", actual.next().getEvent().getPayload().getData().toStringUtf8());
+        assertEquals("event2", actual.next().getEvent().getPayload().getData().toStringUtf8());
+        assertNull(actual.nextIfAvailable());
+        actual.close();
+    }
+
+    @Test
+    void testResubscribeUsingReceviedTokenContinuesOnStream() throws InterruptedException {
+        EventChannel eventChannel = connection1.eventChannel();
+        EventChannel publishingEventChannel = connection2.eventChannel();
+
+        publishingEventChannel.appendEvents(MessageFactory.createEvent("event1"),
+                                            MessageFactory.createEvent("event2"));
+
+        EventStream firstStream = eventChannel.openStream(-1, 10);
+        EventWithToken firstEvent = firstStream.next();
+        assertEquals("event1", firstEvent.getEvent().getPayload().getData().toStringUtf8());
+        long token = firstEvent.getToken();
+        System.out.println("Token with first event is " + token);
+        firstStream.close();
+
+        EventStream secondStream = eventChannel.openStream(token, 10);
+        EventWithToken secondEvent = secondStream.nextIfAvailable(1, SECONDS);
+        assertEquals("event2", secondEvent.getEvent().getPayload().getData().toStringUtf8());
+        secondStream.close();
     }
 }

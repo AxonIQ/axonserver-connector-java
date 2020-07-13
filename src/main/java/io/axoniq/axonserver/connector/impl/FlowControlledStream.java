@@ -31,28 +31,31 @@ public abstract class FlowControlledStream<IN, OUT> implements ClientResponseObs
 
     private final AtomicInteger permitsConsumed = new AtomicInteger();
     private final String clientId;
+    private final int permits;
     private final int permitsBatch;
-    private final OUT additionalPermitsRequest;
-    private final OUT initialPermitsRequest;
+    private final FlowControl flowControl;
     private ClientCallStreamObserver<OUT> outboundStream;
 
     public FlowControlledStream(String clientId, int permits, int permitsBatch) {
         this.clientId = clientId;
+        this.permits = permits;
         this.permitsBatch = permitsBatch;
-        this.additionalPermitsRequest = buildFlowControlMessage(FlowControl.newBuilder()
-                                                                           .setPermits(permitsBatch)
-                                                                           .setClientId(clientId)
-                                                                           .build());
-        this.initialPermitsRequest = buildInitialFlowControlMessage(FlowControl.newBuilder()
-                                                                               .setPermits(permits)
-                                                                               .setClientId(clientId)
-                                                                               .build());
+        flowControl = FlowControl.newBuilder()
+                                 .setPermits(permitsBatch)
+                                 .setClientId(clientId)
+                                 .build();
     }
 
     public void enableFlowControl() {
-        permitsConsumed.set(0);
-        if (initialPermitsRequest != null) {
-            outboundStream().onNext((initialPermitsRequest));
+        if (permitsBatch > 0) {
+            permitsConsumed.set(0);
+            OUT out = buildInitialFlowControlMessage(FlowControl.newBuilder()
+                                                                .setPermits(permits)
+                                                                .setClientId(clientId)
+                                                                .build());
+            if (out != null) {
+                outboundStream().onNext(out);
+            }
         }
     }
 
@@ -67,18 +70,20 @@ public abstract class FlowControlledStream<IN, OUT> implements ClientResponseObs
     }
 
     public void markConsumed() {
-        if (additionalPermitsRequest == null) {
-            return;
-        }
-        int ticker = permitsConsumed.updateAndGet(current -> {
-            if (current == permitsBatch - 1) {
-                return 0;
+        if (permitsBatch > 0) {
+            int ticker = permitsConsumed.updateAndGet(current -> {
+                if (current == permitsBatch - 1) {
+                    return 0;
+                }
+                return current + 1;
+            });
+            if (ticker == 0) {
+                OUT permitsRequest = buildFlowControlMessage(flowControl);
+                if (permitsRequest != null) {
+                    logger.debug("Requesting additional {} permits", permitsBatch);
+                    outboundStream().onNext(permitsRequest);
+                }
             }
-            return current + 1;
-        });
-        if (ticker == 0) {
-            logger.debug("Requesting additional {} permits", permitsBatch);
-            outboundStream().onNext((additionalPermitsRequest));
         }
     }
 

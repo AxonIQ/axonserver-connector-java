@@ -82,17 +82,23 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
 
     private void handleIncomingCommand(CommandProviderInbound message, ReplyChannel<CommandProviderOutbound> outbound) {
         Command command = message.getCommand();
-        commandHandlers.getOrDefault(command.getName(), c -> noHandlerForCommand())
-                       .apply(command)
-                       .exceptionally(e -> CommandResponse.newBuilder()
-                                                          .setErrorCode(ErrorCategory.COMMAND_EXECUTION_ERROR.errorCode())
-                                                          .setErrorMessage(ErrorMessage.newBuilder().setMessage(e.getMessage()).build())
-                                                          .build())
-                       .thenApply(CommandResponse::newBuilder)
-                       .thenApply(r -> r.setRequestIdentifier(command.getMessageIdentifier()))
-                       .whenComplete((r, e) ->
-                                             outbound.send(CommandProviderOutbound.newBuilder().setCommandResponse(r).build()))
-                       .thenRun(outbound::complete);
+        Function<Command, CompletableFuture<CommandResponse>> handler = commandHandlers.get(command.getName());
+        if (handler != null) {
+            outbound.sendAck();
+        } else {
+            outbound.sendNack();
+            handler = c -> noHandlerForCommand();
+        }
+        handler.apply(command)
+               .exceptionally(e -> CommandResponse.newBuilder()
+                                                  .setErrorCode(ErrorCategory.COMMAND_EXECUTION_ERROR.errorCode())
+                                                  .setErrorMessage(ErrorMessage.newBuilder().setMessage(e.getMessage()).build())
+                                                  .build())
+               .thenApply(CommandResponse::newBuilder)
+               .thenApply(r -> r.setRequestIdentifier(command.getMessageIdentifier()))
+               .whenComplete((r, e) ->
+                                     outbound.send(CommandProviderOutbound.newBuilder().setCommandResponse(r).build()))
+               .thenRun(outbound::complete);
     }
 
     private CompletableFuture<CommandResponse> noHandlerForCommand() {
@@ -123,7 +129,10 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
         IncomingCommandStream responseObserver = new IncomingCommandStream(clientIdentification.getClientId(),
                                                                            permits, permitsBatch,
                                                                            this::onConnectionError);
-        StreamObserver<CommandProviderOutbound> newValue = commandServiceStub.openStream(responseObserver);
+        //noinspection ResultOfMethodCallIgnored
+        commandServiceStub.openStream(responseObserver);
+
+        StreamObserver<CommandProviderOutbound> newValue = responseObserver.getInstructionsForPlatform();
 
         StreamObserver<CommandProviderOutbound> previous = outboundCommandStream.getAndSet(newValue);
 
@@ -179,7 +188,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
     }
 
     private void sendUnsubscribe(String commandName) {
-        outboundCommandStream.get().onNext(
+        doIfNotNull(outboundCommandStream.get(), s -> s.onNext(
                 CommandProviderOutbound.newBuilder()
                                        // TODO - Use instruction id and track with CompletableFuture
                                        .setUnsubscribe(CommandSubscription.newBuilder()
@@ -187,7 +196,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
                                                                           .setClientId(clientIdentification.getClientId())
                                                                           .setComponentName(clientIdentification.getComponentName()))
                                        .build()
-        );
+        ));
     }
 
     private CommandProviderOutbound buildSubscribeMessage(String commandName, String instructionId, int loadFactor) {
@@ -203,7 +212,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
     }
 
     @Override
-    public CompletableFuture<?> prepareDisconnect() {
+    public CompletableFuture<Void> prepareDisconnect() {
         this.commandHandlers.keySet().forEach(this::sendUnsubscribe);
         // TODO: Wait for ACKs in CompletableFuture
         return CompletableFuture.completedFuture(null);

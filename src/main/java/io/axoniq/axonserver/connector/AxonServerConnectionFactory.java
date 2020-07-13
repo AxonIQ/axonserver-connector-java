@@ -84,6 +84,7 @@ public class AxonServerConnectionFactory {
 
     private volatile boolean shutdown;
     private final ReconnectConfiguration reconnectConfiguration;
+    private final long processorInfoUpdateFrequency;
 
     /**
      * @param builder
@@ -102,6 +103,7 @@ public class AxonServerConnectionFactory {
                                                                  builder.reconnectInterval,
                                                                  builder.forceReconnectViaRoutingServers,
                                                                  TimeUnit.MILLISECONDS);
+        this.processorInfoUpdateFrequency = builder.processorInfoUpdateFrequency;
     }
 
     /**
@@ -173,6 +175,7 @@ public class AxonServerConnectionFactory {
                                                                   executorService,
                                                                   this::createChannel
                                      ),
+                                     processorInfoUpdateFrequency,
                                      context);
     }
 
@@ -225,6 +228,7 @@ public class AxonServerConnectionFactory {
         private final String componentName;
         private final String clientInstanceId;
         private final Map<String, String> tags = new HashMap<>();
+        private long processorInfoUpdateFrequency = 2000;
         private List<ServerAddress> routingServers;
         private long connectTimeout = 10000;
         private String token;
@@ -465,6 +469,20 @@ public class AxonServerConnectionFactory {
          */
         public Builder customize(UnaryOperator<ManagedChannelBuilder<?>> customization) {
             otherConfig = otherConfig.andThen(customization);
+            return this;
+        }
+
+        /**
+         * Sets the frequency in which the status of all Event Processors is emitted to the Server. Defaults to 2
+         * seconds.
+         *
+         * @param interval The interval in which to send status updates
+         * @param unit The unit of time in which the interval is expressed
+         *
+         * @return this builder for further configuration
+         */
+        public Builder processorInfoUpdateFrequency(long interval, TimeUnit unit) {
+            this.processorInfoUpdateFrequency = unit.toMillis(interval);
             return this;
         }
 

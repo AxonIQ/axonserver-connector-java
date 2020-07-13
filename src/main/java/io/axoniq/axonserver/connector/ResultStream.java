@@ -42,12 +42,11 @@ public interface ResultStream<T> extends AutoCloseable {
      *                              for an element to become available
      * @see #isClosed()
      */
-    T nextIfAvailable(int timeout, TimeUnit unit) throws InterruptedException;
+    T nextIfAvailable(long timeout, TimeUnit unit) throws InterruptedException;
 
     /**
      * Consumes the next available element in the stream, waiting for an element to become available, or for the buffer
      * to be closed.
-     * v     *
      *
      * @return the next available element in the stream, or {@code null} if none available
      * @throws InterruptedException                                      when the Thread is interrupted while waiting
@@ -56,6 +55,8 @@ public interface ResultStream<T> extends AutoCloseable {
      * @see #isClosed()
      */
     T next() throws InterruptedException;
+
+    // TODO - Allow for a method the returns a CompletableFuture<T> which completes when the next available item is available (or immediately, if one is already available).
 
     /**
      * Sets the callback to execute when data is available for reading, or the stream has been closed. Note that any

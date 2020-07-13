@@ -39,6 +39,21 @@ public interface ReplyChannel<T> {
     void send(T outboundMessage);
 
     /**
+     * Sends an receipt acknowledgement if one hasn't been sent yet for this instruction. If not explicitly
+     * sent, it will be send once the {@link #complete()}, {@link #completeWithError(ErrorMessage)} or
+     * {@link #completeWithError(ErrorCategory, String)} methods are invoked.
+     * <p>
+     * If the incoming instruction has no instruction ID, this method does nothing.
+     */
+    void sendAck();
+
+    default void sendNack() {
+        sendNack(ErrorMessage.getDefaultInstance());
+    }
+
+    void sendNack(ErrorMessage errorMessage);
+
+    /**
      * Marks the inbound instruction as completed.
      */
     void complete();
