@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2010-2020. Axon Framework
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -93,6 +93,7 @@ public class AxonServerConnectionFactory {
         this.componentName = builder.componentName;
         this.clientInstanceId = builder.clientInstanceId;
         this.token = builder.token;
+        this.tags.putAll(builder.tags);
         this.executorService = builder.executorService;
         this.suppressDownloadMessage = builder.suppressDownloadMessage;
         this.routingServers = builder.routingServers;
