@@ -447,7 +447,7 @@
     <scm>
         <connection>scm:git:https://github.com/AxonIQ/axonserver-connector-java.git</connection>
         <developerConnection>scm:git:https://github.com/AxonIQ/axonserver-connector-java.git</developerConnection>
-        <url>https://github.com/AxonIQ/axon-server</url>
+        <url>https://github.com/AxonIQ/axonserver-connector-java</url>
         <tag>master</tag>
     </scm>
 
