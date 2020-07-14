@@ -358,6 +358,7 @@
                     </execution>
                 </executions>
                 <configuration>
+                    <encoding>UTF-8</encoding>
                     <tags>
                         <tag>
                             <name>apiNote</name>
