@@ -226,8 +226,6 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
 
         subscriptionQuery.updates().close();
 
-        updateHandlerRef.get().sendUpdate(QueryUpdate.newBuilder().build());
-
         assertWithin(1, TimeUnit.SECONDS, () -> {
             assertNull(subscriptionQuery.updates().nextIfAvailable());
             assertTrue(subscriptionQuery.updates().isClosed(), "Client side update stream should have been closed");
