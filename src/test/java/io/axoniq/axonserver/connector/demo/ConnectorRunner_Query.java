@@ -68,7 +68,7 @@ public class ConnectorRunner_Query {
             QueryChannel channel = contextConnection.queryChannel();
             channel.registerQueryHandler((q, r) -> {
                 System.out.println("Handled query");
-                r.sendLastResponse(QueryResponse.newBuilder().setRequestIdentifier(q.getMessageIdentifier()).setPayload(q.getPayload()).build());
+                r.sendLast(QueryResponse.newBuilder().setRequestIdentifier(q.getMessageIdentifier()).setPayload(q.getPayload()).build());
             }, new QueryDefinition(String.class.getName(), String.class));
 
             Scanner scanner = new Scanner(System.in);

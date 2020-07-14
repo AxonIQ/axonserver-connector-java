@@ -21,6 +21,7 @@ import io.axoniq.axonserver.connector.AbstractAxonServerIntegrationTest;
 import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
 import io.axoniq.axonserver.connector.Registration;
+import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.grpc.SerializedObject;
 import io.axoniq.axonserver.grpc.query.QueryRequest;
@@ -84,12 +85,14 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
         QueryChannel queryChannel = connection1.queryChannel();
         Registration registration = queryChannel.registerQueryHandler(this::mockHandler, new QueryDefinition("testQuery", "testResult"));
 
+        // This cancellation is asynchronous
         registration.cancel();
 
-        ResultStream<QueryResponse> result = connection2.queryChannel().query(QueryRequest.newBuilder().setQuery("testQuery").build());
 
         assertWithin(2, TimeUnit.SECONDS, () -> {
-            QueryResponse queryResponse = result.nextIfAvailable(1, TimeUnit.SECONDS);
+            ResultStream<QueryResponse> result = connection2.queryChannel().query(QueryRequest.newBuilder().setQuery("testQuery").build());
+
+            QueryResponse queryResponse = result.nextIfAvailable(100, TimeUnit.MILLISECONDS);
             assertNotNull(queryResponse);
             assertTrue(queryResponse.hasErrorMessage());
         });
@@ -137,7 +140,7 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
         AtomicReference<QueryHandler.UpdateHandler> updateHandlerRef = new AtomicReference<>();
         queryChannel.registerQueryHandler(new QueryHandler() {
             @Override
-            public void handle(QueryRequest query, ResponseHandler responseHandler) {
+            public void handle(QueryRequest query, ReplyChannel<QueryResponse> responseHandler) {
                 mockHandler(query, responseHandler);
             }
 
@@ -186,7 +189,7 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
         String subscriptionId = UUID.randomUUID().toString();
         queryChannel.registerQueryHandler(new QueryHandler() {
             @Override
-            public void handle(QueryRequest query, ResponseHandler responseHandler) {
+            public void handle(QueryRequest query, ReplyChannel<QueryResponse> responseHandler) {
                 logger.info("Handling query");
                 mockHandler(query, responseHandler);
             }
@@ -240,7 +243,7 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
         String subscriptionId = UUID.randomUUID().toString();
         queryChannel.registerQueryHandler(new QueryHandler() {
             @Override
-            public void handle(QueryRequest query, ResponseHandler responseHandler) {
+            public void handle(QueryRequest query, ReplyChannel<QueryResponse> responseHandler) {
                 mockHandler(query, responseHandler);
             }
 
@@ -281,7 +284,7 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
     }
 
 
-    private void mockHandler(QueryRequest query, QueryHandler.ResponseHandler responseHandler) {
-        responseHandler.sendLastResponse(QueryResponse.newBuilder().setRequestIdentifier(query.getMessageIdentifier()).setPayload(query.getPayload()).build());
+    private void mockHandler(QueryRequest query, ReplyChannel<QueryResponse> responseHandler) {
+        responseHandler.sendLast(QueryResponse.newBuilder().setRequestIdentifier(query.getMessageIdentifier()).setPayload(query.getPayload()).build());
     }
 }

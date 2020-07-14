@@ -39,6 +39,21 @@ public interface ReplyChannel<T> {
     void send(T outboundMessage);
 
     /**
+     * Sends the given {@code response} and marks the processing as completed, possibly signalling flow control that
+     * more query messages may be sent.
+     * <p>
+     * No more responses should be sent after invoking this method. The behavior in that case is undefined, and
+     * these messages are likely to be ignored.
+     */
+    default void sendLast(T outboundMessage) {
+        try {
+            send(outboundMessage);
+        } finally {
+            complete();
+        }
+    }
+
+    /**
      * Sends an receipt acknowledgement if one hasn't been sent yet for this instruction. If not explicitly
      * sent, it will be send once the {@link #complete()}, {@link #completeWithError(ErrorMessage)} or
      * {@link #completeWithError(ErrorCategory, String)} methods are invoked.
@@ -47,10 +62,20 @@ public interface ReplyChannel<T> {
      */
     void sendAck();
 
+    /**
+     * Sends a negative acknowledgement, indicating that the incoming message could not be handled as
+     * expected. Unlike {@link #sendNack(ErrorMessage)}, no specific error details are provided.
+     *
+     * @see #sendNack(ErrorMessage)
+     */
     default void sendNack() {
         sendNack(ErrorMessage.getDefaultInstance());
     }
 
+    /**
+     * Sends a negative acknowledgement, indicating that the incoming message could not be handled as
+     * expected, using given {@code errorMessage} to describe the reason.
+     */
     void sendNack(ErrorMessage errorMessage);
 
     /**

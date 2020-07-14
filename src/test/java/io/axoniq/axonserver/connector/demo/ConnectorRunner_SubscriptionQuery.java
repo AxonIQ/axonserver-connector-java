@@ -20,6 +20,7 @@ import com.google.protobuf.ByteString;
 import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
 import io.axoniq.axonserver.connector.Registration;
+import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.query.QueryChannel;
 import io.axoniq.axonserver.connector.query.QueryDefinition;
@@ -91,9 +92,9 @@ public class ConnectorRunner_SubscriptionQuery {
             QueryChannel channel = contextConnection.queryChannel();
             channel.registerQueryHandler(new io.axoniq.axonserver.connector.query.QueryHandler() {
                 @Override
-                public void handle(QueryRequest q, ResponseHandler r) {
+                public void handle(QueryRequest q, ReplyChannel<QueryResponse> r) {
                     System.out.println("Handled query");
-                    r.sendLastResponse(QueryResponse.newBuilder().setRequestIdentifier(q.getMessageIdentifier()).setPayload(q.getPayload()).build());
+                    r.sendLast(QueryResponse.newBuilder().setRequestIdentifier(q.getMessageIdentifier()).setPayload(q.getPayload()).build());
                 }
 
                 @Override

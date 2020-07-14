@@ -17,6 +17,7 @@
 package io.axoniq.axonserver.connector.query;
 
 import io.axoniq.axonserver.connector.Registration;
+import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.grpc.query.QueryRequest;
 import io.axoniq.axonserver.grpc.query.QueryResponse;
 import io.axoniq.axonserver.grpc.query.QueryUpdate;
@@ -31,13 +32,13 @@ public interface QueryHandler {
     /**
      * Handle the given {@code query}, using given {@code responseHandler} to send the response(s).
      * <p>
-     * Note that the query <em>must</em> be completed using {@link ResponseHandler#complete()}
-     * or {@link ResponseHandler#sendLastResponse(QueryResponse)}.
+     * Note that the query <em>must</em> be completed using {@link ReplyChannel#complete()}
+     * or {@link ReplyChannel#sendLast(Object)}.
      *
      * @param query           The message representing the query reqyest
      * @param responseHandler To send the responses
      */
-    void handle(QueryRequest query, ResponseHandler responseHandler);
+    void handle(QueryRequest query, ReplyChannel<QueryResponse> responseHandler);
 
     /**
      * Registers an incoming subscription query request, represented by given {@code query}, using given
@@ -54,46 +55,6 @@ public interface QueryHandler {
      */
     default Registration registerSubscriptionQuery(SubscriptionQuery query, UpdateHandler updateHandler) {
         return null;
-    }
-
-    /**
-     * Interface describing a stream to send responses to queries. These streams must be completed using {@link
-     * #complete()} or {@link #sendLastResponse(QueryResponse)} to avoid permit leakage. Components may send as many
-     * response messages as desired.
-     */
-    interface ResponseHandler {
-
-        /**
-         * Sends the given {@code response}.
-         *
-         * @param response The respnose to the query to send
-         */
-        void sendResponse(QueryResponse response);
-
-        /**
-         * Marks the query as completed, possibly signalling flow control that more query messages may be sent.
-         * <p>
-         * No more responses should be sent after invoking this method. The behavior in that case is undefined, and
-         * these messages are likely to be ignored.
-         */
-        void complete();
-
-
-        /**
-         * Sends the given {@code response}  and arks the query as completed, possibly signalling flow control that
-         * more query messages may be sent.
-         * <p>
-         * No more responses should be sent after invoking this method. The behavior in that case is undefined, and
-         * these messages are likely to be ignored.
-         */
-        default void sendLastResponse(QueryResponse response) {
-            try {
-                sendResponse(response);
-            } finally {
-                complete();
-            }
-        }
-
     }
 
     /**

@@ -289,32 +289,33 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
         return outboundQueryStream.get() != null;
     }
 
-    public void doHandleQuery(QueryProviderInbound query, QueryHandler.ResponseHandler responseHandler) {
+    public void doHandleQuery(QueryProviderInbound query, ReplyChannel<QueryResponse> responseHandler) {
         doHandleQuery(query.getQuery(), responseHandler);
     }
 
-    public void doHandleQuery(QueryRequest query, QueryHandler.ResponseHandler responseHandler) {
+    public void doHandleQuery(QueryRequest query, ReplyChannel<QueryResponse> responseHandler) {
         Set<QueryHandler> handlers = queryHandlers.getOrDefault(query.getQuery(), Collections.emptySet());
         if (handlers.isEmpty()) {
-            responseHandler.sendLastResponse(QueryResponse.newBuilder()
-                                                          .setRequestIdentifier(query.getMessageIdentifier())
-                                                          .setErrorCode(ErrorCategory.NO_HANDLER_FOR_QUERY.errorCode())
-                                                          .setErrorMessage(ErrorMessage.newBuilder().setMessage("No handler for query").build())
-                                                          .build());
+            responseHandler.sendNack();
+            responseHandler.sendLast(QueryResponse.newBuilder()
+                                                  .setRequestIdentifier(query.getMessageIdentifier())
+                                                  .setErrorCode(ErrorCategory.NO_HANDLER_FOR_QUERY.errorCode())
+                                                  .setErrorMessage(ErrorMessage.newBuilder().setMessage("No handler for query").build())
+                                                  .build());
         }
 
-        // TODO - Send ACK is there is an instruction ID in incoming Query Message
+        responseHandler.sendAck();
 
         AtomicInteger completeCounter = new AtomicInteger(handlers.size());
-        handlers.forEach(queryHandler -> queryHandler.handle(query, new QueryHandler.ResponseHandler() {
+        handlers.forEach(queryHandler -> queryHandler.handle(query, new ReplyChannel<QueryResponse>() {
             @Override
-            public void sendResponse(QueryResponse response) {
+            public void send(QueryResponse response) {
                 if (!query.getMessageIdentifier().equals(response.getRequestIdentifier())) {
                     logger.debug("RequestIdentifier not properly set, modifying message");
                     QueryResponse newResponse = response.toBuilder().setRequestIdentifier(query.getMessageIdentifier()).build();
-                    responseHandler.sendResponse(newResponse);
+                    responseHandler.send(newResponse);
                 } else {
-                    responseHandler.sendResponse(response);
+                    responseHandler.send(response);
                 }
             }
 
@@ -324,13 +325,33 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
                     responseHandler.complete();
                 }
             }
+
+            @Override
+            public void completeWithError(ErrorMessage errorMessage) {
+                responseHandler.completeWithError(errorMessage);
+            }
+
+            @Override
+            public void completeWithError(ErrorCategory errorCategory, String message) {
+                responseHandler.completeWithError(errorCategory, message);
+            }
+
+            @Override
+            public void sendNack(ErrorMessage errorMessage) {
+                responseHandler.sendNack(errorMessage);
+            }
+
+            @Override
+            public void sendAck() {
+                responseHandler.sendAck();
+            }
         }));
     }
 
     private void handleQuery(QueryProviderInbound inbound, ReplyChannel<QueryProviderOutbound> result) {
-        doHandleQuery(inbound, new QueryHandler.ResponseHandler() {
+        doHandleQuery(inbound, new ReplyChannel<QueryResponse>() {
             @Override
-            public void sendResponse(QueryResponse response) {
+            public void send(QueryResponse response) {
                 result.send(QueryProviderOutbound.newBuilder().setQueryResponse(response).build());
             }
 
@@ -339,15 +360,35 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
                 result.send(QueryProviderOutbound.newBuilder().setQueryComplete(QueryComplete.newBuilder().setRequestId(inbound.getQuery().getMessageIdentifier()).setMessageId(UUID.randomUUID().toString()).build()).build());
                 result.complete();
             }
+
+            @Override
+            public void completeWithError(ErrorMessage errorMessage) {
+                result.completeWithError(errorMessage);
+            }
+
+            @Override
+            public void completeWithError(ErrorCategory errorCategory, String message) {
+                result.completeWithError(errorCategory, message);
+            }
+
+            @Override
+            public void sendNack(ErrorMessage errorMessage) {
+                result.sendNack(errorMessage);
+            }
+
+            @Override
+            public void sendAck() {
+                result.sendAck();
+            }
         });
     }
 
     private void getInitialResult(QueryProviderInbound query, ReplyChannel<QueryProviderOutbound> result) {
         String subscriptionId = query.getSubscriptionQueryRequest().getGetInitialResult().getSubscriptionIdentifier();
-        doHandleQuery(query.getSubscriptionQueryRequest().getGetInitialResult().getQueryRequest(), new QueryHandler.ResponseHandler() {
+        doHandleQuery(query.getSubscriptionQueryRequest().getGetInitialResult().getQueryRequest(), new ReplyChannel<QueryResponse>() {
 
             @Override
-            public void sendResponse(QueryResponse response) {
+            public void send(QueryResponse response) {
                 result.send(QueryProviderOutbound.newBuilder()
                                                  .setSubscriptionQueryResponse(SubscriptionQueryResponse.newBuilder()
                                                                                                         .setSubscriptionIdentifier(subscriptionId)
@@ -359,7 +400,28 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
 
             @Override
             public void complete() {
-                // no need to send messages here...
+                result.sendAck();
+                // no need to send other messages here...
+            }
+
+            @Override
+            public void completeWithError(ErrorMessage errorMessage) {
+                result.completeWithError(errorMessage);
+            }
+
+            @Override
+            public void completeWithError(ErrorCategory errorCategory, String message) {
+                result.completeWithError(errorCategory, message);
+            }
+
+            @Override
+            public void sendNack(ErrorMessage errorMessage) {
+                result.sendNack(errorMessage);
+            }
+
+            @Override
+            public void sendAck() {
+                result.sendAck();
             }
         });
     }
