@@ -7,6 +7,11 @@ jdk:
   - openjdk8
   - openjdk11
 
+before_install:
+  - chmod +x mvnw
+
+install: true
+
 cache:
   directories:
     - $HOME/.m2
