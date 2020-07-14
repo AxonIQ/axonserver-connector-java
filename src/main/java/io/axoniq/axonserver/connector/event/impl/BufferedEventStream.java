@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2010-2020. Axon Framework
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,7 +52,7 @@ public class BufferedEventStream extends AbstractBufferedStream<EventWithToken, 
     protected GetEventsRequest buildInitialFlowControlMessage(FlowControl flowControl) {
         GetEventsRequest eventsRequest = GetEventsRequest.newBuilder()
                                                          .setTrackingToken(trackingToken + 1)
-                                                         .setAllowReadingFromFollower(!forceReadFromLeader)
+                                                         .setForceReadFromLeader(forceReadFromLeader)
                                                          .setNumberOfPermits(flowControl.getPermits()).build();
         logger.trace("Sending request for data: {}", eventsRequest);
         return eventsRequest;
