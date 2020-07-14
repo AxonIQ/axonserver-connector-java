@@ -18,4 +18,4 @@ cache:
 
 script:
   - mvn -version
-  - mvn -B -Possrh clean verify
+  - mvn -B -U -Possrh clean verify
