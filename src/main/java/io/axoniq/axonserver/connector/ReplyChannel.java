@@ -22,9 +22,9 @@ import io.axoniq.axonserver.grpc.ErrorMessage;
  * Interface providing access to the communication channel to send replies to incoming instructions. All instructions
  * must be acknowledged by completing the reply channel after successfully sending all necessary replies.
  * <p>
- * One should not send messages after completing the reply channel. The behavior is such case is undefined.
+ * One should not send messages after completing the reply channel. The behavior is such a case is undefined.
  *
- * @param <T> The type of message expected on the replyChannel
+ * @param <T> the type of message expected on this {@link ReplyChannel}
  */
 public interface ReplyChannel<T> {
 
@@ -32,8 +32,7 @@ public interface ReplyChannel<T> {
      * Sends the given {@code outboundMessage} as a reply to an incoming instruction. Where possible, the instruction
      * identifiers should be set on the outbound message.
      *
-     * @param outboundMessage The message to send
-     *
+     * @param outboundMessage the message to send
      * @implNote Implementations are encouraged to validate and correct these instruction identifiers.
      */
     void send(T outboundMessage);
@@ -42,8 +41,8 @@ public interface ReplyChannel<T> {
      * Sends the given {@code response} and marks the processing as completed, possibly signalling flow control that
      * more query messages may be sent.
      * <p>
-     * No more responses should be sent after invoking this method. The behavior in that case is undefined, and
-     * these messages are likely to be ignored.
+     * No more responses should be sent after invoking this method. The behavior in that case is undefined, and these
+     * messages are likely to be ignored.
      */
     default void sendLast(T outboundMessage) {
         try {
@@ -54,17 +53,20 @@ public interface ReplyChannel<T> {
     }
 
     /**
-     * Sends an receipt acknowledgement if one hasn't been sent yet for this instruction. If not explicitly
-     * sent, it will be send once the {@link #complete()}, {@link #completeWithError(ErrorMessage)} or
-     * {@link #completeWithError(ErrorCategory, String)} methods are invoked.
+     * Sends an receipt acknowledgement if one hasn't been sent yet for this instruction. If not explicitly sent, it
+     * will be send once the {@link #complete()} method is invoked.
      * <p>
      * If the incoming instruction has no instruction ID, this method does nothing.
      */
     void sendAck();
 
     /**
-     * Sends a negative acknowledgement, indicating that the incoming message could not be handled as
-     * expected. Unlike {@link #sendNack(ErrorMessage)}, no specific error details are provided.
+     * Sends a negative acknowledgement, indicating that the incoming message could not be handled as expected. Unlike
+     * {@link #sendNack(ErrorMessage)}, no specific error details are provided. If not explicitly sent, it will be send
+     * once the {@link #completeWithError(ErrorMessage)} or {@link #completeWithError(ErrorCategory, String)} methods
+     * are invoked.
+     * <p>
+     * If the incoming instruction has no instruction ID, this method does nothing.
      *
      * @see #sendNack(ErrorMessage)
      */
@@ -73,8 +75,12 @@ public interface ReplyChannel<T> {
     }
 
     /**
-     * Sends a negative acknowledgement, indicating that the incoming message could not be handled as
-     * expected, using given {@code errorMessage} to describe the reason.
+     * Sends a negative acknowledgement, indicating that the incoming message could not be handled as expected, using
+     * given {@code errorMessage} to describe the reason. If not explicitly sent, it will be send once the {@link
+     * #completeWithError(ErrorMessage)} or {@link #completeWithError(ErrorCategory, String)} methods are invoked. The
+     * given {@code errorMessage} should provide sufficient information about the error.
+     * <p>
+     * If the incoming instruction has no instruction ID, this method does nothing.
      */
     void sendNack(ErrorMessage errorMessage);
 
@@ -87,7 +93,7 @@ public interface ReplyChannel<T> {
      * Marks the inbound instruction as exceptionally completed. The given {@code errorMessage} should provide
      * sufficient information about the error.
      *
-     * @param errorMessage The ErrorMessage describing the error
+     * @param errorMessage the ErrorMessage describing the error
      */
     void completeWithError(ErrorMessage errorMessage);
 
@@ -95,8 +101,8 @@ public interface ReplyChannel<T> {
      * Marks the inbound instruction as exceptionally completed. The given {@code errorCategory} and {@code message}
      * should provide sufficient information about the error.
      *
-     * @param errorCategory The category that best described the error encountered
-     * @param message       A message providing more details about the Error
+     * @param errorCategory the category that best described the error encountered
+     * @param message       a message providing more details about the Error
      */
     void completeWithError(ErrorCategory errorCategory, String message);
 }

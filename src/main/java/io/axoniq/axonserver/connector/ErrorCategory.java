@@ -87,5 +87,4 @@ public enum ErrorCategory {
     public String errorCode() {
         return errorCode;
     }
-
 }

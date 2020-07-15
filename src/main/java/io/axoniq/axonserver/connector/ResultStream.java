@@ -26,14 +26,16 @@ import java.util.concurrent.TimeUnit;
  * such case, for example, there is no guarantee that a {@code peek()} followed by a {@code nextIfAvailable()} will
  * yield the same message.
  *
- * @param <T>
+ * @param <T> the result type returned by this {@link ResultStream}
  */
 public interface ResultStream<T> extends AutoCloseable {
+
     /**
-     * Returns the next available element in the stream, if available, without consuming it from the stream. Will
-     * return {@code null} when no element is available, or when the stream has been closed.
+     * Returns the next available element in the stream, if available, without consuming it from the stream. Will return
+     * {@code null} when no element is available, or when the stream has been closed.
      *
-     * @return the next available element in the stream, or {@code null} if none available, or if the stream is closed
+     * @return the next available element in the stream, or {@code null} if none is available, or if the stream is
+     * closed
      */
     T peek();
 
@@ -41,21 +43,20 @@ public interface ResultStream<T> extends AutoCloseable {
      * Consumes the next available element in the stream, if available. Will return {@code null} if no element is
      * available immediately.
      *
-     * @return the next available element in the stream, or {@code null} if none available or if the stream is closed
+     * @return the next available element in the stream, or {@code null} if none is available, or if the stream is
+     * closed
      */
     T nextIfAvailable();
 
     /**
-     * Consumes the next available element in the stream, waiting for at most {@code timeout} (in given {@code unit}
-     * for an element to become available. Of no element is available with the given timeout, or if the stream has been
+     * Consumes the next available element in the stream, waiting for at most {@code timeout} (in given {@code unit})
+     * for an element to become available. If no element is available with the given timeout, or if the stream has been
      * closed, it returns {@code null}.
      *
-     * @param timeout The amount of time to wait for an element to become available
-     * @param unit    The unit of time in which the timeout is expressed
-     *
-     * @return the next available element in the stream, or {@code null} if none available
-     * @throws InterruptedException when the Thread is interrupted while waiting
-     *                              for an element to become available
+     * @param timeout the amount of time to wait for an element to become available
+     * @param unit    the unit of time in which the timeout is expressed
+     * @return the next available element in the stream, or {@code null} if none is available
+     * @throws InterruptedException when the Thread is interrupted while waiting for an element to become available
      * @see #isClosed()
      */
     T nextIfAvailable(long timeout, TimeUnit unit) throws InterruptedException;
@@ -75,27 +76,26 @@ public interface ResultStream<T> extends AutoCloseable {
     // TODO - Allow for a method the returns a CompletableFuture<T> which completes when the next available item is available (or immediately, if one is already available).
 
     /**
-     * Sets the callback to execute when data is available for reading, or the stream has been closed. Note that any
-     * registration will replace the previous one.
+     * Sets the given {@code callback} to execute when data is available for reading, or the stream has been closed.
+     * Note that <em>any</em> registration will replace the previous one.
      * <p>
      * The callback is invoked in the publisher's thread. Invocations should be as short as possible, preferably
      * delegating to a reader thead, instead of accessing the entries directly.
      *
-     * @param r
+     * @param callback a {{@link Runnable}} to {@link Runnable#run()} when the next entry becomes available
      */
-    void onAvailable(Runnable r);
+    void onAvailable(Runnable callback);
 
     /**
-     * Requests the current stream to be closed. It is up to the publisher end of the stream to honor the request.
+     * Requests the current stream to be closed. It is up to the publishing end of the stream to honor the request.
      * <p>
      * Any elements received before closing are still available for reading.
      */
     void close();
 
     /**
-     * Indicates whether the current stream is closed for further reading. Note that this method will also return
-     * {@code false} in case the stream is closed by the element provider, but there are still elements awaiting
-     * consumption.
+     * Indicates whether the current stream is closed for further reading. Note that this method will also return {@code
+     * false} in case the stream is closed by the element provider, but there are still elements awaiting consumption.
      *
      * @return {@code true} if the stream is closed for further reading, otherwise {@code false}
      */

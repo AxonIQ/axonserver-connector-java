@@ -52,15 +52,15 @@ public interface AxonServerConnection {
     boolean isConnected();
 
     /**
-     * Disconnects all communication channels and terminates any active network connections to AxonServer. No
-     * more operations can be performed on this connection after invoking <em>disconnect()</em>.
+     * Disconnects all communication channels and terminates any active network connections to AxonServer. No more
+     * operations can be performed on this connection after invoking <em>{@code disconnect()}</em>.
      */
     void disconnect();
 
     /**
-     * Returns the channel on which platform control messages can be sent and received
+     * Returns the channel on which platform control messages can be sent and received.
      *
-     * @return the channel for platform instruction
+     * @return the channel for platform instructions
      */
     ControlChannel controlChannel();
 

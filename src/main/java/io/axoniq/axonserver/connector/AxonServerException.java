@@ -34,48 +34,53 @@ public class AxonServerException extends RuntimeException {
     /**
      * Initialize the exception for the error reported in the given {@code errorMessage}.
      *
-     * @param errorMessage The ErrorMessage provided by AxonServer to describe the error
+     * @param errorMessage the ErrorMessage provided by AxonServer to describe the error
      */
     public AxonServerException(ErrorMessage errorMessage) {
-        this(ErrorCategory.getFromCode(errorMessage.getErrorCode()), errorMessage.getMessage(), errorMessage.getLocation(), errorMessage.getDetailsList(), null);
+        this(ErrorCategory.getFromCode(errorMessage.getErrorCode()),
+             errorMessage.getMessage(),
+             errorMessage.getLocation(),
+             errorMessage.getDetailsList(),
+             null);
     }
 
     /**
-     * Initialize the exception for an error in given {@code errorCategory}, explained in given {@code message}, which
-     * occurred in given {@code location}.
+     * Initialize the exception for an error in the given {@code errorCategory}, explained by the given {@code message},
+     * which occurred in given {@code location}.
      *
-     * @param errorCategory The category of error occurring
-     * @param message       The message describing the exception
-     * @param location      The location (AxonServer, client Id) where the error occurred
+     * @param errorCategory the category of error occurring
+     * @param message       the message describing the exception
+     * @param location      the location (AxonServer, client Id) where the error occurred
      */
     public AxonServerException(ErrorCategory errorCategory, String message, String location) {
         this(errorCategory, message, location, Collections.emptyList(), null);
     }
 
     /**
-     * Initialize the exception for an error in given {@code errorCategory}, explained in given {@code message}, which
-     * occurred in given {@code location} and caused by given {@code cause}.
+     * Initialize the exception for an error in the given {@code errorCategory}, explained by the given {@code message},
+     * which occurred in given {@code location} and caused by the given {@code cause}.
      *
-     * @param errorCategory The category of error occurring
-     * @param message       The message describing the exception
-     * @param location      The location (AxonServer, client Id) where the error occurred
-     * @param cause         The underlying cause of the exception. May be {@code null}
+     * @param errorCategory the category of error occurring
+     * @param message       the message describing the exception
+     * @param location      the location (AxonServer, client Id) where the error occurred
+     * @param cause         the underlying cause of the exception. May be {@code null}
      */
     public AxonServerException(ErrorCategory errorCategory, String message, String location, Throwable cause) {
         this(errorCategory, message, location, Collections.emptyList(), cause);
     }
 
     /**
-     * Initialize the exception for an error in given {@code errorCategory}, explained in given {@code message} and
-     * {@code details}, which occurred in given {@code location} and caused by given {@code cause}.
+     * Initialize the exception for an error in the given {@code errorCategory}, explained by the given {@code message}
+     * and {@code details}, which occurred in given {@code location} and caused by the given {@code cause}.
      *
-     * @param errorCategory The category of error occurring
-     * @param message       The message describing the exception
-     * @param location      The location (AxonServer, client Id) where the error occurred
-     * @param details       A list of messages detailing underlying causes
-     * @param cause         The underlying cause of the exception. May be {@code null}
+     * @param errorCategory the category of error occurring
+     * @param message       the message describing the exception
+     * @param location      the location (AxonServer, client Id) where the error occurred
+     * @param details       a list of messages detailing underlying causes
+     * @param cause         the underlying cause of the exception. May be {@code null}
      */
-    public AxonServerException(ErrorCategory errorCategory, String message, String location, List<String> details, Throwable cause) {
+    public AxonServerException(ErrorCategory errorCategory, String message, String location, List<String> details,
+                               Throwable cause) {
         super("[" + errorCategory.errorCode() + "] " + message, cause);
         this.errorCategory = errorCategory;
         this.location = location;

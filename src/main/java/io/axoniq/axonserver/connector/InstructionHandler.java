@@ -18,6 +18,9 @@ package io.axoniq.axonserver.connector;
 
 /**
  * Interface describing a component that is capable of handling instructions coming from AxonServer.
+ *
+ * @param <I> the type of the instruction handled by this handler
+ * @param <R> the type of response used by {@link #handle(Object, ReplyChannel)}'s {@link ReplyChannel}
  */
 @FunctionalInterface
 public interface InstructionHandler<I, R> {
@@ -30,5 +33,4 @@ public interface InstructionHandler<I, R> {
      * @param replyChannel the channel onto which replies and acknowledgements to send
      */
     void handle(I instruction, ReplyChannel<R> replyChannel);
-
 }
