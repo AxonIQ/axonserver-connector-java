@@ -29,16 +29,15 @@ public interface AppendEventsTransaction {
     /**
      * Append the given event to be committed as part of this transaction.
      *
-     * @param event The event to append
-     *
+     * @param event the event to append
      * @return this instance for fluent interfacing
      */
     AppendEventsTransaction appendEvent(Event event);
 
     /**
-     * Commit this transaction, appending all registered events into the event store.
+     * Commit this transaction, appending all registered events into the Event Store.
      *
-     * @return a CompletableFuture resolving the confirmation of the successful processing of the transaction.
+     * @return a CompletableFuture resolving the confirmation of the successful processing of the transaction
      */
     CompletableFuture<Confirmation> commit();
 

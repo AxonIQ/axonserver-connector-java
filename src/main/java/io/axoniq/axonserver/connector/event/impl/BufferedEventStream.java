@@ -27,14 +27,29 @@ import org.slf4j.LoggerFactory;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.nonNullOrDefault;
 
-public class BufferedEventStream extends AbstractBufferedStream<EventWithToken, GetEventsRequest> implements EventStream {
+/**
+ * Buffering implementation of the {@link EventStream} used for Event processing.
+ */
+public class BufferedEventStream
+        extends AbstractBufferedStream<EventWithToken, GetEventsRequest>
+        implements EventStream {
 
     private static final Logger logger = LoggerFactory.getLogger(BufferedEventStream.class);
+
     private static final EventWithToken TERMINAL_MESSAGE = EventWithToken.newBuilder().setToken(-1729).build();
 
     private final long trackingToken;
     private final boolean forceReadFromLeader;
 
+    /**
+     * Construct a {@link BufferedEventStream}, starting a position {@code trackingToken} with the given {@code
+     * bufferSize}.
+     *
+     * @param trackingToken       the position to start this {@link BufferedEventStream} at
+     * @param bufferSize          the buffer size of this event stream
+     * @param refillBatch         the number of Events to consume prior refilling the buffer
+     * @param forceReadFromLeader a {@code boolean} defining whether Events <b>must</b> be read from the leader
+     */
     public BufferedEventStream(long trackingToken, int bufferSize, int refillBatch, boolean forceReadFromLeader) {
         super("unused", bufferSize, refillBatch);
         this.trackingToken = trackingToken;
@@ -65,12 +80,11 @@ public class BufferedEventStream extends AbstractBufferedStream<EventWithToken, 
 
     @Override
     public void excludePayloadType(String payloadType, String revision) {
-        GetEventsRequest request = GetEventsRequest.newBuilder()
-                                                   .addBlacklist(PayloadDescription.newBuilder()
-                                                                                   .setType(payloadType)
-                                                                                   .setRevision(nonNullOrDefault(revision, ""))
-                                                                                   .build())
-                                                   .build();
+        PayloadDescription payloadToExclude = PayloadDescription.newBuilder()
+                                                                .setType(payloadType)
+                                                                .setRevision(nonNullOrDefault(revision, ""))
+                                                                .build();
+        GetEventsRequest request = GetEventsRequest.newBuilder().addBlacklist(payloadToExclude).build();
         logger.trace("Requesting exclusion of message type: {}", request);
         outboundStream().onNext(request);
     }

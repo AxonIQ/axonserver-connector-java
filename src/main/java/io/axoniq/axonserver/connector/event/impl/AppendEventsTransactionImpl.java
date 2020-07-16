@@ -25,11 +25,21 @@ import io.grpc.stub.StreamObserver;
 
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Implementation of the {@link AppendEventsTransaction} used to append events to the Event Store.
+ */
 public class AppendEventsTransactionImpl implements AppendEventsTransaction {
 
     private final StreamObserver<Event> stream;
     private final CompletableFuture<Confirmation> result;
 
+    /**
+     * Constructs a {@link AppendEventsTransactionImpl} used to append events to the Event Store.
+     *
+     * @param stream the {@link StreamObserver} of {@link Event} instances which should be appended
+     * @param result a {@link CompletableFuture} resolving the {@link Confirmation} of the successful processing of this
+     *               transaction
+     */
     public AppendEventsTransactionImpl(StreamObserver<Event> stream, CompletableFuture<Confirmation> result) {
         this.stream = stream;
         this.result = result;

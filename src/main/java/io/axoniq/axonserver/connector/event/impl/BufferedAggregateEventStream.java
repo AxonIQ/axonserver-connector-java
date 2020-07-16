@@ -22,16 +22,29 @@ import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.GetAggregateEventsRequest;
 
-public class BufferedAggregateEventStream extends FlowControlledBuffer<Event, GetAggregateEventsRequest> implements AggregateEventStream {
+/**
+ * Buffering implementation of the {@link AggregateEventStream} used for Event Sourced Aggregates.
+ */
+public class BufferedAggregateEventStream
+        extends FlowControlledBuffer<Event, GetAggregateEventsRequest>
+        implements AggregateEventStream {
 
-    public static final Event TERMINAL_MESSAGE = Event.newBuilder().setAggregateSequenceNumber(-1729).build();
+    private static final Event TERMINAL_MESSAGE = Event.newBuilder().setAggregateSequenceNumber(-1729).build();
 
     private Event peeked;
 
+    /**
+     * Constructs a {@link BufferedAggregateEventStream} with a buffer size of {@link Integer#MAX_VALUE}.
+     */
     public BufferedAggregateEventStream() {
         this(Integer.MAX_VALUE);
     }
 
+    /**
+     * Constructs a {@link BufferedAggregateEventStream} with the given {@code bufferSize}.
+     *
+     * @param bufferSize the buffer size of the aggregate event stream
+     */
     public BufferedAggregateEventStream(int bufferSize) {
         super("unused", bufferSize, 0);
     }

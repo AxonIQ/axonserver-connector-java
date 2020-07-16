@@ -25,8 +25,8 @@ import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 /**
- * A stream of Events for a single Aggregate. The operations on this stream are blocking and intended for Event
- * Sourcing purposes, where an Aggregate's state needs to be reconstructed based on historic events.
+ * A stream of Events for a single Aggregate. The operations on this stream are blocking and intended for Event Sourcing
+ * purposes, where an Aggregate's state needs to be reconstructed based on historic events.
  */
 public interface AggregateEventStream {
 
@@ -42,8 +42,8 @@ public interface AggregateEventStream {
     Event next() throws InterruptedException;
 
     /**
-     * Indicates whether a new event is available. This method may block while waiting for a confirmation if an event
-     * is available for reading.
+     * Indicates whether a new event is available. This method may block while waiting for a confirmation if an event is
+     * available for reading.
      *
      * @return {@code true} if a message is available, or {@code false} if the stream has reached the end
      */
@@ -60,7 +60,7 @@ public interface AggregateEventStream {
      * parallel to the returned stream, as this may provide undefined results on the availability of events in either
      * stream instance.
      *
-     * @return a Stream containing the Events contained in this stream.
+     * @return a Stream containing the Events contained in this stream
      */
     default Stream<Event> asStream() {
         return StreamSupport.stream(new Spliterator<Event>() {
@@ -94,5 +94,4 @@ public interface AggregateEventStream {
             }
         }, false);
     }
-
 }

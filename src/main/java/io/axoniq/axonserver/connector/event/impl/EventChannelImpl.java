@@ -39,13 +39,24 @@ import io.grpc.stub.StreamObserver;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 
+/**
+ * {@link EventChannel} implementation, serving as the event connection between AxonServer and a client application.
+ */
 public class EventChannelImpl extends AbstractAxonServerChannel implements EventChannel {
 
-    public static final ReadHighestSequenceNrResponse UNKNOWN_HIGHEST_SEQ = ReadHighestSequenceNrResponse.newBuilder().setToSequenceNr(-1).build();
-    public static final TrackingToken NO_TOKEN_AVAILABLE = TrackingToken.newBuilder().setToken(-1).build();
+    private static final ReadHighestSequenceNrResponse UNKNOWN_HIGHEST_SEQ =
+            ReadHighestSequenceNrResponse.newBuilder().setToSequenceNr(-1).build();
+    private static final TrackingToken NO_TOKEN_AVAILABLE = TrackingToken.newBuilder().setToken(-1).build();
+
     private final EventStoreGrpc.EventStoreStub eventStore;
     // guarded by -this-
 
+    /**
+     * Constructs a {@link EventChannelImpl}.
+     *
+     * @param executor a {@link ScheduledExecutorService} used to schedule reconnects of this channel
+     * @param channel  the {@link AxonServerManagedChannel} used to form the connection with AxonServer
+     */
     public EventChannelImpl(ScheduledExecutorService executor, AxonServerManagedChannel channel) {
         super(executor, channel);
         eventStore = EventStoreGrpc.newStub(channel);
@@ -85,7 +96,10 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
 
     @Override
     public EventStream openStream(long token, int bufferSize, int refillBatch, boolean forceReadFromLeader) {
-        BufferedEventStream buffer = new BufferedEventStream(token, Math.max(64, bufferSize), Math.max(16, Math.min(bufferSize, refillBatch)), forceReadFromLeader);
+        BufferedEventStream buffer = new BufferedEventStream(token,
+                                                             Math.max(64, bufferSize),
+                                                             Math.max(16, Math.min(bufferSize, refillBatch)),
+                                                             forceReadFromLeader);
         //noinspection ResultOfMethodCallIgnored
         eventStore.listEvents(buffer);
         buffer.enableFlowControl();
@@ -101,7 +115,9 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
     }
 
     @Override
-    public AggregateEventStream openAggregateStream(String aggregateIdentifier, long initialSequence, long maxSequence) {
+    public AggregateEventStream openAggregateStream(String aggregateIdentifier,
+                                                    long initialSequence,
+                                                    long maxSequence) {
         return doGetAggregateStream(GetAggregateEventsRequest.newBuilder()
                                                              .setAggregateId(aggregateIdentifier)
                                                              .setInitialSequence(initialSequence)
@@ -111,20 +127,25 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
 
     @Override
     public CompletableFuture<Confirmation> appendSnapshot(Event snapshotEvent) {
-        FutureStreamObserver<Confirmation> result = new FutureStreamObserver<>(Confirmation.newBuilder().setSuccess(false).build());
+        FutureStreamObserver<Confirmation> result =
+                new FutureStreamObserver<>(Confirmation.newBuilder().setSuccess(false).build());
         eventStore.appendSnapshot(snapshotEvent, result);
         return result;
     }
 
     @Override
-    public AggregateEventStream loadSnapshots(String aggregateIdentifier, long initialSequence, long maxSequence, int maxResults) {
+    public AggregateEventStream loadSnapshots(String aggregateIdentifier,
+                                              long initialSequence,
+                                              long maxSequence,
+                                              int maxResults) {
         BufferedAggregateEventStream buffer = new BufferedAggregateEventStream(maxResults);
         eventStore.listAggregateSnapshots(GetAggregateSnapshotsRequest.newBuilder()
-                                                                            .setInitialSequence(initialSequence)
-                                                                            .setMaxResults(maxResults)
-                                                                            .setMaxSequence(maxSequence)
-                                                                            .setAggregateId(aggregateIdentifier)
-                                                                            .build(), buffer);
+                                                                      .setInitialSequence(initialSequence)
+                                                                      .setMaxResults(maxResults)
+                                                                      .setMaxSequence(maxSequence)
+                                                                      .setAggregateId(aggregateIdentifier)
+                                                                      .build(),
+                                          buffer);
         return buffer;
     }
 
@@ -154,5 +175,4 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
         eventStore.listAggregateEvents(request, buffer);
         return buffer;
     }
-
 }

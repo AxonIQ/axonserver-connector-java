@@ -26,14 +26,13 @@ import io.axoniq.axonserver.grpc.event.EventWithToken;
 public interface EventStream extends ResultStream<EventWithToken> {
 
     /**
-     * Instructs AxonServer to not send messages with the given {@code payloadType} and {@code revision}. This method
-     * is in no way a guarantee that these message will no longer be sent at all. Some messages may already have been
-     * en-route, and AxonServer may decide to send messages every once in a while as a "beacon" to relay progress of
-     * the tracking token. It may choose, however, to omit the actual payload, in that case.
+     * Instructs AxonServer to <em>not</em> send messages with the given {@code payloadType} and {@code revision}. This
+     * method is in no way a guarantee that these message will no longer be sent at all. Some messages may already have
+     * been en-route, and AxonServer may decide to send messages every once in a while as a "beacon" to relay progress
+     * of the tracking token. It may choose, however, to omit the actual payload, in that case.
      *
-     * @param payloadType The type of payload to exclude from the stream
-     * @param revision    The revision of the payload to exclude from the stream
+     * @param payloadType the type of payload to exclude from the stream
+     * @param revision    the revision of the payload to exclude from the stream
      */
     void excludePayloadType(String payloadType, String revision);
-
 }
