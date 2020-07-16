@@ -24,19 +24,35 @@ import io.axoniq.axonserver.grpc.query.SubscriptionQueryRequest;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * Buffer for {@link SubscriptionQuery} updates.
+ */
 public class SubscriptionQueryUpdateBuffer extends AbstractBufferedStream<QueryUpdate, SubscriptionQueryRequest> {
 
     private static final QueryUpdate TERMINAL_MESSAGE = QueryUpdate.newBuilder().setClientId("__terminal__").build();
+
     private final AtomicBoolean closed = new AtomicBoolean();
     private final String subscriptionQueryId;
     private final int refillBatch;
     private final SubscriptionQueryRequest refillRequest;
 
+    /**
+     * Instantiates a {@link SubscriptionQueryUpdateBuffer}.
+     *
+     * @param clientId            the identifier of the client initiating the subscription query
+     * @param subscriptionQueryId the identifier of the subscription query this buffer buffers for
+     * @param bufferSize          the size of this buffer
+     * @param refillBatch         the number of updates to be consumed prior to refilling this buffer
+     */
     public SubscriptionQueryUpdateBuffer(String clientId, String subscriptionQueryId, int bufferSize, int refillBatch) {
         super(clientId, bufferSize, refillBatch);
         this.subscriptionQueryId = subscriptionQueryId;
         this.refillBatch = refillBatch;
-        this.refillRequest = SubscriptionQueryRequest.newBuilder().setFlowControl(SubscriptionQuery.newBuilder().setNumberOfPermits(refillBatch).build()).build();
+        this.refillRequest = SubscriptionQueryRequest.newBuilder()
+                                                     .setFlowControl(SubscriptionQuery.newBuilder()
+                                                                                      .setNumberOfPermits(refillBatch)
+                                                                                      .build())
+                                                     .build();
     }
 
     @Override
@@ -49,7 +65,11 @@ public class SubscriptionQueryUpdateBuffer extends AbstractBufferedStream<QueryU
         if (refillBatch == flowControl.getPermits()) {
             return refillRequest;
         }
-        return SubscriptionQueryRequest.newBuilder().setFlowControl(SubscriptionQuery.newBuilder().setNumberOfPermits(flowControl.getPermits()).build()).build();
+        return SubscriptionQueryRequest.newBuilder()
+                                       .setFlowControl(SubscriptionQuery.newBuilder()
+                                                                        .setNumberOfPermits(flowControl.getPermits())
+                                                                        .build())
+                                       .build();
     }
 
     @Override
@@ -81,7 +101,11 @@ public class SubscriptionQueryUpdateBuffer extends AbstractBufferedStream<QueryU
     @Override
     public void close() {
         if (!closed.getAndSet(true)) {
-            outboundStream().onNext(SubscriptionQueryRequest.newBuilder().setUnsubscribe(SubscriptionQuery.newBuilder().setSubscriptionIdentifier(subscriptionQueryId).build()).build());
+            SubscriptionQuery subscriptionQueryToUnsubscribe =
+                    SubscriptionQuery.newBuilder().setSubscriptionIdentifier(subscriptionQueryId).build();
+            outboundStream().onNext(SubscriptionQueryRequest.newBuilder()
+                                                            .setUnsubscribe(subscriptionQueryToUnsubscribe)
+                                                            .build());
             // complete the buffer
             onCompleted();
             // complete the stream to the server

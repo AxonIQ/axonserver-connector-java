@@ -24,7 +24,7 @@ import io.axoniq.axonserver.grpc.query.QueryUpdate;
 import io.axoniq.axonserver.grpc.query.SubscriptionQuery;
 
 /**
- * Interface representing a component that can handle queries
+ * Interface representing a component that can handle queries.
  */
 @FunctionalInterface
 public interface QueryHandler {
@@ -32,26 +32,25 @@ public interface QueryHandler {
     /**
      * Handle the given {@code query}, using given {@code responseHandler} to send the response(s).
      * <p>
-     * Note that the query <em>must</em> be completed using {@link ReplyChannel#complete()}
-     * or {@link ReplyChannel#sendLast(Object)}.
+     * Note that the query <em>must</em> be completed using {@link ReplyChannel#complete()} or {@link
+     * ReplyChannel#sendLast(Object)}.
      *
-     * @param query           The message representing the query reqyest
-     * @param responseHandler To send the responses
+     * @param query           the message representing the query request
+     * @param responseHandler to handler to send responses with
      */
     void handle(QueryRequest query, ReplyChannel<QueryResponse> responseHandler);
 
     /**
-     * Registers an incoming subscription query request, represented by given {@code query}, using given
-     * {@code updateHandler} to send updates when the projection for this query changes.
+     * Registers an incoming subscription query request, represented by given {@code query}, using given {@code
+     * updateHandler} to send updates when the projection for this query changes.
      * <p>
      * If this handler doesn't support subscription queries for the given {@code query}, it should return {@code null}.
      * Otherwise, it must return a handle that can be used to cancel the subscription query.
      *
-     * @param query         The message representing the query
-     * @param updateHandler To send updates
-     *
+     * @param query         the message representing the query
+     * @param updateHandler to handler to send updates with
      * @return a registration to cancel the subscription, or {@code null} if this handler doesn't support the
-     * subscription query.
+     * subscription query
      */
     default Registration registerSubscriptionQuery(SubscriptionQuery query, UpdateHandler updateHandler) {
         return null;
@@ -65,7 +64,7 @@ public interface QueryHandler {
         /**
          * Send the given {@code queryUpdate} in response to the subscription query this handler was provided for.
          *
-         * @param queryUpdate The update to send
+         * @param queryUpdate the update to send
          */
         void sendUpdate(QueryUpdate queryUpdate);
 
@@ -74,6 +73,5 @@ public interface QueryHandler {
          * sending the subscription query is requested to close the subscription.
          */
         void complete();
-
     }
 }
