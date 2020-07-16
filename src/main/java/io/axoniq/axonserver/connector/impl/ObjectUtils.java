@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2010-2020. Axon Framework
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,10 +32,12 @@ public class ObjectUtils {
         return instance;
     }
 
-    public static <T> void doIfNotNull(T instance, Consumer<T> action) {
+    public static <T> OrElse doIfNotNull(T instance, Consumer<T> action) {
         if (instance != null) {
             action.accept(instance);
+            return OrElse.ignore();
         }
+        return OrElse.execute();
     }
 
     public static <T> void silently(T instance, Consumer<T> action) {
@@ -60,4 +62,29 @@ public class ObjectUtils {
         return sb.toString();
     }
 
+    public static class OrElse {
+
+        private static final OrElse IGNORE = new OrElse(false);
+        private static final OrElse EXECUTE = new OrElse(true);
+
+        private final boolean executeRunnable;
+
+        public OrElse(boolean executeRunnable) {
+            this.executeRunnable = executeRunnable;
+        }
+
+        private static OrElse ignore() {
+            return IGNORE;
+        }
+
+        public static OrElse execute() {
+            return EXECUTE;
+        }
+
+        public void orElse(Runnable runnable) {
+            if (executeRunnable) {
+                runnable.run();
+            }
+        }
+    }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2010-2020. Axon Framework
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -137,9 +137,9 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
     }
 
     @Override
-    public Registration registerInstructionHandler(PlatformOutboundInstruction.RequestCase type, InstructionHandler handler) {
+    public Registration registerInstructionHandler(PlatformOutboundInstruction.RequestCase type, InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> handler) {
         instructionHandlers.put(type, handler);
-        return () -> instructionHandlers.remove(type, handler);
+        return new SyncRegistration(() -> instructionHandlers.remove(type, handler));
     }
 
     @Override
@@ -149,12 +149,11 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
         if (infoSupplierActive.compareAndSet(false, true)) {
             // first processor is registered
             sendScheduledProcessorInfo();
-
         }
-        return () -> {
+        return new SyncRegistration(() -> {
             processorInstructionHandlers.remove(processorName, instructionHandler);
             processorInfoSuppliers.remove(processorName, infoSupplier);
-        };
+        });
     }
 
     private void sendScheduledProcessorInfo() {

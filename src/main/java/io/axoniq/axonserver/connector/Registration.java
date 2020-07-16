@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2010-2020. Axon Framework
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,10 @@
 
 package io.axoniq.axonserver.connector;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
 /**
  * Interface describing a registration that can be cancelled.
  */
@@ -27,5 +31,14 @@ public interface Registration {
      * cancelled, or when the registration was undone by another mechanism (such as a new registration overriding this
      * one).
      */
-    void cancel();
+    CompletableFuture<Void> cancel();
+
+    default Registration awaitAck(long timeout, TimeUnit unit) throws TimeoutException, InterruptedException {
+        return this;
+    }
+
+    default Registration onAck(Runnable runnable) {
+        runnable.run();
+        return this;
+    }
 }

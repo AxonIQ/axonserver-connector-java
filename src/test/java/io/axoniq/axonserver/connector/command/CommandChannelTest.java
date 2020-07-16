@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2010-2020. Axon Framework
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,7 +75,7 @@ class CommandChannelTest extends AbstractAxonServerIntegrationTest {
         CommandChannel commandChannel = connection1.commandChannel();
         Registration registration = commandChannel.registerCommandHandler(this::mockHandler, 100, "testCommand");
 
-        registration.cancel();
+        registration.cancel().get(1, TimeUnit.SECONDS);
 
         CompletableFuture<CommandResponse> result = connection2.commandChannel().sendCommand(Command.newBuilder().setName("testCommand").build());
 
@@ -83,8 +83,9 @@ class CommandChannelTest extends AbstractAxonServerIntegrationTest {
 
         logger.info("Closing TCP connection to AxonServer");
         axonServerProxy.disable();
-        assertWithin(1000, TimeUnit.MILLISECONDS, () -> assertTrue(connection1.isConnectionFailed()));
-//Thread.sleep(1000);
+
+        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(connection1.isConnectionFailed()));
+
         logger.info("Re-enabling TCP connection to AxonServer");
         axonServerProxy.enable();
 
