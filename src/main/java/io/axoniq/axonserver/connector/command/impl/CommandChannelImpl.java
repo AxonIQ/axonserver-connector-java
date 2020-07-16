@@ -55,9 +55,14 @@ import java.util.function.Function;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
 
+/**
+ * {@link CommandChannel} implementation, serving as the command connection between AxonServer and a client
+ * application.
+ */
 public class CommandChannelImpl extends AbstractAxonServerChannel implements CommandChannel {
 
     private static final Logger logger = LoggerFactory.getLogger(CommandChannelImpl.class);
+
     private final AtomicReference<StreamObserver<CommandProviderOutbound>> outboundCommandStream = new AtomicReference<>();
     private final ClientIdentification clientIdentification;
     private final ConcurrentMap<String, Function<Command, CompletableFuture<CommandResponse>>> commandHandlers = new ConcurrentHashMap<>();
@@ -67,8 +72,19 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
     private final int permitsBatch;
     private final CommandServiceGrpc.CommandServiceStub commandServiceStub;
 
+    /**
+     * Constructs a {@link CommandChannelImpl}.
+     *
+     * @param clientIdentification the information identifying the client application which is connecting
+     * @param permits              an {@code int} defining the number of permits this channel has
+     * @param permitsBatch         an {@code int} defining the number of permits to be consumed from prior to requesting
+     *                             additional permits for this channel
+     * @param executor             a {@link ScheduledExecutorService} used to schedule reconnects of this channel
+     * @param channel              the {@link AxonServerManagedChannel} used to form the connection with AxonServer
+     */
     public CommandChannelImpl(ClientIdentification clientIdentification,
-                              int permits, int permitsBatch,
+                              int permits,
+                              int permitsBatch,
                               ScheduledExecutorService executor,
                               AxonServerManagedChannel channel) {
         super(executor, channel);
@@ -89,21 +105,29 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
             outbound.sendNack();
             handler = c -> noHandlerForCommand();
         }
+
         handler.apply(command)
                .exceptionally(e -> CommandResponse.newBuilder()
                                                   .setErrorCode(ErrorCategory.COMMAND_EXECUTION_ERROR.errorCode())
-                                                  .setErrorMessage(ErrorMessage.newBuilder().setMessage(e.getMessage()).build())
+                                                  .setErrorMessage(
+                                                          ErrorMessage.newBuilder()
+                                                                      .setMessage(e.getMessage())
+                                                                      .build()
+                                                  )
                                                   .build())
                .thenApply(CommandResponse::newBuilder)
                .thenApply(r -> r.setRequestIdentifier(command.getMessageIdentifier()))
-               .whenComplete((r, e) ->
-                                     outbound.send(CommandProviderOutbound.newBuilder().setCommandResponse(r).build()))
+               .whenComplete((r, e) -> outbound.send(
+                       CommandProviderOutbound.newBuilder().setCommandResponse(r).build()
+               ))
                .thenRun(outbound::complete);
     }
 
     private CompletableFuture<CommandResponse> noHandlerForCommand() {
         CompletableFuture<CommandResponse> r = new CompletableFuture<>();
-        r.completeExceptionally(new AxonServerException(ErrorCategory.NO_HANDLER_FOR_COMMAND, "No handler for command", clientIdentification.getClientId()));
+        r.completeExceptionally(new AxonServerException(ErrorCategory.NO_HANDLER_FOR_COMMAND,
+                                                        "No handler for command",
+                                                        clientIdentification.getClientId()));
         return r;
     }
 
@@ -126,9 +150,10 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
             // we're already connected on this channel
             return;
         }
-        IncomingCommandStream responseObserver = new IncomingCommandStream(clientIdentification.getClientId(),
-                                                                           permits, permitsBatch,
-                                                                           this::onConnectionError);
+        IncomingCommandStream responseObserver = new IncomingCommandStream(
+                clientIdentification.getClientId(), permits, permitsBatch, this::onConnectionError
+        );
+
         //noinspection ResultOfMethodCallIgnored
         commandServiceStub.openStream(responseObserver);
 
@@ -146,8 +171,8 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
 
     private void onConnectionError(Throwable error) {
         instructionsAwaitingAck.keySet().forEach(
-                k -> doIfNotNull(instructionsAwaitingAck.remove(k),
-                                 f -> f.completeExceptionally(error)));
+                k -> doIfNotNull(instructionsAwaitingAck.remove(k), f -> f.completeExceptionally(error))
+        );
         scheduleReconnect();
     }
 
@@ -167,7 +192,9 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
     }
 
     @Override
-    public Registration registerCommandHandler(Function<Command, CompletableFuture<CommandResponse>> handler, int loadFactor, String... commandNames) {
+    public Registration registerCommandHandler(Function<Command,
+            CompletableFuture<CommandResponse>> handler,
+                                               int loadFactor, String... commandNames) {
         for (String commandName : commandNames) {
             commandHandlers.put(commandName, handler);
             logger.info("Registered handler for command {}", commandName);
@@ -180,7 +207,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
 
     private void unsubscribe(Function<Command, CompletableFuture<CommandResponse>> handler, String... commandNames) {
         for (String commandName : commandNames) {
-            // TODO - Remove command handler only after sending the unsubsribe message and receiving successful ACK
+            // TODO - Remove command handler only after sending the unsubscribe message and receiving successful ACK
             if (commandHandlers.remove(commandName, handler)) {
                 sendUnsubscribe(commandName);
             }
@@ -191,10 +218,13 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
         doIfNotNull(outboundCommandStream.get(), s -> s.onNext(
                 CommandProviderOutbound.newBuilder()
                                        // TODO - Use instruction id and track with CompletableFuture
-                                       .setUnsubscribe(CommandSubscription.newBuilder()
-                                                                          .setCommand(commandName)
-                                                                          .setClientId(clientIdentification.getClientId())
-                                                                          .setComponentName(clientIdentification.getComponentName()))
+                                       .setUnsubscribe(
+                                               CommandSubscription
+                                                       .newBuilder()
+                                                       .setCommand(commandName)
+                                                       .setClientId(clientIdentification.getClientId())
+                                                       .setComponentName(clientIdentification.getComponentName())
+                                       )
                                        .build()
         ));
     }
@@ -206,9 +236,58 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
                                                                        .setMessageId(instructionId)
                                                                        .setCommand(commandName)
                                                                        .setClientId(clientIdentification.getClientId())
-                                                                       .setComponentName(clientIdentification.getComponentName())
+                                                                       .setComponentName(clientIdentification
+                                                                                                 .getComponentName())
                                                                        .setLoadFactor(loadFactor))
                                       .build();
+    }
+
+    @Override
+    public CompletableFuture<CommandResponse> sendCommand(Command command) {
+        boolean hasRoutingKey = command.getProcessingInstructionsList()
+                                       .stream()
+                                       .anyMatch(pi -> pi.getKey() == ProcessingKey.ROUTING_KEY);
+        String messageIdentifier = "".equals(command.getMessageIdentifier())
+                ? UUID.randomUUID().toString()
+                : command.getMessageIdentifier();
+
+        Command.Builder toSend = Command.newBuilder(command)
+                                        .setMessageIdentifier(messageIdentifier)
+                                        .setClientId(clientIdentification.getClientId())
+                                        .setComponentName(clientIdentification.getComponentName());
+        if (!hasRoutingKey) {
+            toSend.addProcessingInstructions(
+                    ProcessingInstruction.newBuilder()
+                                         .setKey(ProcessingKey.ROUTING_KEY)
+                                         .setValue(
+                                                 MetaDataValue.newBuilder()
+                                                              .setTextValue(toSend.getMessageIdentifier())
+                                         )
+            );
+        }
+        CompletableFuture<CommandResponse> response = new CompletableFuture<>();
+
+        try {
+            commandServiceStub.dispatch(
+                    toSend.build(), new CommandResponseHandler(clientIdentification.getClientId(), response)
+            );
+        } catch (OutOfDirectMemoryError e) {
+            // error thrown when Netty is out of buffer space to send this command
+            // unfortunately, the API doesn't allow us to detect this prior to sending
+            // TODO - Use a backpressure mechanism when this error occurs, instead of failing directly
+            response.completeExceptionally(new AxonServerException(ErrorCategory.COMMAND_DISPATCH_ERROR,
+                                                                   "Unable to buffer message for dispatching",
+                                                                   clientIdentification.getClientId(),
+                                                                   e));
+        } catch (Exception e) {
+            response.completeExceptionally(new AxonServerException(
+                    ErrorCategory.COMMAND_DISPATCH_ERROR,
+                    "An error occurred while attempting to dispatch a message",
+                    clientIdentification.getClientId(),
+                    e
+            ));
+        }
+        return response;
     }
 
     @Override
@@ -216,33 +295,6 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
         this.commandHandlers.keySet().forEach(this::sendUnsubscribe);
         // TODO: Wait for ACKs in CompletableFuture
         return CompletableFuture.completedFuture(null);
-    }
-
-    @Override
-    public CompletableFuture<CommandResponse> sendCommand(Command command) {
-        boolean hasRoutingKey = command.getProcessingInstructionsList().stream().anyMatch(pi -> pi.getKey() == ProcessingKey.ROUTING_KEY);
-        Command.Builder toSend = Command.newBuilder(command)
-                                        .setMessageIdentifier("".equals(command.getMessageIdentifier()) ? UUID.randomUUID().toString() : command.getMessageIdentifier())
-                                        .setClientId(clientIdentification.getClientId())
-                                        .setComponentName(clientIdentification.getComponentName());
-        if (!hasRoutingKey) {
-            toSend.addProcessingInstructions(ProcessingInstruction.newBuilder().setKey(ProcessingKey.ROUTING_KEY)
-                                                                  .setValue(MetaDataValue.newBuilder().setTextValue(toSend.getMessageIdentifier())));
-        }
-        CompletableFuture<CommandResponse> response = new CompletableFuture<>();
-
-
-        try {
-            commandServiceStub.dispatch(toSend.build(), new CommandResponseHandler(clientIdentification.getClientId(), response));
-        } catch (OutOfDirectMemoryError e) {
-            // error thrown when Netty is out of buffer space to send this command
-            // unfortunately, the API doesn't allow us to detect this prior to sending
-            // TODO - Use a backpressure mechanism when this error occurs, instead of failing directly
-            response.completeExceptionally(new AxonServerException(ErrorCategory.COMMAND_DISPATCH_ERROR, "Unable to buffer message for dispatching", clientIdentification.getClientId(), e));
-        } catch (Exception e) {
-            response.completeExceptionally(new AxonServerException(ErrorCategory.COMMAND_DISPATCH_ERROR, "An error occurred while attempting to dispatch a message", clientIdentification.getClientId(), e));
-        }
-        return response;
     }
 
     private static class CommandResponseHandler implements StreamObserver<CommandResponse> {
@@ -268,7 +320,8 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
                 // TODO - Check for flow control related errors and do backoff-retry.
                 response.completeExceptionally(new AxonServerException(ErrorCategory.COMMAND_DISPATCH_ERROR,
                                                                        "Received exception while dispatching command",
-                                                                       clientId, t));
+                                                                       clientId,
+                                                                       t));
             }
         }
 
@@ -282,9 +335,13 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
         }
     }
 
-    private class IncomingCommandStream extends AbstractIncomingInstructionStream<CommandProviderInbound, CommandProviderOutbound> {
+    private class IncomingCommandStream
+            extends AbstractIncomingInstructionStream<CommandProviderInbound, CommandProviderOutbound> {
 
-        public IncomingCommandStream(String clientId, int permits, int permitsBatch, Consumer<Throwable> disconnectHandler) {
+        public IncomingCommandStream(String clientId,
+                                     int permits,
+                                     int permitsBatch,
+                                     Consumer<Throwable> disconnectHandler) {
             super(clientId, permits, permitsBatch, disconnectHandler);
         }
 
@@ -304,7 +361,9 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
         }
 
         @Override
-        protected InstructionHandler<CommandProviderInbound, CommandProviderOutbound> getHandler(CommandProviderInbound request) {
+        protected InstructionHandler<CommandProviderInbound, CommandProviderOutbound> getHandler(
+                CommandProviderInbound request
+        ) {
             return handlers.get(request.getRequestCase());
         }
 

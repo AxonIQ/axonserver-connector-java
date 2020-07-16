@@ -30,14 +30,13 @@ public interface CommandChannel {
 
     /**
      * Registers the given {@code handler} to handle incoming commands with given {@code commandNames}, using the given
-     * {@code loadFactor}. If handlers had already been registered for any of the  given command names, this
-     * registration replaces the existing one for those command names. Other commands remain unaffected.
+     * {@code loadFactor}. If handlers had already been registered for any of the given command names, this registration
+     * replaces the existing one for those command names. Other commands remain unaffected.
      *
-     * @param handler      The handler to handle incoming commands with
-     * @param loadFactor   The relative load factor for this handler
-     * @param commandNames The names of the commands to register the handler for
-     *
-     * @return a registration which allows the command handlers to be unregistered.
+     * @param handler      the handler to handle incoming commands with
+     * @param loadFactor   the relative load factor for this handler
+     * @param commandNames the names of the commands to register the handler for
+     * @return a registration which allows the command handler to be unregistered
      */
     Registration registerCommandHandler(Function<Command, CompletableFuture<CommandResponse>> handler,
                                         int loadFactor,
@@ -46,11 +45,18 @@ public interface CommandChannel {
     /**
      * Sends the give Command to AxonServer for routing to an appropriate handler.
      *
-     * @param command The command to send
-     *
+     * @param command the command to send
      * @return a CompletableFuture providing the result of command execution
      */
     CompletableFuture<CommandResponse> sendCommand(Command command);
 
+    /**
+     * Prepares this {@link CommandChannel} to disconnect, by unsubscribing all registered command handlers. Will wait
+     * with a certain cut off until all acknowledgments of unsubscribing have been received.
+     * <p>
+     * This method should be used if a connected client wants to disconnect from AxonServer.
+     *
+     * @return a {@link CompletableFuture} of {@link Void} to react when all command handlers have been unsubscribed
+     */
     CompletableFuture<Void> prepareDisconnect();
 }
