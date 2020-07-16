@@ -192,9 +192,9 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
     }
 
     @Override
-    public Registration registerCommandHandler(Function<Command,
-            CompletableFuture<CommandResponse>> handler,
-                                               int loadFactor, String... commandNames) {
+    public Registration registerCommandHandler(Function<Command, CompletableFuture<CommandResponse>> handler,
+                                               int loadFactor,
+                                               String... commandNames) {
         for (String commandName : commandNames) {
             commandHandlers.put(commandName, handler);
             logger.info("Registered handler for command {}", commandName);
