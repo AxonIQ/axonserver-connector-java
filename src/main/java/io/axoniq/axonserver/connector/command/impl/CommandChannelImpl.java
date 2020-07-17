@@ -178,6 +178,24 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
     }
 
     @Override
+    public void reconnect() {
+        CompletableFuture<Void> unsubscribed = commandHandlers.keySet()
+                                                              .stream()
+                                                              .map(this::sendUnsubscribe)
+                                                              .reduce(CompletableFuture::allOf)
+                                                              .orElseGet(() -> CompletableFuture.completedFuture(null));
+
+        // TODO - Wait for all received commands to have returned their responses
+
+        StreamObserver<CommandProviderOutbound> previousOutbound = outboundCommandStream.getAndSet(null);
+
+        // when received commands are completed
+        unsubscribed.thenRun(() -> doIfNotNull(previousOutbound, StreamObserver::onCompleted));
+
+        scheduleImmediateReconnect();
+    }
+
+    @Override
     public void disconnect() {
         commandHandlers.keySet().forEach(this::sendUnsubscribe);
 

@@ -361,6 +361,12 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
     }
 
     @Override
+    public void reconnect() {
+        disconnect();
+        scheduleImmediateReconnect();
+    }
+
+    @Override
     public CompletableFuture<Void> prepareDisconnect() {
         CompletableFuture<Void> future = supportedQueries.stream()
                                                          .map(this::sendUnsubscribe)

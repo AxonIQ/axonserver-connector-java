@@ -33,17 +33,26 @@ public abstract class AbstractAxonServerChannel {
     }
 
     protected void scheduleReconnect() {
+        scheduleReconnect(false);
+    }
+    protected void scheduleImmediateReconnect() {
+        scheduleReconnect(true);
+    }
+
+    private void scheduleReconnect(boolean immediate) {
         executor.schedule(() -> {
             ConnectivityState connectivityState = channel.getState(false);
             if (connectivityState == ConnectivityState.READY) {
                 connect();
             } else {
-                scheduleReconnect();
+                scheduleReconnect(false);
             }
-        }, 500, TimeUnit.MILLISECONDS);
+        }, immediate ? 0 : 500, TimeUnit.MILLISECONDS);
     }
 
     public abstract void connect();
+
+    public abstract void reconnect();
 
     public abstract void disconnect();
 

@@ -58,6 +58,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
     private final ClientIdentification clientIdentification;
     private final ScheduledExecutorService executor;
     private final long processorUpdateFrequency;
+    private final Runnable reconnectHandler;
     private final AtomicReference<StreamObserver<PlatformInboundInstruction>> instructionDispatcher = new AtomicReference<>();
     private final Map<PlatformOutboundInstruction.RequestCase, InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction>> instructionHandlers = new EnumMap<>(PlatformOutboundInstruction.RequestCase.class);
     private final HeartbeatMonitor heartbeatMonitor;
@@ -70,12 +71,14 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
 
     public ControlChannelImpl(ClientIdentification clientIdentification, String context,
                               ScheduledExecutorService executor, AxonServerManagedChannel channel,
-                              long processorUpdateFrequency) {
+                              long processorUpdateFrequency,
+                              Runnable reconnectHandler) {
         super(executor, channel);
         this.clientIdentification = clientIdentification;
         this.context = context;
         this.executor = executor;
         this.processorUpdateFrequency = processorUpdateFrequency;
+        this.reconnectHandler = reconnectHandler;
         heartbeatMonitor = new HeartbeatMonitor(executor, this::sendHeartBeat, channel::forceReconnect);
         this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.ACK, i -> new AckHandler());
         this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.HEARTBEAT, i -> (msg, reply) -> heartbeatMonitor.handleIncomingBeat(reply));
@@ -85,7 +88,14 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
         this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.PAUSE_EVENT_PROCESSOR, i -> ProcessorInstructions.pauseHandler(processorInstructionHandlers));
         this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.RELEASE_SEGMENT, i -> ProcessorInstructions.releaseSegmentHandler(processorInstructionHandlers));
         this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.REQUEST_EVENT_PROCESSOR_INFO, i -> ProcessorInstructions.requestInfoHandler(processorInfoSuppliers));
+        this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.REQUEST_RECONNECT, i -> this::handleReconnectRequest);
         platformServiceStub = PlatformServiceGrpc.newStub(channel);
+    }
+
+    private void handleReconnectRequest(PlatformOutboundInstruction platformOutboundInstruction, ReplyChannel<PlatformInboundInstruction> replyChannel) {
+        logger.info("AxonServer requested reconnect");
+        replyChannel.sendAck();
+        reconnectHandler.run();
     }
 
     @Override
@@ -112,6 +122,12 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
             }
         }
 
+    }
+
+    @Override
+    public void reconnect() {
+        doIfNotNull(instructionDispatcher.getAndSet(null), StreamObserver::onCompleted);
+        scheduleImmediateReconnect();
     }
 
     private void handleDisconnect(Throwable cause) {

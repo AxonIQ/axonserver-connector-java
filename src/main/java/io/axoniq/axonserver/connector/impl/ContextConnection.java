@@ -55,7 +55,15 @@ public class ContextConnection implements AxonServerConnection {
         this.clientIdentification = clientIdentification;
         this.executorService = executorService;
         this.connection = connection;
-        this.controlChannel = new ControlChannelImpl(clientIdentification, context, executorService, connection, processorInfoUpdateFrequency);
+        this.controlChannel = new ControlChannelImpl(clientIdentification, context, executorService, connection, processorInfoUpdateFrequency, this::reconnectChannels);
+    }
+
+    private void reconnectChannels() {
+        connection.requestReconnect();
+        doIfNotNull(commandChannel.get(), CommandChannelImpl::reconnect);
+        doIfNotNull(queryChannel.get(), QueryChannelImpl::reconnect);
+        doIfNotNull(controlChannel, ControlChannelImpl::reconnect);
+        doIfNotNull(eventChannel.get(), EventChannelImpl::reconnect);
     }
 
     @Override
