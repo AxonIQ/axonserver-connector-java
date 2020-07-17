@@ -56,7 +56,7 @@ podTemplate(label: label,
     volumes: [
         hostPathVolume(mountPath: '/var/run/docker.sock', hostPath: '/var/run/docker.sock'),
         secretVolume(secretName: 'cacerts', mountPath: '/docker-java-home/lib/security'),
-        secretVolume(secretName: 'maven-settings', mountPath: '/maven_settings')
+        secretVolume(secretName: 'maven-allard-settings', mountPath: '/maven_settings')
     ]) {
         node(label) {
             def myRepo = checkout scm
