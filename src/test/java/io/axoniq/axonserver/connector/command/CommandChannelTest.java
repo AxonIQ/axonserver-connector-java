@@ -102,11 +102,11 @@ class CommandChannelTest extends AbstractAxonServerIntegrationTest {
 
         axonServerProxy.disable();
 
-        assertWithin(1, TimeUnit.SECONDS, () -> assertFalse(connection1.isConnected()));
+        assertWithin(1, TimeUnit.SECONDS, () -> assertFalse(connection1.isConnectionFailed()));
 
         axonServerProxy.enable();
 
-        assertWithin(2, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
+        assertWithin(3, TimeUnit.SECONDS, () -> assertTrue(connection1.isConnected()));
 
         Thread.sleep(100);
 

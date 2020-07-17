@@ -17,6 +17,8 @@
 package io.axoniq.axonserver.connector.impl;
 
 import io.grpc.ConnectivityState;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -25,6 +27,8 @@ import java.util.concurrent.TimeUnit;
  * Abstract class representing a channel with AxonServer.
  */
 public abstract class AbstractAxonServerChannel {
+
+    private static final Logger logger = LoggerFactory.getLogger(AbstractAxonServerChannel.class);
 
     private final ScheduledExecutorService executor;
     private final AxonServerManagedChannel channel;
@@ -54,15 +58,17 @@ public abstract class AbstractAxonServerChannel {
      * Schedule an immediate attempt to reconnect with AxonServer.
      */
     protected void scheduleImmediateReconnect() {
+        logger.debug("Scheduling immediate reconnect");
         scheduleReconnect(true);
     }
 
     private void scheduleReconnect(boolean immediate) {
         executor.schedule(() -> {
-            ConnectivityState connectivityState = channel.getState(false);
+            ConnectivityState connectivityState = channel.getState(immediate);
             if (connectivityState == ConnectivityState.READY) {
                 connect();
             } else {
+                logger.debug("No connection to AxonServer available. Scheduling next attempt in 500ms");
                 scheduleReconnect(false);
             }
         }, immediate ? 0 : 500, TimeUnit.MILLISECONDS);

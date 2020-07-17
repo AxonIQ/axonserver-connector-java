@@ -36,7 +36,9 @@ import io.axoniq.axonserver.grpc.event.ReadHighestSequenceNrResponse;
 import io.axoniq.axonserver.grpc.event.TrackingToken;
 import io.grpc.stub.StreamObserver;
 
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 
 /**
@@ -49,6 +51,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
     private static final TrackingToken NO_TOKEN_AVAILABLE = TrackingToken.newBuilder().setToken(-1).build();
 
     private final EventStoreGrpc.EventStoreStub eventStore;
+    private final Set<BufferedEventStream> buffers = ConcurrentHashMap.newKeySet();
     // guarded by -this-
 
     /**
@@ -69,12 +72,17 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
 
     @Override
     public void reconnect() {
-        // TODO - Disconnect all the long-living event stream requests
+        closeEventStreams();
     }
 
     @Override
     public void disconnect() {
-        // TODO - Disconnect all the long-living event stream requests
+        closeEventStreams();
+    }
+
+    private void closeEventStreams() {
+        buffers.forEach(BufferedEventStream::close);
+        buffers.clear();
     }
 
     @Override
@@ -105,8 +113,15 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
                                                              Math.max(64, bufferSize),
                                                              Math.max(16, Math.min(bufferSize, refillBatch)),
                                                              forceReadFromLeader);
-        //noinspection ResultOfMethodCallIgnored
-        eventStore.listEvents(buffer);
+        buffers.add(buffer);
+        buffer.onCloseRequested(() -> buffers.remove(buffer));
+        try {
+            //noinspection ResultOfMethodCallIgnored
+            eventStore.listEvents(buffer);
+        } catch (Exception e) {
+            buffers.remove(buffer);
+            throw e;
+        }
         buffer.enableFlowControl();
         return buffer;
     }

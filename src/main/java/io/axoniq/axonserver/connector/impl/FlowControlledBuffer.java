@@ -16,6 +16,9 @@
 
 package io.axoniq.axonserver.connector.impl;
 
+import io.axoniq.axonserver.connector.AxonServerException;
+import io.axoniq.axonserver.connector.ErrorCategory;
+
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -64,6 +67,10 @@ public abstract class FlowControlledBuffer<T, R> extends FlowControlledStream<T,
     @Override
     public void onCompleted() {
         buffer.offer(terminalMessage());
+    }
+
+    public void close() {
+        errorResult.set(new AxonServerException(ErrorCategory.OTHER, "Stream closed on client request", ""));
     }
 
     /**

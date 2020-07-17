@@ -18,7 +18,10 @@ package io.axoniq.axonserver.connector.impl;
 
 import io.axoniq.axonserver.connector.ResultStream;
 
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -34,6 +37,9 @@ public abstract class AbstractBufferedStream<T, R> extends FlowControlledBuffer<
     };
 
     private final AtomicReference<Runnable> onAvailableCallback = new AtomicReference<>(NO_OP);
+    private final Queue<Runnable> closeHandlers = new ConcurrentLinkedQueue<>();
+    private final AtomicBoolean closeRequested = new AtomicBoolean();
+    private final AtomicBoolean clientClosed = new AtomicBoolean();
 
     /**
      * Constructs an {@link AbstractBufferedStream}
@@ -71,12 +77,16 @@ public abstract class AbstractBufferedStream<T, R> extends FlowControlledBuffer<
     public void onError(Throwable t) {
         super.onError(t);
         onAvailableCallback.get().run();
+        closeRequested.set(true);
+        invokeCloseRequestHandlers();
     }
 
     @Override
     public void onCompleted() {
         super.onCompleted();
         onAvailableCallback.get().run();
+        closeRequested.set(true);
+        invokeCloseRequestHandlers();
     }
 
     @Override
@@ -103,6 +113,24 @@ public abstract class AbstractBufferedStream<T, R> extends FlowControlledBuffer<
 
     @Override
     public void close() {
-        outboundStream().onCompleted();
+        if(!clientClosed.getAndSet(true)) {
+            super.close();
+            outboundStream().onCompleted();
+        }
+    }
+
+    public void onCloseRequested(Runnable handler) {
+        this.closeHandlers.add(handler);
+        if (closeRequested.get()) {
+            invokeCloseRequestHandlers();
+        }
+    }
+
+    private void invokeCloseRequestHandlers() {
+        Runnable closeHandler;
+        do {
+            closeHandler = closeHandlers.poll();
+            ObjectUtils.doIfNotNull(closeHandler, Runnable::run);
+        } while (closeHandler != null);
     }
 }

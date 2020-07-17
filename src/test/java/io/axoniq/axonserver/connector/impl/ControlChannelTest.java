@@ -22,8 +22,13 @@ import eu.rekawek.toxiproxy.model.toxic.Timeout;
 import io.axoniq.axonserver.connector.AbstractAxonServerIntegrationTest;
 import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
+import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.connector.control.ProcessorInstructionHandler;
+import io.axoniq.axonserver.connector.event.EventStream;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo;
+import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
+import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
+import io.axoniq.axonserver.grpc.control.RequestReconnect;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -36,6 +41,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
@@ -92,7 +99,7 @@ class ControlChannelTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
-    void testEventProcessorInformationUpdated() {
+    void testEventProcessorInformationUpdated() throws TimeoutException, InterruptedException {
         client = AxonServerConnectionFactory.forClient(getClass().getSimpleName())
                                             .routingServers(axonServerAddress)
                                             .build();
@@ -106,6 +113,33 @@ class ControlChannelTest extends AbstractAxonServerIntegrationTest {
             JsonElement response = getFromAxonServer("/v1/components/" + getClass().getSimpleName() + "/processors?context=default");
             assertEquals("testProcessor", response.getAsJsonArray().get(0).getAsJsonObject().get("name").getAsString());
         });
+    }
+
+    @Test
+    void testConnectionResetOnReconnectRequest() {
+        AtomicInteger connectionCount = new AtomicInteger();
+        client = AxonServerConnectionFactory.forClient(getClass().getSimpleName())
+                                            .routingServers(axonServerAddress)
+                                            .forceReconnectViaRoutingServers(true)
+                                            .customize(b -> {
+                                                connectionCount.incrementAndGet();
+                                                return b;
+                                            })
+                                            .build();
+        AxonServerConnection connection1 = client.connect("default");
+
+        assertWithin(1, TimeUnit.SECONDS, () -> assertEquals(1, connectionCount.get()));
+
+        EventStream buffer = connection1.eventChannel().openStream(0, 10);
+
+        // simulate a request to reconnect from AxonServer
+        ReplyChannel<PlatformInboundInstruction> mockReplyChannel = mock(ReplyChannel.class);
+        ((ControlChannelImpl) connection1.controlChannel()).handleReconnectRequest(PlatformOutboundInstruction.newBuilder().setRequestReconnect(RequestReconnect.getDefaultInstance()).build(), mockReplyChannel);
+
+        assertWithin(5, TimeUnit.SECONDS, () -> assertEquals(2, connectionCount.get()));
+
+        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(buffer.isClosed(), "Expected Event Streams to be closed by reconnect request"));
+
     }
 
     @Test
@@ -135,7 +169,7 @@ class ControlChannelTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
-    void testSplitAndMergeInstructionIsPickedUpByHandler() {
+    void testSplitAndMergeInstructionIsPickedUpByHandler() throws TimeoutException, InterruptedException {
         client = AxonServerConnectionFactory.forClient(getClass().getSimpleName())
                                             .routingServers(axonServerAddress)
                                             .build();
@@ -143,8 +177,10 @@ class ControlChannelTest extends AbstractAxonServerIntegrationTest {
         ProcessorInstructionHandler instructionHandler = mock(ProcessorInstructionHandler.class);
         AtomicReference<EventProcessorInfo> processorInfo = new AtomicReference<>(buildEventProcessorInfo(true));
 
-        connection1.controlChannel().registerEventProcessor("testProcessor", processorInfo::get,
-                                                            instructionHandler);
+        connection1.controlChannel()
+                   .registerEventProcessor("testProcessor", processorInfo::get,
+                                                            instructionHandler)
+                   .awaitAck(1, TimeUnit.SECONDS);
 
 
         assertWithin(2, TimeUnit.SECONDS, () -> sendToAxonServer(Request.Builder::patch, "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/segments/merge?context=default"));
@@ -165,11 +201,14 @@ class ControlChannelTest extends AbstractAxonServerIntegrationTest {
 
         CountDownLatch cdl = new CountDownLatch(1);
 
-        connection1.controlChannel().registerEventProcessor("testProcessor", () -> {
-                                                                    cdl.countDown();
-                                                                    return processorInfo.get();
-                                                                },
-                                                            instructionHandler);
+        connection1.controlChannel()
+                   .registerEventProcessor("testProcessor", () -> {
+                                               cdl.countDown();
+                                               return processorInfo.get();
+                                           },
+                                           instructionHandler)
+                   .awaitAck(1, TimeUnit.SECONDS);
+
 
         // we wait for AxonServer to request data, which is an acknowledgement that the processor was registered.
         cdl.await(3, TimeUnit.SECONDS);
