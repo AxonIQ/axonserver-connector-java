@@ -76,7 +76,8 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
     /**
      * Constructs a {@link CommandChannelImpl}.
      *
-     * @param clientIdentification the information identifying the client application which is connecting
+     * @param clientIdentification client information identifying whom has connected. This information is used to pass
+     *                             on to message
      * @param permits              an {@code int} defining the number of permits this channel has
      * @param permitsBatch         an {@code int} defining the number of permits to be consumed from prior to requesting
      *                             additional permits for this channel
@@ -225,7 +226,8 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
         return new AsyncRegistration(subscriptionResult, () -> unsubscribe(handler, commandNames));
     }
 
-    private CompletableFuture<Void> unsubscribe(Function<Command, CompletableFuture<CommandResponse>> handler, String... commandNames) {
+    private CompletableFuture<Void> unsubscribe(Function<Command, CompletableFuture<CommandResponse>> handler,
+                                                String... commandNames) {
         CompletableFuture<Void> future = CompletableFuture.completedFuture(null);
         for (String commandName : commandNames) {
             if (commandHandlers.get(commandName) == handler) {
@@ -243,17 +245,17 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
         doIfNotNull(outboundCommandStream.get(),
                     s -> {
                         instructionsAwaitingAck.put(instructionId, future);
-                        s.onNext(
-                                CommandProviderOutbound.newBuilder()
-                                                       .setInstructionId(instructionId)
-                                                       .setUnsubscribe(CommandSubscription.newBuilder()
-                                                                                          .setMessageId(instructionId)
-                                                                                          .setCommand(commandName)
-                                                                                          .setClientId(clientIdentification.getClientId())
-                                                                                          .setComponentName(clientIdentification.getComponentName()))
-                                                       .build()
-                        );
-
+                        CommandSubscription unsubscribeMessage =
+                                CommandSubscription.newBuilder()
+                                                   .setMessageId(instructionId)
+                                                   .setCommand(commandName)
+                                                   .setClientId(clientIdentification.getClientId())
+                                                   .setComponentName(clientIdentification.getComponentName())
+                                                   .build();
+                        s.onNext(CommandProviderOutbound.newBuilder()
+                                                        .setInstructionId(instructionId)
+                                                        .setUnsubscribe(unsubscribeMessage)
+                                                        .build());
                     })
                 .orElse(() -> future.complete(null));
         return future;
@@ -388,8 +390,8 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
         }
 
         @Override
-        protected String getInstructionId(CommandProviderInbound value) {
-            return value.getInstructionId();
+        protected String getInstructionId(CommandProviderInbound instruction) {
+            return instruction.getInstructionId();
         }
 
         @Override

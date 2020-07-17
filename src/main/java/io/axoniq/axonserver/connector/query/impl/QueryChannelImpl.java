@@ -97,7 +97,8 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
     /**
      * Constructs a {@link QueryChannelImpl}.
      *
-     * @param clientIdentification the information identifying the client application which is connecting
+     * @param clientIdentification client information identifying whom has connected. This information is used to pass
+     *                             on to message
      * @param permits              an {@code int} defining the number of permits this channel has
      * @param permitsBatch         an {@code int} defining the number of permits to be consumed from prior to requesting
      *                             additional permits for this channel
@@ -233,7 +234,10 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
                                   .add(handler);
                 boolean firstRegistration = supportedQueries.add(queryDefinition);
                 if (firstRegistration) {
-                    CompletableFuture<Void> instructionResult = sendInstruction(buildSubscribeMessage(queryDefinition.getQueryName(), queryDefinition.getResultType(), UUID.randomUUID().toString()));
+                    QueryProviderOutbound subscribeMessage = buildSubscribeMessage(queryDefinition.getQueryName(),
+                                                                                   queryDefinition.getResultType(),
+                                                                                   UUID.randomUUID().toString());
+                    CompletableFuture<Void> instructionResult = sendInstruction(subscribeMessage);
                     subscriptionResult = CompletableFuture.allOf(subscriptionResult, instructionResult);
                 }
                 logger.debug("Registered handler for query {}", queryDefinition);
@@ -252,7 +256,6 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
                 }
                 return result;
             }
-
         });
     }
 
@@ -273,14 +276,17 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
 
     private CompletableFuture<Void> sendUnsubscribe(QueryDefinition queryDefinition) {
         String instructionId = UUID.randomUUID().toString();
+        QuerySubscription unsubscribeMessage =
+                QuerySubscription.newBuilder()
+                                 .setMessageId(instructionId)
+                                 .setQuery(queryDefinition.getQueryName())
+                                 .setResultName(queryDefinition.getResultType())
+                                 .setClientId(clientIdentification.getClientId())
+                                 .setComponentName(clientIdentification.getComponentName())
+                                 .build();
         return sendInstruction(QueryProviderOutbound.newBuilder()
                                                     .setInstructionId(instructionId)
-                                                    .setUnsubscribe(QuerySubscription.newBuilder()
-                                                                                     .setMessageId(instructionId)
-                                                                                     .setQuery(queryDefinition.getQueryName())
-                                                                                     .setResultName(queryDefinition.getResultType())
-                                                                                     .setClientId(clientIdentification.getClientId())
-                                                                                     .setComponentName(clientIdentification.getComponentName()))
+                                                    .setUnsubscribe(unsubscribeMessage)
                                                     .build()
         );
     }
@@ -557,8 +563,8 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
         }
 
         @Override
-        protected String getInstructionId(QueryProviderInbound value) {
-            return value.getInstructionId();
+        protected String getInstructionId(QueryProviderInbound instruction) {
+            return instruction.getInstructionId();
         }
 
         @Override
