@@ -17,6 +17,7 @@
 package io.axoniq.axonserver.connector.impl;
 
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
+import io.axoniq.axonserver.grpc.control.NodeInfo;
 import io.axoniq.axonserver.grpc.control.PlatformInfo;
 import io.axoniq.axonserver.grpc.control.PlatformServiceGrpc;
 import io.grpc.CallOptions;
@@ -30,7 +31,6 @@ import io.grpc.StatusRuntimeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
@@ -42,9 +42,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
+import javax.annotation.Nullable;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
 
+/**
+ * AxonServer specific {@link ManagedChannel} implementation providing AxonServer specific connection logic.
+ */
 public class AxonServerManagedChannel extends ManagedChannel {
 
     private static final Logger logger = LoggerFactory.getLogger(AxonServerManagedChannel.class);
@@ -54,18 +58,31 @@ public class AxonServerManagedChannel extends ManagedChannel {
     private final String context;
     private final ClientIdentification clientIdentification;
     private final ScheduledExecutorService executor;
+    private final boolean forcePlatformReconnect;
     private final BiFunction<ServerAddress, String, ManagedChannel> connectionFactory;
     private final long connectTimeout;
 
     private final AtomicReference<ManagedChannel> activeChannel = new AtomicReference<>();
     private final AtomicBoolean shutdown = new AtomicBoolean();
-
     private final AtomicBoolean suppressErrors = new AtomicBoolean();
     private final Queue<Runnable> connectListeners = new LinkedBlockingQueue<>();
     private final AtomicLong nextAttemptTime = new AtomicLong();
-    private final boolean forcePlatformReconnect;
     private final AtomicReference<Exception> lastConnectException = new AtomicReference<>();
 
+    /**
+     * Constructs a {@link AxonServerManagedChannel}.
+     *
+     * @param routingServers         {@link List} of {@link ServerAddress}' denoting the instances to connect with
+     * @param reconnectConfiguration configuration holder defining how this {@link ManagedChannel} implementation should
+     *                               reconnect
+     * @param context                the context this {@link ManagedChannel} operates in
+     * @param clientIdentification   the information identifying the client application which is connecting. This
+     *                               information is used to form the connection with a client
+     * @param executor               {@link ScheduledExecutorService} used to schedule operations to ensure the
+     *                               connection is maintained
+     * @param connectionFactory      factory method able of creating new {@link ManagedChannel} instances based on a
+     *                               given {@link ServerAddress} and context
+     */
     public AxonServerManagedChannel(List<ServerAddress> routingServers,
                                     ReconnectConfiguration reconnectConfiguration,
                                     String context,
@@ -73,7 +90,8 @@ public class AxonServerManagedChannel extends ManagedChannel {
                                     ScheduledExecutorService executor,
                                     BiFunction<ServerAddress, String, ManagedChannel> connectionFactory) {
         this.routingServers = new ArrayList<>(routingServers);
-        this.reconnectInterval = reconnectConfiguration.getTimeUnit().toMillis(reconnectConfiguration.getReconnectInterval());
+        this.reconnectInterval = reconnectConfiguration.getTimeUnit()
+                                                       .toMillis(reconnectConfiguration.getReconnectInterval());
         this.context = context;
         this.clientIdentification = clientIdentification;
         this.executor = executor;
@@ -95,27 +113,28 @@ public class AxonServerManagedChannel extends ManagedChannel {
                             nodeInfo.getHostName(), nodeInfo.getGrpcPort());
 
                 PlatformInfo clusterInfo = stub.getPlatformServer(clientIdentification);
+                NodeInfo primaryClusterInfo = clusterInfo.getPrimary();
                 logger.debug("Received PlatformInfo suggesting [{}] ({}:{}), {}",
-                             clusterInfo.getPrimary().getNodeName(),
-                             clusterInfo.getPrimary().getHostName(),
-                             clusterInfo.getPrimary().getGrpcPort(),
-                             clusterInfo.getSameConnection() ? "allowing use of existing connection" : "requiring new connection");
+                             primaryClusterInfo.getNodeName(),
+                             primaryClusterInfo.getHostName(),
+                             primaryClusterInfo.getGrpcPort(),
+                             clusterInfo.getSameConnection()
+                                     ? "allowing use of existing connection"
+                                     : "requiring new connection");
                 if (clusterInfo.getSameConnection()
-                        || (clusterInfo.getPrimary().getGrpcPort() == nodeInfo.getGrpcPort()
-                        && clusterInfo.getPrimary().getHostName().equals(nodeInfo.getHostName()))) {
+                        || (primaryClusterInfo.getGrpcPort() == nodeInfo.getGrpcPort()
+                        && primaryClusterInfo.getHostName().equals(nodeInfo.getHostName()))) {
                     logger.debug("Reusing existing channel");
                     connection = candidate;
                 } else {
                     candidate.shutdown();
                     logger.info("Connecting to [{}] ({}:{})",
-                                clusterInfo.getPrimary().getNodeName(),
-                                clusterInfo.getPrimary().getHostName(),
-                                clusterInfo.getPrimary().getGrpcPort());
-                    connection = connectionFactory.apply(new ServerAddress(
-                                                                 clusterInfo.getPrimary().getHostName(),
-                                                                 clusterInfo.getPrimary().getGrpcPort()),
-                                                         context
-                    );
+                                primaryClusterInfo.getNodeName(),
+                                primaryClusterInfo.getHostName(),
+                                primaryClusterInfo.getGrpcPort());
+                    ServerAddress serverAddress =
+                            new ServerAddress(primaryClusterInfo.getHostName(), primaryClusterInfo.getGrpcPort());
+                    connection = connectionFactory.apply(serverAddress, context);
                 }
                 suppressErrors.set(false);
                 lastConnectException.set(null);
@@ -124,15 +143,9 @@ public class AxonServerManagedChannel extends ManagedChannel {
                 lastConnectException.set(sre);
                 shutdownNow(candidate);
                 if (!suppressErrors.getAndSet(true)) {
-                    logger.warn(
-                            "Connecting to AxonServer node [{}] failed.",
-                            nodeInfo, sre
-                    );
+                    logger.warn("Connecting to AxonServer node [{}] failed.", nodeInfo, sre);
                 } else {
-                    logger.warn(
-                            "Connecting to AxonServer node [{}] failed: {}",
-                            nodeInfo, sre.getMessage()
-                    );
+                    logger.warn("Connecting to AxonServer node [{}] failed: {}", nodeInfo, sre.getMessage());
                 }
             }
         }
@@ -186,7 +199,8 @@ public class AxonServerManagedChannel extends ManagedChannel {
     }
 
     @Override
-    public <REQ, RESP> ClientCall<REQ, RESP> newCall(MethodDescriptor<REQ, RESP> methodDescriptor, CallOptions callOptions) {
+    public <REQ, RESP> ClientCall<REQ, RESP> newCall(MethodDescriptor<REQ, RESP> methodDescriptor,
+                                                     CallOptions callOptions) {
         ensureConnected(false);
         ManagedChannel current = activeChannel.get();
         if (current == null) {
@@ -321,13 +335,15 @@ public class AxonServerManagedChannel extends ManagedChannel {
                     newConnection.notifyWhenStateChanged(ConnectivityState.READY, this::verifyConnectionStateChange);
                 }
             } else if (allowReschedule) {
-                logger.info("Failed to get connection to AxonServer. Scheduling a reconnect in {}ms", reconnectInterval);
+                logger.info("Failed to get connection to AxonServer. Scheduling a reconnect in {}ms",
+                            reconnectInterval);
                 scheduleConnectionCheck(reconnectInterval);
             }
         } catch (Exception e) {
             doIfNotNull(newConnection, ManagedChannel::shutdown);
             if (allowReschedule) {
-                logger.info("Failed to get connection to AxonServer. Scheduling a reconnect in {}ms", reconnectInterval, e);
+                logger.info("Failed to get connection to AxonServer. Scheduling a reconnect in {}ms",
+                            reconnectInterval, e);
                 scheduleConnectionCheck(reconnectInterval);
             } else {
                 logger.debug("Failed to get connection to AxonServer.");
@@ -348,6 +364,9 @@ public class AxonServerManagedChannel extends ManagedChannel {
         }
     }
 
+    /**
+     * Requests a dedicated reconnect of this {@link ManagedChannel} implementation.
+     */
     public void requestReconnect() {
         logger.info("Reconnect requested. Closing current connection");
         doIfNotNull(activeChannel.get(), c -> {
@@ -356,6 +375,10 @@ public class AxonServerManagedChannel extends ManagedChannel {
         });
     }
 
+    /**
+     * Forcefully perform a reconnect of this {@link ManagedChannel} implementation by shutting down the current
+     * connection.
+     */
     public void forceReconnect() {
         logger.info("Forceful reconnect required. Closing current connection");
         ManagedChannel currentChannel = activeChannel.get();
@@ -371,6 +394,7 @@ public class AxonServerManagedChannel extends ManagedChannel {
     }
 
     private static class FailingCall<REQ, RESP> extends ClientCall<REQ, RESP> {
+
         @Override
         public void start(Listener<RESP> responseListener, Metadata headers) {
             responseListener.onClose(Status.UNAVAILABLE, null);

@@ -21,20 +21,38 @@ import io.grpc.ConnectivityState;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Abstract class representing a channel with AxonServer.
+ */
 public abstract class AbstractAxonServerChannel {
 
     private final ScheduledExecutorService executor;
     private final AxonServerManagedChannel channel;
 
+    /**
+     * Instantiate an {@link AbstractAxonServerChannel}.
+     *
+     * @param executor                 a {@link ScheduledExecutorService} used to invoke {@link #scheduleReconnect()} in
+     *                                 a separate thread
+     * @param axonServerManagedChannel the {@link AxonServerManagedChannel} used to validate whether {@link
+     *                                 #scheduleReconnect()} is succeeded or should be tried again
+     */
     public AbstractAxonServerChannel(ScheduledExecutorService executor,
                                      AxonServerManagedChannel axonServerManagedChannel) {
         this.executor = executor;
         this.channel = axonServerManagedChannel;
     }
 
+    /**
+     * Schedule an attempt to reconnect with AxonServer.
+     */
     protected void scheduleReconnect() {
         scheduleReconnect(false);
     }
+
+    /**
+     * Schedule an immediate attempt to reconnect with AxonServer.
+     */
     protected void scheduleImmediateReconnect() {
         scheduleReconnect(true);
     }
@@ -50,11 +68,25 @@ public abstract class AbstractAxonServerChannel {
         }, immediate ? 0 : 500, TimeUnit.MILLISECONDS);
     }
 
+    /**
+     * Connect this channel with AxonServer.
+     */
     public abstract void connect();
 
+    /**
+     * Reconnect this channel with AxonServer.
+     */
     public abstract void reconnect();
 
+    /**
+     * Disconnect this channel from AxonServer.
+     */
     public abstract void disconnect();
 
+    /**
+     * Validate whether this channel is connected with AxonServer.
+     *
+     * @return {@code true} if this channel is connected with AxonServer, {@code false} otherwise
+     */
     public abstract boolean isConnected();
 }

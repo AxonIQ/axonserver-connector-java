@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2020. Axon Framework
+ * Copyright (c) 2020. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,10 +26,21 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 
+/**
+ * Asynchronous implementation of the {@link Registration}.
+ */
 public class AsyncRegistration implements Registration {
+
     private final CompletableFuture<Void> requestAck;
     private final Supplier<CompletableFuture<Void>> cancelAction;
 
+    /**
+     * Construct a {@link AsyncRegistration}, using the given {@code requestAck} on {@link #awaitAck(long, TimeUnit)}
+     * and {@link #onAck(Runnable)}, and the given {@code cancelAction} on {@link #cancel()}.
+     *
+     * @param requestAck   the {@link CompletableFuture} to wait for on #awaitAck(long, TimeUnit)
+     * @param cancelAction the {@link Supplier} of the {@link CompletableFuture} to retrieve on {@link #cancel()}
+     */
     public AsyncRegistration(CompletableFuture<Void> requestAck, Supplier<CompletableFuture<Void>> cancelAction) {
         this.requestAck = requestAck;
         this.cancelAction = cancelAction;
@@ -48,7 +59,10 @@ public class AsyncRegistration implements Registration {
             if (e.getCause() instanceof AxonServerException) {
                 throw (AxonServerException) e.getCause();
             } else {
-                throw new AxonServerException(ErrorCategory.INSTRUCTION_ACK_ERROR, "An instruction returned a failed acknowledgement", "", e);
+                throw new AxonServerException(
+                        ErrorCategory.INSTRUCTION_ACK_ERROR,
+                        "An instruction returned a failed acknowledgement", "", e
+                );
             }
         }
         return this;

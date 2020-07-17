@@ -18,14 +18,26 @@ package io.axoniq.axonserver.connector.impl;
 
 import io.grpc.stub.ClientCallStreamObserver;
 
-import javax.annotation.Nullable;
 import java.util.concurrent.atomic.AtomicBoolean;
+import javax.annotation.Nullable;
 
+/**
+ * Lock-based synchronized implementation of a {@link ClientCallStreamObserver}. Acts as a wrapper of another {@code
+ * ClientCallStreamObserver}, to which all of operations will be delegated, adding synchronization logic to {@link
+ * #onNext(Object)}, {@link #onCompleted()} and {@link #onError(Throwable)}.
+ *
+ * @param <T> the type of value returned by this stream
+ */
 public class SynchronizedRequestStream<T> extends ClientCallStreamObserver<T> {
 
     private final ClientCallStreamObserver<T> delegate;
     private final AtomicBoolean lock = new AtomicBoolean(false);
 
+    /**
+     * Instantiate a {@link SynchronizedRequestStream}, delegating all operations to the given {@code requestStream}
+     *
+     * @param requestStream the {@link ClientCallStreamObserver} to delegate method invocations to
+     */
     public SynchronizedRequestStream(ClientCallStreamObserver<T> requestStream) {
         delegate = requestStream;
     }

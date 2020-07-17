@@ -19,12 +19,23 @@ package io.axoniq.axonserver.connector.impl;
 import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.grpc.ErrorMessage;
 
-public class MessageFactory {
+/**
+ * Utility class to build simple messages.
+ */
+public abstract class MessageFactory {
 
     private MessageFactory() {
-
+        // Utility class
     }
 
+    /**
+     * Build an {@link ErrorMessage}, using the given {@code errorCategory}, {@code client} and {@link Throwable}.
+     *
+     * @param errorCategory the {@link ErrorCategory} the constructed {@link ErrorMessage} belongs to
+     * @param client        a {@link String} defining where the constructed {@link ErrorMessage} originates from
+     * @param t             a {@link Throwable} defining the original exception resulting in this {@link ErrorMessage}
+     * @return an {@link ErrorMessage}, using the given {@code errorCategory}, {@code client} and {@link Throwable}
+     */
     public static ErrorMessage buildErrorMessage(ErrorCategory errorCategory, String client, Throwable t) {
         ErrorMessage.Builder builder = ErrorMessage.newBuilder()
                                                    .setLocation(client)

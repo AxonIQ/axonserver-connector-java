@@ -18,15 +18,24 @@ package io.axoniq.axonserver.connector.impl;
 
 import io.grpc.Metadata;
 
-public class Headers {
+/**
+ * Utility class containing header definitions.
+ */
+public abstract class Headers {
 
+    /**
+     * A {@link Metadata.Key} defining the context from within which a message will be send.
+     */
     public static final Metadata.Key<String> CONTEXT =
             Metadata.Key.of("AxonIQ-Context", Metadata.ASCII_STRING_MARSHALLER);
 
+    /**
+     * A {@link Metadata.Key} defining the access token from the application sending this message.
+     */
     public static final Metadata.Key<String> ACCESS_TOKEN =
             Metadata.Key.of("AxonIQ-Access-Token", Metadata.ASCII_STRING_MARSHALLER);
 
-
     private Headers() {
+        // Utility class
     }
 }

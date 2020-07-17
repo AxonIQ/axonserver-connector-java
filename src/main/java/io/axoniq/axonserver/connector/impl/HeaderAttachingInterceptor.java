@@ -25,8 +25,9 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 
 /**
- * Interceptor around a gRPC request to add a Context element to the metadata.
+ * Interceptor around a gRPC request to add header information as metadata to a message.
  *
+ * @param <T> the key and value type of the header this interceptor will attach
  * @author Marc Gathier
  * @since 4.0
  */
@@ -35,6 +36,13 @@ public class HeaderAttachingInterceptor<T> implements ClientInterceptor {
     private final Metadata.Key<T> header;
     private final T value;
 
+    /**
+     * Constructs a {@link HeaderAttachingInterceptor} attaching metadata using the given {@code header} as key, paired
+     * with the given {@code value}
+     *
+     * @param header the {@link Metadata.Key} to attach on intercepted messages
+     * @param value  the object of type {@code T} to attach on intercepted messages
+     */
     public HeaderAttachingInterceptor(Metadata.Key<T> header, T value) {
         this.header = header;
         this.value = value;

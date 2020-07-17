@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2020. Axon Framework
+ * Copyright (c) 2020. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,11 +20,19 @@ import io.axoniq.axonserver.connector.Registration;
 
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Synchronous implementation of the {@link Registration}.
+ */
 public class SyncRegistration implements Registration {
 
     private static final CompletableFuture<Void> COMPLETED = CompletableFuture.completedFuture(null);
     private final Runnable cancelAction;
 
+    /**
+     * Construct a {@link SyncRegistration}, using the given {@code cancelAction} when {@link #cancel()} is invoked.
+     *
+     * @param cancelAction the operation to perform when {@link #cancel()} is invoked
+     */
     public SyncRegistration(Runnable cancelAction) {
         this.cancelAction = cancelAction;
     }
@@ -34,6 +42,4 @@ public class SyncRegistration implements Registration {
         cancelAction.run();
         return COMPLETED;
     }
-
-
 }

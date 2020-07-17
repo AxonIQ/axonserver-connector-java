@@ -48,19 +48,23 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
-import static io.axoniq.axonserver.connector.impl.ObjectUtils.hasLength;
-import static io.axoniq.axonserver.connector.impl.ObjectUtils.silently;
+import static io.axoniq.axonserver.connector.impl.ObjectUtils.*;
 
+/**
+ * {@link ControlChannel} implementation, serving as the overall control and instruction connection between AxonServer
+ * and a client application.
+ */
 public class ControlChannelImpl extends AbstractAxonServerChannel implements ControlChannel {
 
     private static final Logger logger = LoggerFactory.getLogger(ControlChannelImpl.class);
+
     private final ClientIdentification clientIdentification;
     private final ScheduledExecutorService executor;
-    private final long processorUpdateFrequency;
+    private final long processorInfoUpdateFrequency;
     private final Runnable reconnectHandler;
     private final AtomicReference<StreamObserver<PlatformInboundInstruction>> instructionDispatcher = new AtomicReference<>();
-    private final Map<PlatformOutboundInstruction.RequestCase, InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction>> instructionHandlers = new EnumMap<>(PlatformOutboundInstruction.RequestCase.class);
+    private final Map<PlatformOutboundInstruction.RequestCase, InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction>> instructionHandlers =
+            new EnumMap<>(PlatformOutboundInstruction.RequestCase.class);
     private final HeartbeatMonitor heartbeatMonitor;
     private final Map<String, CompletableFuture<InstructionAck>> awaitingAck = new ConcurrentHashMap<>();
     private final String context;
@@ -69,30 +73,85 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
     private final AtomicBoolean infoSupplierActive = new AtomicBoolean();
     private final PlatformServiceGrpc.PlatformServiceStub platformServiceStub;
 
-    public ControlChannelImpl(ClientIdentification clientIdentification, String context,
-                              ScheduledExecutorService executor, AxonServerManagedChannel channel,
-                              long processorUpdateFrequency,
+    /**
+     * Constructs a {@link ControlChannelImpl}.
+     *
+     * @param clientIdentification         the information identifying the client application which is connecting. This
+     *                                     information is used to pass on to message
+     * @param context                      the context this {@link ControlChannel} operates in
+     * @param executor                     a {@link ScheduledExecutorService} used to schedule reconnects of this
+     *                                     channel, heartbeat message dispatching and processor information updates
+     * @param channel                      the {@link AxonServerManagedChannel} used to form the connection with
+     *                                     AxonServer
+     * @param processorInfoUpdateFrequency the update frequency in milliseconds of event processor information
+     * @param reconnectHandler             operation run when a reconnect request is received for this channel
+     */
+    public ControlChannelImpl(ClientIdentification clientIdentification,
+                              String context,
+                              ScheduledExecutorService executor,
+                              AxonServerManagedChannel channel,
+                              long processorInfoUpdateFrequency,
                               Runnable reconnectHandler) {
         super(executor, channel);
         this.clientIdentification = clientIdentification;
         this.context = context;
         this.executor = executor;
-        this.processorUpdateFrequency = processorUpdateFrequency;
+        this.processorInfoUpdateFrequency = processorInfoUpdateFrequency;
         this.reconnectHandler = reconnectHandler;
         heartbeatMonitor = new HeartbeatMonitor(executor, this::sendHeartBeat, channel::forceReconnect);
-        this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.ACK, i -> new AckHandler());
-        this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.HEARTBEAT, i -> (msg, reply) -> heartbeatMonitor.handleIncomingBeat(reply));
-        this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.MERGE_EVENT_PROCESSOR_SEGMENT, i -> ProcessorInstructions.mergeHandler(processorInstructionHandlers));
-        this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.SPLIT_EVENT_PROCESSOR_SEGMENT, i -> ProcessorInstructions.splitHandler(processorInstructionHandlers));
-        this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.START_EVENT_PROCESSOR, i -> ProcessorInstructions.startHandler(processorInstructionHandlers));
-        this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.PAUSE_EVENT_PROCESSOR, i -> ProcessorInstructions.pauseHandler(processorInstructionHandlers));
-        this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.RELEASE_SEGMENT, i -> ProcessorInstructions.releaseSegmentHandler(processorInstructionHandlers));
-        this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.REQUEST_EVENT_PROCESSOR_INFO, i -> ProcessorInstructions.requestInfoHandler(processorInfoSuppliers));
-        this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.REQUEST_RECONNECT, i -> this::handleReconnectRequest);
+        this.instructionHandlers.computeIfAbsent(
+                PlatformOutboundInstruction.RequestCase.ACK,
+                i -> new AckHandler()
+        );
+        this.instructionHandlers.computeIfAbsent(
+                PlatformOutboundInstruction.RequestCase.HEARTBEAT,
+                i -> (msg, reply) -> heartbeatMonitor.handleIncomingBeat(reply)
+        );
+        this.instructionHandlers.computeIfAbsent(
+                PlatformOutboundInstruction.RequestCase.MERGE_EVENT_PROCESSOR_SEGMENT,
+                i -> ProcessorInstructions.mergeHandler(processorInstructionHandlers)
+        );
+        this.instructionHandlers.computeIfAbsent(
+                PlatformOutboundInstruction.RequestCase.SPLIT_EVENT_PROCESSOR_SEGMENT,
+                i -> ProcessorInstructions.splitHandler(processorInstructionHandlers)
+        );
+        this.instructionHandlers.computeIfAbsent(
+                PlatformOutboundInstruction.RequestCase.START_EVENT_PROCESSOR,
+                i -> ProcessorInstructions.startHandler(processorInstructionHandlers)
+        );
+        this.instructionHandlers.computeIfAbsent(
+                PlatformOutboundInstruction.RequestCase.PAUSE_EVENT_PROCESSOR,
+                i -> ProcessorInstructions.pauseHandler(processorInstructionHandlers)
+        );
+        this.instructionHandlers.computeIfAbsent(
+                PlatformOutboundInstruction.RequestCase.RELEASE_SEGMENT,
+                i -> ProcessorInstructions.releaseSegmentHandler(processorInstructionHandlers)
+        );
+        this.instructionHandlers.computeIfAbsent(
+                PlatformOutboundInstruction.RequestCase.REQUEST_EVENT_PROCESSOR_INFO,
+                i -> ProcessorInstructions.requestInfoHandler(processorInfoSuppliers)
+        );
+        this.instructionHandlers.computeIfAbsent(
+                PlatformOutboundInstruction.RequestCase.REQUEST_RECONNECT,
+                i -> this::handleReconnectRequest
+        );
         platformServiceStub = PlatformServiceGrpc.newStub(channel);
     }
 
-    private void handleReconnectRequest(PlatformOutboundInstruction platformOutboundInstruction, ReplyChannel<PlatformInboundInstruction> replyChannel) {
+    private CompletableFuture<InstructionAck> sendHeartBeat() {
+        if (!isConnected()) {
+            return CompletableFuture.completedFuture(null);
+        }
+        PlatformInboundInstruction heartbeatMessage =
+                PlatformInboundInstruction.newBuilder()
+                                          .setInstructionId(UUID.randomUUID().toString())
+                                          .setHeartbeat(Heartbeat.getDefaultInstance())
+                                          .build();
+        return sendInstruction(heartbeatMessage);
+    }
+
+    private void handleReconnectRequest(PlatformOutboundInstruction platformOutboundInstruction,
+                                        ReplyChannel<PlatformInboundInstruction> replyChannel) {
         logger.info("AxonServer requested reconnect");
         replyChannel.sendAck();
         reconnectHandler.run();
@@ -104,24 +163,28 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
         if (existing != null) {
             logger.info("Not connecting - connection already present");
         } else {
-            PlatformOutboundInstructionHandler responseObserver = new PlatformOutboundInstructionHandler(clientIdentification.getClientId(), this::handleDisconnect);
+            PlatformOutboundInstructionHandler responseObserver =
+                    new PlatformOutboundInstructionHandler(clientIdentification.getClientId(), this::handleDisconnect);
             logger.debug("Opening instruction stream");
             //noinspection ResultOfMethodCallIgnored
             platformServiceStub.openStream(responseObserver);
-            StreamObserver<PlatformInboundInstruction> instructionsForPlatform = responseObserver.getInstructionsForPlatform();
-            StreamObserver<PlatformInboundInstruction> previous = instructionDispatcher.getAndSet(instructionsForPlatform);
+            StreamObserver<PlatformInboundInstruction> instructionsForPlatform =
+                    responseObserver.getInstructionsForPlatform();
+            StreamObserver<PlatformInboundInstruction> previous =
+                    instructionDispatcher.getAndSet(instructionsForPlatform);
             silently(previous, StreamObserver::onCompleted);
 
             try {
                 logger.info("Connected instruction stream for context '{}'. Sending client identification", context);
-                instructionsForPlatform.onNext(PlatformInboundInstruction.newBuilder().setRegister(clientIdentification).build());
+                instructionsForPlatform.onNext(PlatformInboundInstruction.newBuilder()
+                                                                         .setRegister(clientIdentification)
+                                                                         .build());
                 heartbeatMonitor.resume();
             } catch (Exception e) {
                 instructionDispatcher.set(null);
                 instructionsForPlatform.onError(e);
             }
         }
-
     }
 
     @Override
@@ -153,13 +216,16 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
     }
 
     @Override
-    public Registration registerInstructionHandler(PlatformOutboundInstruction.RequestCase type, InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> handler) {
+    public Registration registerInstructionHandler(PlatformOutboundInstruction.RequestCase type,
+                                                   InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> handler) {
         instructionHandlers.put(type, handler);
         return new SyncRegistration(() -> instructionHandlers.remove(type, handler));
     }
 
     @Override
-    public Registration registerEventProcessor(String processorName, Supplier<EventProcessorInfo> infoSupplier, ProcessorInstructionHandler instructionHandler) {
+    public Registration registerEventProcessor(String processorName,
+                                               Supplier<EventProcessorInfo> infoSupplier,
+                                               ProcessorInstructionHandler instructionHandler) {
         processorInstructionHandlers.put(processorName, instructionHandler);
         processorInfoSuppliers.put(processorName, infoSupplier);
         if (infoSupplierActive.compareAndSet(false, true)) {
@@ -182,8 +248,12 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
             }
         } else {
             infoSupplies.forEach(info -> doIfNotNull(info.get(), this::sendProcessorInfo));
-            executor.schedule(this::sendScheduledProcessorInfo, processorUpdateFrequency, TimeUnit.MILLISECONDS);
+            executor.schedule(this::sendScheduledProcessorInfo, processorInfoUpdateFrequency, TimeUnit.MILLISECONDS);
         }
+    }
+
+    private CompletableFuture<InstructionAck> sendProcessorInfo(EventProcessorInfo processorInfo) {
+        return sendInstruction(PlatformInboundInstruction.newBuilder().setEventProcessorInfo(processorInfo).build());
     }
 
     @Override
@@ -196,17 +266,6 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
         heartbeatMonitor.disableHeartbeat();
     }
 
-    public CompletableFuture<InstructionAck> sendProcessorInfo(EventProcessorInfo processorInfo) {
-        return sendInstruction(PlatformInboundInstruction.newBuilder().setEventProcessorInfo(processorInfo).build());
-    }
-
-    public CompletableFuture<InstructionAck> sendHeartBeat() {
-        if (!isConnected()) {
-            return CompletableFuture.completedFuture(null);
-        }
-        return sendInstruction(PlatformInboundInstruction.newBuilder().setInstructionId(UUID.randomUUID().toString()).setHeartbeat(Heartbeat.getDefaultInstance()).build());
-    }
-
     @Override
     public CompletableFuture<InstructionAck> sendInstruction(PlatformInboundInstruction instruction) {
         CompletableFuture<InstructionAck> result = new CompletableFuture<>();
@@ -214,7 +273,9 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
         StreamObserver<PlatformInboundInstruction> dispatcher = instructionDispatcher.get();
         if (dispatcher == null) {
             if (logger.isDebugEnabled()) {
-                logger.debug("Unable to send instruction: {} {}. Disconnected.", instruction.getRequestCase().name(), instructionId);
+                logger.debug("Unable to send instruction: {} {}. Disconnected.",
+                             instruction.getRequestCase().name(),
+                             instructionId);
             }
             result.completeExceptionally(new AxonServerException(ErrorCategory.INSTRUCTION_EXECUTION_ERROR,
                                                                  "Unable to send instruction",
@@ -233,7 +294,8 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
                 result.completeExceptionally(e);
                 silently(dispatcher, d -> d.onError(e));
             }
-        } return result;
+        }
+        return result;
     }
 
     @Override
@@ -241,7 +303,8 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
         return instructionDispatcher.get() != null;
     }
 
-    private class PlatformOutboundInstructionHandler extends AbstractIncomingInstructionStream<PlatformOutboundInstruction, PlatformInboundInstruction> {
+    private class PlatformOutboundInstructionHandler
+            extends AbstractIncomingInstructionStream<PlatformOutboundInstruction, PlatformInboundInstruction> {
 
         public PlatformOutboundInstructionHandler(String clientId, Consumer<Throwable> disconnectHandler) {
             super(clientId, 0, 0, disconnectHandler);
@@ -253,13 +316,15 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
         }
 
         @Override
-        protected String getInstructionId(PlatformOutboundInstruction value) {
-            return value.getInstructionId();
+        protected String getInstructionId(PlatformOutboundInstruction instruction) {
+            return instruction.getInstructionId();
         }
 
 
         @Override
-        protected InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> getHandler(PlatformOutboundInstruction platformOutboundInstruction) {
+        protected InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> getHandler(
+                PlatformOutboundInstruction platformOutboundInstruction
+        ) {
             return instructionHandlers.get(platformOutboundInstruction.getRequestCase());
         }
 
@@ -268,9 +333,11 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
             heartbeatMonitor.pause();
             boolean disconnected = instructionDispatcher.compareAndSet(expected, null);
             if (disconnected) {
-                failOpenInstructions(new AxonServerException(ErrorCategory.INSTRUCTION_ACK_ERROR,
-                                                             "Disconnected from AxonServer before receiving instruction ACK",
-                                                             clientId()));
+                failOpenInstructions(new AxonServerException(
+                        ErrorCategory.INSTRUCTION_ACK_ERROR,
+                        "Disconnected from AxonServer before receiving instruction ACK",
+                        clientId()
+                ));
             }
             return disconnected;
         }
@@ -284,7 +351,8 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
     private class AckHandler implements InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> {
 
         @Override
-        public void handle(PlatformOutboundInstruction ackMessage, ReplyChannel<PlatformInboundInstruction> replyChannel) {
+        public void handle(PlatformOutboundInstruction ackMessage,
+                           ReplyChannel<PlatformInboundInstruction> replyChannel) {
             String instructionId = ackMessage.getAck().getInstructionId();
             logger.debug("Received ACK for {}", instructionId);
             CompletableFuture<InstructionAck> handle = awaitingAck.remove(instructionId);

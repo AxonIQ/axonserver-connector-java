@@ -16,7 +16,16 @@
 
 package io.axoniq.axonserver.connector.impl;
 
+/**
+ * A {@link RuntimeException} to throw if a stream is closed.
+ */
 public class StreamClosedException extends RuntimeException {
+
+    /**
+     * Constructs a new {@link StreamClosedException} using the given {@code cause}.
+     *
+     * @param cause the {@link Throwable} further defining this {@link StreamClosedException}
+     */
     public StreamClosedException(Throwable cause) {
         super(cause);
     }

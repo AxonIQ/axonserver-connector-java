@@ -37,6 +37,10 @@ import java.util.function.UnaryOperator;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
 
+/**
+ * Implementation of the {@link AxonServerConnection}, carrying context information with the overall connection. The
+ * context information can be used to support the notion of bounded contexts or multi-tenancy for example.
+ */
 public class ContextConnection implements AxonServerConnection {
 
     private final ClientIdentification clientIdentification;
@@ -47,6 +51,18 @@ public class ContextConnection implements AxonServerConnection {
     private final ScheduledExecutorService executorService;
     private final AxonServerManagedChannel connection;
 
+    /**
+     * Construct a {@link ContextConnection} carrying context information.
+     *
+     * @param clientIdentification         client information identifying whom has connected. This information is used
+     *                                     to pass on to message
+     * @param executorService              a {@link ScheduledExecutorService} used to schedule reconnects in the
+     *                                     channels this connection provides
+     * @param connection                   the {@link AxonServerManagedChannel} used to form the connections with
+     *                                     AxonServer
+     * @param processorInfoUpdateFrequency the update frequency in milliseconds of event processor information
+     * @param context                      the context this connection belongs to
+     */
     public ContextConnection(ClientIdentification clientIdentification,
                              ScheduledExecutorService executorService,
                              AxonServerManagedChannel connection,
@@ -55,7 +71,12 @@ public class ContextConnection implements AxonServerConnection {
         this.clientIdentification = clientIdentification;
         this.executorService = executorService;
         this.connection = connection;
-        this.controlChannel = new ControlChannelImpl(clientIdentification, context, executorService, connection, processorInfoUpdateFrequency, this::reconnectChannels);
+        this.controlChannel = new ControlChannelImpl(clientIdentification,
+                                                     context,
+                                                     executorService,
+                                                     connection,
+                                                     processorInfoUpdateFrequency,
+                                                     this::reconnectChannels);
     }
 
     private void reconnectChannels() {
@@ -107,22 +128,39 @@ public class ContextConnection implements AxonServerConnection {
         return controlChannel;
     }
 
+    /**
+     * Ensure there is a connection with the {@link ControlChannel} this connection provides.
+     */
+    public void connect() {
+        ensureConnected(controlChannel);
+    }
+
     @Override
     public CommandChannel commandChannel() {
-        CommandChannelImpl channel = this.commandChannel.updateAndGet(getIfNull(() -> new CommandChannelImpl(clientIdentification, 5000, 2000, executorService, connection)));
+        CommandChannelImpl channel = this.commandChannel.updateAndGet(
+                getIfNull(() -> new CommandChannelImpl(clientIdentification, 5000, 2000, executorService, connection))
+        );
         return ensureConnected(channel);
     }
 
     @Override
     public EventChannel eventChannel() {
-        EventChannelImpl channel = this.eventChannel.updateAndGet(getIfNull(() -> new EventChannelImpl(executorService, connection)));
+        EventChannelImpl channel = this.eventChannel.updateAndGet(
+                getIfNull(() -> new EventChannelImpl(executorService, connection))
+        );
         return ensureConnected(channel);
     }
 
     @Override
     public QueryChannel queryChannel() {
-        QueryChannelImpl channel = this.queryChannel.updateAndGet(getIfNull(() -> new QueryChannelImpl(clientIdentification, 5000, 2000, executorService, connection)));
+        QueryChannelImpl channel = this.queryChannel.updateAndGet(
+                getIfNull(() -> new QueryChannelImpl(clientIdentification, 5000, 2000, executorService, connection))
+        );
         return ensureConnected(channel);
+    }
+
+    private <T> UnaryOperator<T> getIfNull(Supplier<T> factory) {
+        return existing -> existing == null ? factory.get() : existing;
     }
 
     private <T extends AbstractAxonServerChannel> T ensureConnected(T channel) {
@@ -141,14 +179,11 @@ public class ContextConnection implements AxonServerConnection {
         return channel;
     }
 
-    private <T> UnaryOperator<T> getIfNull(Supplier<T> factory) {
-        return existing -> existing == null ? factory.get() : existing;
-    }
-
-    public void connect() {
-        ensureConnected(controlChannel);
-    }
-
+    /**
+     * Retrieve the {@link AxonServerManagedChannel} used to create connection with.
+     *
+     * @return the {@link AxonServerManagedChannel} used to create connection with
+     */
     public AxonServerManagedChannel getManagedChannel() {
         return connection;
     }

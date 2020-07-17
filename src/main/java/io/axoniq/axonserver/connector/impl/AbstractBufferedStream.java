@@ -21,13 +21,27 @@ import io.axoniq.axonserver.connector.ResultStream;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+/**
+ * An abstract {@link FlowControlledBuffer} and {@link ResultStream} implementation, used to provide a buffered stream
+ * of results of {@code T} when receiving a request of type {@code R}.
+ *
+ * @param <T> the type of results this stream implementation buffers
+ * @param <R> the type of message used for flow control on this stream
+ */
 public abstract class AbstractBufferedStream<T, R> extends FlowControlledBuffer<T, R> implements ResultStream<T> {
 
-    public static final Runnable NO_OP = () -> {
+    private static final Runnable NO_OP = () -> {
     };
 
     private final AtomicReference<Runnable> onAvailableCallback = new AtomicReference<>(NO_OP);
 
+    /**
+     * Constructs an {@link AbstractBufferedStream}
+     *
+     * @param clientId    the identifier of the client initiation this stream
+     * @param bufferSize  the size of this buffer
+     * @param refillBatch the number of entries to be consumed prior to refilling this buffer
+     */
     public AbstractBufferedStream(String clientId, int bufferSize, int refillBatch) {
         super(clientId, bufferSize, refillBatch);
     }
@@ -91,5 +105,4 @@ public abstract class AbstractBufferedStream<T, R> extends FlowControlledBuffer<
     public void close() {
         outboundStream().onCompleted();
     }
-
 }

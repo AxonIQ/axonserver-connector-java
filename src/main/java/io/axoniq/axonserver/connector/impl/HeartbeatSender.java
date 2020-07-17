@@ -20,7 +20,17 @@ import io.axoniq.axonserver.grpc.InstructionAck;
 
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Functional interface defining a method to send heartbeats with.
+ */
 @FunctionalInterface
 public interface HeartbeatSender {
+
+    /**
+     * Send a heartbeat, receiving a {@link CompletableFuture} containing the {@link InstructionAck} once the heartbeat
+     * has been received.
+     *
+     * @return a {@link CompletableFuture} containing the {@link InstructionAck} once the heartbeat has been received
+     */
     CompletableFuture<InstructionAck> sendHeartbeat();
 }

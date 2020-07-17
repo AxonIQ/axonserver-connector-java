@@ -23,8 +23,6 @@ import io.axoniq.axonserver.connector.control.ProcessorInstructionHandler;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo;
 import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -33,64 +31,123 @@ import java.util.function.Supplier;
 
 import static io.axoniq.axonserver.connector.impl.MessageFactory.buildErrorMessage;
 
-public class ProcessorInstructions {
-
-    private static final Logger logger = LoggerFactory.getLogger(ProcessorInstructions.class);
+/**
+ * Utility class providing {@link InstructionHandler} instances for event processor instructions.
+ */
+public abstract class ProcessorInstructions {
 
     private ProcessorInstructions() {
+        // Utility class
     }
 
-    public static InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> mergeHandler(Map<String, ProcessorInstructionHandler> instructionHandlers) {
+    /**
+     * Provides a {@link InstructionHandler} which handles a processor's merge request from AxonServer and sends it to
+     * the right client(s).
+     *
+     * @param instructionHandlers the collection of instruction handler instances to retrieve the {@link
+     *                            ProcessorInstructionHandler} from to execute the actual {@link
+     *                            ProcessorInstructionHandler#mergeSegment(int)} operation
+     * @return the {@link InstructionHandler} to delegate the merge request with
+     */
+    public static InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> mergeHandler(
+            Map<String, ProcessorInstructionHandler> instructionHandlers
+    ) {
         return (instruction, replyChannel) -> {
             String processorName = instruction.getMergeEventProcessorSegment().getProcessorName();
             int segmentId = instruction.getMergeEventProcessorSegment().getSegmentIdentifier();
-            executeAndReply(replyChannel,
-                            instructionHandlers.get(processorName),
-                            h -> h.mergeSegment(segmentId));
+            executeAndReply(replyChannel, instructionHandlers.get(processorName), h -> h.mergeSegment(segmentId));
         };
     }
 
-    public static InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> splitHandler(Map<String, ProcessorInstructionHandler> instructionHandlers) {
+    /**
+     * Provides a {@link InstructionHandler} which handles a processor's split request from AxonServer and sends it to
+     * the right client(s).
+     *
+     * @param instructionHandlers the collection of instruction handler instances to retrieve the {@link
+     *                            ProcessorInstructionHandler} from to execute the actual {@link
+     *                            ProcessorInstructionHandler#splitSegment(int)} operation
+     * @return the {@link InstructionHandler} to delegate the split request with
+     */
+    public static InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> splitHandler(
+            Map<String, ProcessorInstructionHandler> instructionHandlers
+    ) {
         return (instruction, replyChannel) -> {
             String processorName = instruction.getSplitEventProcessorSegment().getProcessorName();
             int segmentId = instruction.getSplitEventProcessorSegment().getSegmentIdentifier();
-            executeAndReply(replyChannel,
-                            instructionHandlers.get(processorName),
-                            h -> h.splitSegment(segmentId));
+            executeAndReply(replyChannel, instructionHandlers.get(processorName), h -> h.splitSegment(segmentId));
         };
-
     }
 
-    public static InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> startHandler(Map<String, ProcessorInstructionHandler> instructionHandlers) {
+    /**
+     * Provides a {@link InstructionHandler} which handles a processor's start request from AxonServer and sends it to
+     * the right client(s).
+     *
+     * @param instructionHandlers the collection of instruction handler instances to retrieve the {@link
+     *                            ProcessorInstructionHandler} from to execute the actual {@link
+     *                            ProcessorInstructionHandler#startProcessor()} operation
+     * @return the {@link InstructionHandler} to delegate the start request with
+     */
+    public static InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> startHandler(
+            Map<String, ProcessorInstructionHandler> instructionHandlers
+    ) {
         return (instruction, replyChannel) -> {
             String processorName = instruction.getStartEventProcessor().getProcessorName();
-            executeAndReply(replyChannel,
-                            instructionHandlers.get(processorName),
-                            h -> h.startProcessor().thenApply(r -> true));
+            executeAndReply(
+                    replyChannel, instructionHandlers.get(processorName), h -> h.startProcessor().thenApply(r -> true)
+            );
         };
     }
 
-    public static InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> pauseHandler(Map<String, ProcessorInstructionHandler> instructionHandlers) {
+    /**
+     * Provides a {@link InstructionHandler} which handles a processor's pause request from AxonServer and sends it to
+     * the right client(s).
+     *
+     * @param instructionHandlers the collection of instruction handler instances to retrieve the {@link
+     *                            ProcessorInstructionHandler} from to execute the actual {@link
+     *                            ProcessorInstructionHandler#pauseProcessor()} operation
+     * @return the {@link InstructionHandler} to delegate the pause request with
+     */
+    public static InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> pauseHandler(
+            Map<String, ProcessorInstructionHandler> instructionHandlers
+    ) {
         return (instruction, replyChannel) -> {
             String processorName = instruction.getPauseEventProcessor().getProcessorName();
-            executeAndReply(replyChannel,
-                            instructionHandlers.get(processorName),
-                            h -> h.pauseProcessor().thenApply(r -> true));
+            executeAndReply(
+                    replyChannel, instructionHandlers.get(processorName), h -> h.pauseProcessor().thenApply(r -> true)
+            );
         };
     }
 
-    public static InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> releaseSegmentHandler(Map<String, ProcessorInstructionHandler> instructionHandlers) {
+    /**
+     * Provides a {@link InstructionHandler} which handles a processor's release segment request from AxonServer and
+     * sends it to the right client(s).
+     *
+     * @param instructionHandlers the collection of instruction handler instances to retrieve the {@link
+     *                            ProcessorInstructionHandler} from to execute the actual {@link
+     *                            ProcessorInstructionHandler#releaseSegment(int)}} operation
+     * @return the {@link InstructionHandler} to delegate the release segment request with
+     */
+    public static InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> releaseSegmentHandler(
+            Map<String, ProcessorInstructionHandler> instructionHandlers
+    ) {
         return (instruction, replyChannel) -> {
             String processorName = instruction.getReleaseSegment().getProcessorName();
             int segmentId = instruction.getReleaseSegment().getSegmentIdentifier();
-
-            executeAndReply(replyChannel,
-                            instructionHandlers.get(processorName),
-                            h -> h.releaseSegment(segmentId));
+            executeAndReply(replyChannel, instructionHandlers.get(processorName), h -> h.releaseSegment(segmentId));
         };
     }
 
-    public static InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> requestInfoHandler(Map<String, Supplier<EventProcessorInfo>> infoSuppliers) {
+    /**
+     * Provides a {@link InstructionHandler} which handles a processor's information request from AxonServer and sends
+     * it to the right client(s).
+     *
+     * @param infoSuppliers the collection of {@link EventProcessorInfo} supplier instances to retrieve the right
+     *                      instance to pull information from
+     * @return the {@link InstructionHandler} to delegate the processor information request with
+     */
+    public static InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> requestInfoHandler(
+            Map<String, Supplier<EventProcessorInfo>> infoSuppliers
+    ) {
         return (instruction, replyChannel) -> {
             String instructionId = instruction.getInstructionId();
             String processorName = instruction.getRequestEventProcessorInfo().getProcessorName();
@@ -106,21 +163,23 @@ public class ProcessorInstructions {
         };
     }
 
-    private static void executeAndReply(ReplyChannel<PlatformInboundInstruction> replyChannel, ProcessorInstructionHandler handler, Function<ProcessorInstructionHandler, CompletableFuture<Boolean>> task) {
+    private static void executeAndReply(ReplyChannel<PlatformInboundInstruction> replyChannel,
+                                        ProcessorInstructionHandler handler,
+                                        Function<ProcessorInstructionHandler, CompletableFuture<Boolean>> task) {
         if (handler != null) {
             task.apply(handler)
                 .whenComplete((r, e) -> {
                     boolean success = r != null && r;
                     if (!success || e != null) {
-                        replyChannel.completeWithError(buildErrorMessage(ErrorCategory.INSTRUCTION_EXECUTION_ERROR, "client", e));
+                        replyChannel.completeWithError(
+                                buildErrorMessage(ErrorCategory.INSTRUCTION_EXECUTION_ERROR, "client", e)
+                        );
                     } else {
                         replyChannel.complete();
                     }
-
                 });
         } else {
-            replyChannel.completeWithError(ErrorCategory.INSTRUCTION_EXECUTION_ERROR,
-                                           "Unknown processor");
+            replyChannel.completeWithError(ErrorCategory.INSTRUCTION_EXECUTION_ERROR, "Unknown processor");
         }
     }
 }
