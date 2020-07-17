@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2010-2020. Axon Framework
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.connector.command.CommandChannel;
 import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
 import io.axoniq.axonserver.connector.impl.AbstractIncomingInstructionStream;
+import io.axoniq.axonserver.connector.impl.AsyncRegistration;
 import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
 import io.axoniq.axonserver.connector.impl.ObjectUtils;
 import io.axoniq.axonserver.grpc.ErrorMessage;
@@ -177,6 +178,24 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
     }
 
     @Override
+    public void reconnect() {
+        CompletableFuture<Void> unsubscribed = commandHandlers.keySet()
+                                                              .stream()
+                                                              .map(this::sendUnsubscribe)
+                                                              .reduce(CompletableFuture::allOf)
+                                                              .orElseGet(() -> CompletableFuture.completedFuture(null));
+
+        // TODO - Wait for all received commands to have returned their responses
+
+        StreamObserver<CommandProviderOutbound> previousOutbound = outboundCommandStream.getAndSet(null);
+
+        // when received commands are completed
+        unsubscribed.thenRun(() -> doIfNotNull(previousOutbound, StreamObserver::onCompleted));
+
+        scheduleImmediateReconnect();
+    }
+
+    @Override
     public void disconnect() {
         commandHandlers.keySet().forEach(this::sendUnsubscribe);
 
@@ -195,6 +214,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
     public Registration registerCommandHandler(Function<Command, CompletableFuture<CommandResponse>> handler,
                                                int loadFactor,
                                                String... commandNames) {
+        CompletableFuture<Void> subscriptionResult = CompletableFuture.completedFuture(null);
         for (String commandName : commandNames) {
             commandHandlers.put(commandName, handler);
             logger.info("Registered handler for command {}", commandName);
@@ -202,31 +222,41 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
             doIfNotNull(outboundCommandStream.get(),
                         s -> s.onNext(buildSubscribeMessage(commandName, instructionId, loadFactor)));
         }
-        return () -> unsubscribe(handler, commandNames);
+        return new AsyncRegistration(subscriptionResult, () -> unsubscribe(handler, commandNames));
     }
 
-    private void unsubscribe(Function<Command, CompletableFuture<CommandResponse>> handler, String... commandNames) {
+    private CompletableFuture<Void> unsubscribe(Function<Command, CompletableFuture<CommandResponse>> handler, String... commandNames) {
+        CompletableFuture<Void> future = CompletableFuture.completedFuture(null);
         for (String commandName : commandNames) {
-            // TODO - Remove command handler only after sending the unsubscribe message and receiving successful ACK
-            if (commandHandlers.remove(commandName, handler)) {
-                sendUnsubscribe(commandName);
+            if (commandHandlers.get(commandName) == handler) {
+                CompletableFuture<Void> result = sendUnsubscribe(commandName)
+                        .thenRun(() -> commandHandlers.remove(commandName, handler));
+                future = CompletableFuture.allOf(future, result);
             }
         }
+        return future;
     }
 
-    private void sendUnsubscribe(String commandName) {
-        doIfNotNull(outboundCommandStream.get(), s -> s.onNext(
-                CommandProviderOutbound.newBuilder()
-                                       // TODO - Use instruction id and track with CompletableFuture
-                                       .setUnsubscribe(
-                                               CommandSubscription
-                                                       .newBuilder()
-                                                       .setCommand(commandName)
-                                                       .setClientId(clientIdentification.getClientId())
-                                                       .setComponentName(clientIdentification.getComponentName())
-                                       )
-                                       .build()
-        ));
+    private CompletableFuture<Void> sendUnsubscribe(String commandName) {
+        String instructionId = UUID.randomUUID().toString();
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        doIfNotNull(outboundCommandStream.get(),
+                    s -> {
+                        instructionsAwaitingAck.put(instructionId, future);
+                        s.onNext(
+                                CommandProviderOutbound.newBuilder()
+                                                       .setInstructionId(instructionId)
+                                                       .setUnsubscribe(CommandSubscription.newBuilder()
+                                                                                          .setMessageId(instructionId)
+                                                                                          .setCommand(commandName)
+                                                                                          .setClientId(clientIdentification.getClientId())
+                                                                                          .setComponentName(clientIdentification.getComponentName()))
+                                                       .build()
+                        );
+
+                    })
+                .orElse(() -> future.complete(null));
+        return future;
     }
 
     private CommandProviderOutbound buildSubscribeMessage(String commandName, String instructionId, int loadFactor) {
@@ -292,9 +322,11 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
 
     @Override
     public CompletableFuture<Void> prepareDisconnect() {
-        this.commandHandlers.keySet().forEach(this::sendUnsubscribe);
-        // TODO: Wait for ACKs in CompletableFuture
-        return CompletableFuture.completedFuture(null);
+        return this.commandHandlers.keySet()
+                                   .stream()
+                                   .map(this::sendUnsubscribe)
+                                   .reduce(CompletableFuture::allOf)
+                                   .orElseGet(() -> CompletableFuture.completedFuture(null));
     }
 
     private static class CommandResponseHandler implements StreamObserver<CommandResponse> {

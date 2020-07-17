@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2010-2020. Axon Framework
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ import io.axoniq.axonserver.grpc.query.QueryUpdate;
 import io.axoniq.axonserver.grpc.query.SubscriptionQuery;
 
 import java.util.Scanner;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -111,6 +112,7 @@ public class ConnectorRunner_SubscriptionQuery {
                         running.set(false);
                         task.cancel(false);
                         System.out.println("Subscription query closed");
+                        return CompletableFuture.completedFuture(null);
                     };
                 }
             }, new QueryDefinition(String.class.getName(), String.class));

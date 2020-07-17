@@ -68,8 +68,13 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
     }
 
     @Override
+    public void reconnect() {
+        // TODO - Disconnect all the long-living event stream requests
+    }
+
+    @Override
     public void disconnect() {
-        // there is no instruction stream for the events channel
+        // TODO - Disconnect all the long-living event stream requests
     }
 
     @Override

@@ -117,14 +117,13 @@ class HeartbeatMonitorTest {
         nextCheckBeat.run();
         assertEquals(5, scheduledBeats.size());
         assertFalse(trigger.get());
-        elapseTime(99);
+        elapseTime(499);
         nextCheckBeat.run();
         assertFalse(trigger.get());
         elapseTime(1);
         nextCheckBeat.run();
         assertTrue(trigger.get());
     }
-
 
     @Test
     void testPausingPreventsTriggers() {

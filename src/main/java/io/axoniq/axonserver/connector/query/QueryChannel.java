@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2010-2020. Axon Framework
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,11 +22,12 @@ import io.axoniq.axonserver.grpc.SerializedObject;
 import io.axoniq.axonserver.grpc.query.QueryRequest;
 import io.axoniq.axonserver.grpc.query.QueryResponse;
 
+import java.util.concurrent.CompletableFuture;
+
 /**
  * Communication channel with AxonServer for Query related interactions.
  */
 public interface QueryChannel {
-
 
     /**
      * Registers the given {@code handler} to handle incoming queries defined through the given {@code queryTypes}.
@@ -67,5 +68,5 @@ public interface QueryChannel {
      * <p>
      * This method should be used if a connected client wants to disconnect from AxonServer.
      */
-    void prepareDisconnect();
+    CompletableFuture<Void> prepareDisconnect();
 }

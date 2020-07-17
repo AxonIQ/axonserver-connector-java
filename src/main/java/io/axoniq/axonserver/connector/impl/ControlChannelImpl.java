@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2010-2020. Axon Framework
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,6 +58,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
     private final ClientIdentification clientIdentification;
     private final ScheduledExecutorService executor;
     private final long processorUpdateFrequency;
+    private final Runnable reconnectHandler;
     private final AtomicReference<StreamObserver<PlatformInboundInstruction>> instructionDispatcher = new AtomicReference<>();
     private final Map<PlatformOutboundInstruction.RequestCase, InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction>> instructionHandlers = new EnumMap<>(PlatformOutboundInstruction.RequestCase.class);
     private final HeartbeatMonitor heartbeatMonitor;
@@ -70,12 +71,14 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
 
     public ControlChannelImpl(ClientIdentification clientIdentification, String context,
                               ScheduledExecutorService executor, AxonServerManagedChannel channel,
-                              long processorUpdateFrequency) {
+                              long processorUpdateFrequency,
+                              Runnable reconnectHandler) {
         super(executor, channel);
         this.clientIdentification = clientIdentification;
         this.context = context;
         this.executor = executor;
         this.processorUpdateFrequency = processorUpdateFrequency;
+        this.reconnectHandler = reconnectHandler;
         heartbeatMonitor = new HeartbeatMonitor(executor, this::sendHeartBeat, channel::forceReconnect);
         this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.ACK, i -> new AckHandler());
         this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.HEARTBEAT, i -> (msg, reply) -> heartbeatMonitor.handleIncomingBeat(reply));
@@ -85,7 +88,14 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
         this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.PAUSE_EVENT_PROCESSOR, i -> ProcessorInstructions.pauseHandler(processorInstructionHandlers));
         this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.RELEASE_SEGMENT, i -> ProcessorInstructions.releaseSegmentHandler(processorInstructionHandlers));
         this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.REQUEST_EVENT_PROCESSOR_INFO, i -> ProcessorInstructions.requestInfoHandler(processorInfoSuppliers));
+        this.instructionHandlers.computeIfAbsent(PlatformOutboundInstruction.RequestCase.REQUEST_RECONNECT, i -> this::handleReconnectRequest);
         platformServiceStub = PlatformServiceGrpc.newStub(channel);
+    }
+
+    private void handleReconnectRequest(PlatformOutboundInstruction platformOutboundInstruction, ReplyChannel<PlatformInboundInstruction> replyChannel) {
+        logger.info("AxonServer requested reconnect");
+        replyChannel.sendAck();
+        reconnectHandler.run();
     }
 
     @Override
@@ -114,6 +124,12 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
 
     }
 
+    @Override
+    public void reconnect() {
+        doIfNotNull(instructionDispatcher.getAndSet(null), StreamObserver::onCompleted);
+        scheduleImmediateReconnect();
+    }
+
     private void handleDisconnect(Throwable cause) {
         failOpenInstructions(cause);
         scheduleReconnect();
@@ -137,9 +153,9 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
     }
 
     @Override
-    public Registration registerInstructionHandler(PlatformOutboundInstruction.RequestCase type, InstructionHandler handler) {
+    public Registration registerInstructionHandler(PlatformOutboundInstruction.RequestCase type, InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> handler) {
         instructionHandlers.put(type, handler);
-        return () -> instructionHandlers.remove(type, handler);
+        return new SyncRegistration(() -> instructionHandlers.remove(type, handler));
     }
 
     @Override
@@ -149,12 +165,11 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
         if (infoSupplierActive.compareAndSet(false, true)) {
             // first processor is registered
             sendScheduledProcessorInfo();
-
         }
-        return () -> {
+        return new SyncRegistration(() -> {
             processorInstructionHandlers.remove(processorName, instructionHandler);
             processorInfoSuppliers.remove(processorName, infoSupplier);
-        };
+        });
     }
 
     private void sendScheduledProcessorInfo() {
@@ -196,15 +211,18 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
     public CompletableFuture<InstructionAck> sendInstruction(PlatformInboundInstruction instruction) {
         CompletableFuture<InstructionAck> result = new CompletableFuture<>();
         String instructionId = instruction.getInstructionId();
-        if (logger.isDebugEnabled()) {
-            logger.debug("Sending instruction: {} {}", instruction.getRequestCase().name(), instructionId);
-        }
         StreamObserver<PlatformInboundInstruction> dispatcher = instructionDispatcher.get();
         if (dispatcher == null) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("Unable to send instruction: {} {}. Disconnected.", instruction.getRequestCase().name(), instructionId);
+            }
             result.completeExceptionally(new AxonServerException(ErrorCategory.INSTRUCTION_EXECUTION_ERROR,
                                                                  "Unable to send instruction",
                                                                  clientIdentification.getClientId()));
         } else {
+            if (logger.isDebugEnabled()) {
+                logger.debug("Sending instruction: {} {}", instruction.getRequestCase().name(), instructionId);
+            }
             if (hasLength(instructionId)) {
                 awaitingAck.put(instructionId, result);
             }
@@ -268,7 +286,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
         @Override
         public void handle(PlatformOutboundInstruction ackMessage, ReplyChannel<PlatformInboundInstruction> replyChannel) {
             String instructionId = ackMessage.getAck().getInstructionId();
-            logger.info("Received ACK for {}", instructionId);
+            logger.debug("Received ACK for {}", instructionId);
             CompletableFuture<InstructionAck> handle = awaitingAck.remove(instructionId);
             if (handle != null) {
                 handle.complete(ackMessage.getAck());

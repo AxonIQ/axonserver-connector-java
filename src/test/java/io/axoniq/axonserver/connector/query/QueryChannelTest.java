@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2010-2020. Axon Framework
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -49,6 +50,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class QueryChannelTest extends AbstractAxonServerIntegrationTest {
+
+    private static final CompletableFuture<Void> COMPLETED_FUTURE = CompletableFuture.completedFuture(null);
 
     private AxonServerConnectionFactory connectionFactory1;
     private AxonServerConnection connection1;
@@ -85,12 +88,11 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
         QueryChannel queryChannel = connection1.queryChannel();
         Registration registration = queryChannel.registerQueryHandler(this::mockHandler, new QueryDefinition("testQuery", "testResult"));
 
-        // This cancellation is asynchronous
-        registration.cancel();
+        registration.cancel().join();
 
+        ResultStream<QueryResponse> result = connection2.queryChannel().query(QueryRequest.newBuilder().setQuery("testQuery").build());
 
         assertWithin(2, TimeUnit.SECONDS, () -> {
-            ResultStream<QueryResponse> result = connection2.queryChannel().query(QueryRequest.newBuilder().setQuery("testQuery").build());
 
             QueryResponse queryResponse = result.nextIfAvailable(100, TimeUnit.MILLISECONDS);
             assertNotNull(queryResponse);
@@ -103,7 +105,7 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
 
         axonServerProxy.enable();
 
-        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
+        assertWithin(2, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
 
         ResultStream<QueryResponse> result2 = connection2.queryChannel().query(QueryRequest.newBuilder().setQuery("testQuery").build());
         QueryResponse actual = result2.nextIfAvailable(1, TimeUnit.SECONDS);
@@ -147,7 +149,10 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
             @Override
             public Registration registerSubscriptionQuery(SubscriptionQuery query, UpdateHandler updateHandler) {
                 updateHandlerRef.set(updateHandler);
-                return () -> updateHandlerRef.set(null);
+                return () -> {
+                    updateHandlerRef.set(null);
+                    return COMPLETED_FUTURE;
+                };
             }
         }, new QueryDefinition("testQuery", "testResult"));
 
@@ -205,6 +210,7 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
                 return () -> {
                     logger.info("Clearing update handler");
                     updateHandlerRef.set(null);
+                    return COMPLETED_FUTURE;
                 };
             }
         }, new QueryDefinition("testQuery", "testResult"));
@@ -255,6 +261,7 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
                 updateHandlerRef.set(updateHandler);
                 return () -> {
                     updateHandlerRef.set(null);
+                    return COMPLETED_FUTURE;
                 };
             }
         }, new QueryDefinition("testQuery", "testResult"));

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2010-2020. Axon Framework
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 package io.axoniq.axonserver.connector.query.impl;
 
+import io.axoniq.axonserver.connector.AxonServerException;
 import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.InstructionHandler;
 import io.axoniq.axonserver.connector.Registration;
@@ -24,6 +25,7 @@ import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
 import io.axoniq.axonserver.connector.impl.AbstractBufferedStream;
 import io.axoniq.axonserver.connector.impl.AbstractIncomingInstructionStream;
+import io.axoniq.axonserver.connector.impl.AsyncRegistration;
 import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
 import io.axoniq.axonserver.connector.impl.ObjectUtils;
 import io.axoniq.axonserver.connector.query.QueryChannel;
@@ -66,6 +68,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
+import static io.axoniq.axonserver.connector.impl.ObjectUtils.hasLength;
 
 /**
  * {@link QueryChannel} implementation, serving as the query connection between AxonServer and a client application.
@@ -80,6 +83,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
     private final Set<QueryDefinition> supportedQueries = new CopyOnWriteArraySet<>();
     private final ConcurrentMap<String, Set<QueryHandler>> queryHandlers = new ConcurrentHashMap<>();
     private final ConcurrentMap<Enum<?>, InstructionHandler<QueryProviderInbound, QueryProviderOutbound>> instructionHandlers = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, CompletableFuture<Void>> instructions = new ConcurrentHashMap<>();
 
     private final ClientIdentification clientIdentification;
     private final int permits;
@@ -118,7 +122,15 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
     }
 
     private void handleAck(QueryProviderInbound query, ReplyChannel<QueryProviderOutbound> result) {
-        // TODO - Keep track of instructions awaiting ACK and complete them
+        String instructionId = query.getAck().getInstructionId();
+        CompletableFuture<Void> future = instructions.get(instructionId);
+        if (future != null) {
+            if (query.getAck().getSuccess()) {
+                future.complete(null);
+            } else {
+                future.completeExceptionally(new AxonServerException(query.getAck().getError()));
+            }
+        }
         result.complete();
     }
 
@@ -194,7 +206,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
         ));
         responseObserver.enableFlowControl();
 
-        logger.info("QueryChannel connected, {} query types registered", queryHandlers.size());
+        logger.info("QueryChannel connected, {} registrations resubscribed", queryHandlers.size());
         ObjectUtils.silently(previous, StreamObserver::onCompleted);
     }
 
@@ -214,50 +226,63 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
 
     @Override
     public Registration registerQueryHandler(QueryHandler handler, QueryDefinition... queryDefinitions) {
+        CompletableFuture<Void> subscriptionResult = CompletableFuture.completedFuture(null);
         synchronized (queryHandlerMonitor) {
             for (QueryDefinition queryDefinition : queryDefinitions) {
                 this.queryHandlers.computeIfAbsent(queryDefinition.getQueryName(), k -> new CopyOnWriteArraySet<>())
                                   .add(handler);
                 boolean firstRegistration = supportedQueries.add(queryDefinition);
                 if (firstRegistration) {
-                    doIfNotNull(
-                            outboundQueryStream.get(),
-                            s -> s.onNext(buildSubscribeMessage(
-                                    queryDefinition.getQueryName(), queryDefinition.getResultType(), ""
-                            ))
-                    );
+                    CompletableFuture<Void> instructionResult = sendInstruction(buildSubscribeMessage(queryDefinition.getQueryName(), queryDefinition.getResultType(), UUID.randomUUID().toString()));
+                    subscriptionResult = CompletableFuture.allOf(subscriptionResult, instructionResult);
                 }
-                logger.info("Registered handler for query {}", queryDefinition);
+                logger.debug("Registered handler for query {}", queryDefinition);
             }
         }
-        return () -> {
+        return new AsyncRegistration(subscriptionResult, () -> {
             synchronized (queryHandlerMonitor) {
-                for (QueryDefinition queryDefinition : queryDefinitions) {
-                    Set<QueryHandler> refs = queryHandlers.get(queryDefinition.getQueryName());
+                CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
+                for (QueryDefinition def : queryDefinitions) {
+                    Set<QueryHandler> refs = queryHandlers.get(def.getQueryName());
                     if (refs != null && refs.remove(handler) && refs.isEmpty()) {
-                        queryHandlers.remove(queryDefinition.getQueryName());
-                        sendUnsubscribe(queryDefinition);
+                        queryHandlers.remove(def.getQueryName());
+                        result = CompletableFuture.allOf(result, sendUnsubscribe(def));
+                        logger.debug("Unregistered handlers for query {}", def);
                     }
                 }
+                return result;
             }
-        };
+
+        });
     }
 
-    private void sendUnsubscribe(QueryDefinition queryDefinition) {
+    private CompletableFuture<Void> sendInstruction(QueryProviderOutbound subscribeMessage) {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        doIfNotNull(outboundQueryStream.get(),
+                    s -> {
+                        if (hasLength(subscribeMessage.getInstructionId())) {
+                            instructions.put(subscribeMessage.getInstructionId(), future);
+                        } else {
+                            future.complete(null);
+                        }
+                        s.onNext(subscribeMessage);
+                    })
+                .orElse(() -> future.complete(null));
+        return future;
+    }
+
+    private CompletableFuture<Void> sendUnsubscribe(QueryDefinition queryDefinition) {
         String instructionId = UUID.randomUUID().toString();
-        doIfNotNull(outboundQueryStream.get(), s -> {
-            QuerySubscription.Builder queryUnsubscription =
-                    QuerySubscription.newBuilder()
-                                     .setMessageId(instructionId)
-                                     .setQuery(queryDefinition.getQueryName())
-                                     .setResultName(queryDefinition.getResultType())
-                                     .setClientId(clientIdentification.getClientId())
-                                     .setComponentName(clientIdentification.getComponentName());
-            s.onNext(QueryProviderOutbound.newBuilder()
-                                          .setInstructionId(instructionId)
-                                          .setUnsubscribe(queryUnsubscription)
-                                          .build());
-        });
+        return sendInstruction(QueryProviderOutbound.newBuilder()
+                                                    .setInstructionId(instructionId)
+                                                    .setUnsubscribe(QuerySubscription.newBuilder()
+                                                                                     .setMessageId(instructionId)
+                                                                                     .setQuery(queryDefinition.getQueryName())
+                                                                                     .setResultName(queryDefinition.getResultType())
+                                                                                     .setClientId(clientIdentification.getClientId())
+                                                                                     .setComponentName(clientIdentification.getComponentName()))
+                                                    .build()
+        );
     }
 
     @Override
@@ -336,10 +361,19 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
     }
 
     @Override
-    public void prepareDisconnect() {
-        // TODO - Ensure all of these instructions are ACKed.
-        supportedQueries.forEach(this::sendUnsubscribe);
+    public void reconnect() {
+        disconnect();
+        scheduleImmediateReconnect();
+    }
+
+    @Override
+    public CompletableFuture<Void> prepareDisconnect() {
+        CompletableFuture<Void> future = supportedQueries.stream()
+                                                         .map(this::sendUnsubscribe)
+                                                         .reduce(CompletableFuture::allOf)
+                                                         .orElseGet(() -> CompletableFuture.completedFuture(null));
         cancelAllSubscriptionQueries();
+        return future;
     }
 
     private void cancelAllSubscriptionQueries() {
