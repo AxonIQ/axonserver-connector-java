@@ -195,15 +195,18 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
     public CompletableFuture<InstructionAck> sendInstruction(PlatformInboundInstruction instruction) {
         CompletableFuture<InstructionAck> result = new CompletableFuture<>();
         String instructionId = instruction.getInstructionId();
-        if (logger.isDebugEnabled()) {
-            logger.debug("Sending instruction: {} {}", instruction.getRequestCase().name(), instructionId);
-        }
         StreamObserver<PlatformInboundInstruction> dispatcher = instructionDispatcher.get();
         if (dispatcher == null) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("Unable to send instruction: {} {}. Disconnected.", instruction.getRequestCase().name(), instructionId);
+            }
             result.completeExceptionally(new AxonServerException(ErrorCategory.INSTRUCTION_EXECUTION_ERROR,
                                                                  "Unable to send instruction",
                                                                  clientIdentification.getClientId()));
         } else {
+            if (logger.isDebugEnabled()) {
+                logger.debug("Sending instruction: {} {}", instruction.getRequestCase().name(), instructionId);
+            }
             if (hasLength(instructionId)) {
                 awaitingAck.put(instructionId, result);
             }
@@ -267,7 +270,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
         @Override
         public void handle(PlatformOutboundInstruction ackMessage, ReplyChannel<PlatformInboundInstruction> replyChannel) {
             String instructionId = ackMessage.getAck().getInstructionId();
-            logger.info("Received ACK for {}", instructionId);
+            logger.debug("Received ACK for {}", instructionId);
             CompletableFuture<InstructionAck> handle = awaitingAck.remove(instructionId);
             if (handle != null) {
                 handle.complete(ackMessage.getAck());

@@ -348,19 +348,26 @@ public class AxonServerManagedChannel extends ManagedChannel {
         }
     }
 
-    public void forceReconnect() {
+    public void requestReconnect() {
         logger.info("Reconnect requested. Closing current connection");
+        doIfNotNull(activeChannel.get(), c -> {
+            c.shutdown();
+            executor.schedule(c::shutdownNow, 5, TimeUnit.SECONDS);
+        });
+    }
+
+    public void forceReconnect() {
+        logger.info("Forceful reconnect required. Closing current connection");
         ManagedChannel currentChannel = activeChannel.get();
         if (currentChannel != null) {
             currentChannel.shutdown();
             try {
-                currentChannel.awaitTermination(10, TimeUnit.SECONDS);
+                currentChannel.awaitTermination(5, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
             currentChannel.shutdownNow();
         }
-
     }
 
     private static class FailingCall<REQ, RESP> extends ClientCall<REQ, RESP> {

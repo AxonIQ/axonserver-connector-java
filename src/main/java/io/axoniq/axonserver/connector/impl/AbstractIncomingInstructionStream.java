@@ -51,6 +51,7 @@ public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowCon
     public void onNext(IN value) {
         InstructionHandler<IN, OUT> handler = getHandler(value);
         if (handler == null) {
+            logger.debug("Unsupported instruction received: {}", value);
             markConsumed();
             String instructionId = getInstructionId(value);
             if (instructionId != null && !instructionId.isEmpty()) {
