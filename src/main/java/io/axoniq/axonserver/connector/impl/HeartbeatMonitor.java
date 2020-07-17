@@ -23,6 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -38,7 +39,7 @@ public class HeartbeatMonitor {
     private final ScheduledExecutorService executor;
     private final HeartbeatSender sender;
     private final Runnable onHeartbeatMissed;
-    private final AtomicLong nextHeartbeatTimeout = new AtomicLong();
+    private final AtomicLong nextHeartbeatDeadline = new AtomicLong();
     private final AtomicLong nextHeartbeat = new AtomicLong();
     private final AtomicLong timeout = new AtomicLong(Long.MAX_VALUE);
     private final AtomicLong interval = new AtomicLong(Long.MAX_VALUE);
@@ -57,14 +58,14 @@ public class HeartbeatMonitor {
         this.timeout.set(timeUnit.toMillis(timeout));
         long now = clock.millis();
         nextHeartbeat.set(now);
-        nextHeartbeatTimeout.set(now + timeUnit.toMillis(timeout));
+        nextHeartbeatDeadline.set(now + timeUnit.toMillis(timeout));
         int task = taskId.incrementAndGet();
         executor.execute(() -> checkAndReschedule(task));
     }
 
     public void disableHeartbeat() {
         this.interval.set(Long.MAX_VALUE);
-        this.nextHeartbeatTimeout.set(Long.MAX_VALUE);
+        this.nextHeartbeatDeadline.set(Long.MAX_VALUE);
         taskId.incrementAndGet();
     }
 
@@ -72,7 +73,7 @@ public class HeartbeatMonitor {
         if (task == taskId.get()) {
             // heartbeats should not be considered valid when a change was made
             checkBeat();
-            long delay = Math.min(interval.get(), 500);
+            long delay = Math.min(interval.get(), 1000);
             logger.debug("Heartbeat status checked. Scheduling next heartbeat verification in {}ms", delay);
             executor.schedule(() -> checkAndReschedule(task), delay, TimeUnit.MILLISECONDS);
         }
@@ -96,19 +97,22 @@ public class HeartbeatMonitor {
 
     public void checkBeat() {
         long now = clock.millis();
-        long nextTimeout = nextHeartbeatTimeout.get();
-        if (nextTimeout <= now) {
+        long nextDeadline = nextHeartbeatDeadline.get();
+        if (nextDeadline <= now) {
             logger.info("Did not receive heartbeat acknowledgement within {}ms", this.timeout.get());
             onHeartbeatMissed.run();
-            nextHeartbeatTimeout.compareAndSet(nextTimeout, now + interval.get());
+            nextHeartbeatDeadline.compareAndSet(nextDeadline, now + interval.get());
         }
         if (planNextBeat(now, interval.get())) {
+            long currentInterval = this.interval.get();
+            long beatTimeout = this.timeout.get();
             sender.sendHeartbeat().whenComplete((r, e) -> {
                 if (e == null) {
-                    long currentInterval = this.interval.get();
                     if (currentInterval != Long.MAX_VALUE) {
-                        nextHeartbeatTimeout.updateAndGet(currentTimeout -> Math.max(nextTimeout + currentInterval, currentTimeout));
-                        logger.debug("Heartbeat Acknowledgement received. Extending timeout with {}ms", currentInterval);
+                        long newDeadline = nextHeartbeatDeadline.updateAndGet(currentDeadline -> Math.max(now + beatTimeout + currentInterval, currentDeadline));
+                        if (logger.isDebugEnabled()) {
+                            logger.debug("Heartbeat Acknowledgement received. Extending deadline to {}", Instant.ofEpochMilli(newDeadline));
+                        }
                     } else if (logger.isDebugEnabled()) {
                         logger.debug("Heartbeat Acknowledgment received.");
                     }
@@ -135,7 +139,7 @@ public class HeartbeatMonitor {
         long currentInterval = this.interval.get();
         // receiving a heartbeat from Server is equivalent to receiving an acknowledgement
         planNextBeat(now, currentInterval);
-        nextHeartbeatTimeout.updateAndGet(current -> Math.max(now + currentInterval, current));
+        nextHeartbeatDeadline.updateAndGet(current -> Math.max(now + currentInterval, current));
         try {
             reply.send(HEARTBEAT_MESSAGE);
         } finally {
