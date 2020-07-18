@@ -19,6 +19,7 @@ package io.axoniq.axonserver.connector.command;
 import io.axoniq.axonserver.connector.AbstractAxonServerIntegrationTest;
 import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
+import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.Registration;
 import io.axoniq.axonserver.grpc.command.Command;
 import io.axoniq.axonserver.grpc.command.CommandResponse;
@@ -29,7 +30,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.silently;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
@@ -129,6 +132,29 @@ class CommandChannelTest extends AbstractAxonServerIntegrationTest {
         CompletableFuture<CommandResponse> result = commandChannel.sendCommand(Command.newBuilder().setName("testCommand").build());
 
         assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(result.isCompletedExceptionally()));
+    }
+
+    @Test
+    void unsubscribingHandlerReturnsUnknownHandlerForCommand() throws TimeoutException, InterruptedException, ExecutionException {
+        CommandChannel commandChannel = connection1.commandChannel();
+        Registration registration = commandChannel.registerCommandHandler(this::mockHandler, 100, "testCommand")
+                                                  .awaitAck(1, TimeUnit.SECONDS);
+
+        // an ACK is not a guarantee that the registration has also been fully processed...
+        Thread.sleep(100);
+
+        CompletableFuture<CommandResponse> actual1 = commandChannel.sendCommand(Command.newBuilder().setName("testCommand").build());
+
+        assertEquals("", actual1.get(100, TimeUnit.MILLISECONDS).getErrorMessage().getMessage());
+        assertEquals("", actual1.get(100, TimeUnit.MILLISECONDS).getErrorCode());
+
+        registration.cancel().get(2, TimeUnit.SECONDS);
+
+        CompletableFuture<CommandResponse> actual2 = commandChannel.sendCommand(Command.newBuilder().setName("testCommand").build());
+
+        assertEquals(ErrorCategory.NO_HANDLER_FOR_COMMAND.errorCode(), actual2.get(1, TimeUnit.SECONDS).getErrorCode());
+        assertEquals("No Handler for command: testCommand", actual2.get(1, TimeUnit.SECONDS).getErrorMessage().getMessage());
+
     }
 
     private CompletableFuture<CommandResponse> mockHandler(Command command) {
