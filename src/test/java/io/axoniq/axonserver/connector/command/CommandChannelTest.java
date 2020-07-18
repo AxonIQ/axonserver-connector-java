@@ -33,6 +33,7 @@ import java.util.concurrent.TimeUnit;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.silently;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -98,23 +99,23 @@ class CommandChannelTest extends AbstractAxonServerIntegrationTest {
     @Test
     void testSubscribedHandlersReconnectAfterConnectionFailure() throws Exception {
         CommandChannel commandChannel = connection1.commandChannel();
-        commandChannel.registerCommandHandler(this::mockHandler, 100, "testCommand");
+        commandChannel.registerCommandHandler(this::mockHandler, 100, "testCommand")
+                      .awaitAck(1, TimeUnit.SECONDS);
 
         axonServerProxy.disable();
 
-        assertWithin(1, TimeUnit.SECONDS, () -> assertFalse(connection1.isConnectionFailed()));
+        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(connection1.isConnectionFailed()));
 
         axonServerProxy.enable();
 
-        assertWithin(3, TimeUnit.SECONDS, () -> assertTrue(connection1.isConnected()));
+        assertWithin(3, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
 
         Thread.sleep(100);
 
         CompletableFuture<CommandResponse> result = connection2.commandChannel().sendCommand(Command.newBuilder().setName("testCommand").build());
 
         CommandResponse commandResponse = result.get(1, TimeUnit.SECONDS);
-        assertFalse(commandResponse.hasErrorMessage(),
-                    () -> "Unexpected message: " + commandResponse.getErrorMessage().getMessage());
+        assertEquals("", commandResponse.getErrorMessage().getMessage());
     }
 
     @Test

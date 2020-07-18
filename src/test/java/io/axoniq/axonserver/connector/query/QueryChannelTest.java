@@ -116,11 +116,12 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
     @Test
     void testSubscribedHandlersReconnectAfterConnectionFailure() throws Exception {
         QueryChannel queryChannel = connection1.queryChannel();
-        queryChannel.registerQueryHandler(this::mockHandler, new QueryDefinition("testQuery", "testResult"));
+        queryChannel.registerQueryHandler(this::mockHandler, new QueryDefinition("testQuery", "testResult"))
+                    .awaitAck(1, TimeUnit.SECONDS);
 
         axonServerProxy.disable();
 
-        assertWithin(1, TimeUnit.SECONDS, () -> assertFalse(connection1.isConnected()));
+        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(connection1.isConnectionFailed()));
 
         axonServerProxy.enable();
 
@@ -131,8 +132,7 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
         ResultStream<QueryResponse> result = connection2.queryChannel().query(QueryRequest.newBuilder().setQuery("testQuery").build());
 
         QueryResponse queryResponse = result.nextIfAvailable(1, TimeUnit.SECONDS);
-        assertFalse(queryResponse.hasErrorMessage(),
-                    () -> "Unexpected message: " + queryResponse.getErrorMessage().getMessage());
+        assertEquals("", queryResponse.getErrorMessage().getMessage());
     }
 
     @Test

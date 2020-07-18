@@ -31,6 +31,7 @@ import io.grpc.StatusRuntimeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
@@ -42,7 +43,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
-import javax.annotation.Nullable;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
 
@@ -317,7 +317,12 @@ public class AxonServerManagedChannel extends ManagedChannel {
             if (newConnection != null) {
                 if (!activeChannel.compareAndSet(current, newConnection)) {
                     // concurrency. We need to abandon the given connection
+                    logger.debug("A successful Connection was concurrently set up. Closing this one.");
                     newConnection.shutdown();
+                    if (allowReschedule) {
+                        // we need to make sure the connection checked "process" is always kept alive
+                        scheduleConnectionCheck(50);
+                    }
                     return;
                 }
                 doIfNotNull(current, ManagedChannel::shutdown);
