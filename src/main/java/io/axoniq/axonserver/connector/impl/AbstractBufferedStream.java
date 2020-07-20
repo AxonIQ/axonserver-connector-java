@@ -113,12 +113,18 @@ public abstract class AbstractBufferedStream<T, R> extends FlowControlledBuffer<
 
     @Override
     public void close() {
-        if(!clientClosed.getAndSet(true)) {
+        if (!clientClosed.getAndSet(true)) {
             super.close();
             outboundStream().onCompleted();
         }
     }
 
+    /**
+     * Adds the given {@code handler} to a collection of {@link Runnable}s to be invoked when {@link #close()} is
+     * called.
+     *
+     * @param handler {@link Runnable} to invoke when {@link #close()} is invoked
+     */
     public void onCloseRequested(Runnable handler) {
         this.closeHandlers.add(handler);
         if (closeRequested.get()) {

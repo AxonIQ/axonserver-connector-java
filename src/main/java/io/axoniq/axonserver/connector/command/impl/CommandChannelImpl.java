@@ -225,7 +225,8 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
             commandHandlers.put(commandName, commandHandler);
             logger.info("Registered handler for command {}", commandName);
             String instructionId = UUID.randomUUID().toString();
-            CompletableFuture<Void> ack = sendInstruction(buildSubscribeMessage(commandName, instructionId, loadFactor));
+            CompletableFuture<Void> ack =
+                    sendInstruction(buildSubscribeMessage(commandName, instructionId, loadFactor));
             subscriptionResult = CompletableFuture.allOf(subscriptionResult, ack);
         }
         return new AsyncRegistration(subscriptionResult, () -> unsubscribe(commandHandler, commandNames));
@@ -247,12 +248,13 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
 
     private CompletableFuture<Void> sendUnsubscribe(String commandName) {
         String instructionId = UUID.randomUUID().toString();
-        CommandSubscription unsubscribeMessage = CommandSubscription.newBuilder()
-                                                                    .setMessageId(instructionId)
-                                                                    .setCommand(commandName)
-                                                                    .setClientId(clientIdentification.getClientId())
-                                                                    .setComponentName(clientIdentification.getComponentName())
-                                                                    .build();
+        CommandSubscription unsubscribeMessage =
+                CommandSubscription.newBuilder()
+                                   .setMessageId(instructionId)
+                                   .setCommand(commandName)
+                                   .setClientId(clientIdentification.getClientId())
+                                   .setComponentName(clientIdentification.getComponentName())
+                                   .build();
         return sendInstruction(CommandProviderOutbound.newBuilder()
                                                       .setInstructionId(instructionId)
                                                       .setUnsubscribe(unsubscribeMessage)

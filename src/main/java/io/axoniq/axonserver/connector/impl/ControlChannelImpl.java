@@ -48,9 +48,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
-import static io.axoniq.axonserver.connector.impl.ObjectUtils.hasLength;
-import static io.axoniq.axonserver.connector.impl.ObjectUtils.silently;
+import static io.axoniq.axonserver.connector.impl.ObjectUtils.*;
 
 /**
  * {@link ControlChannel} implementation, serving as the overall control and instruction connection between AxonServer
@@ -154,7 +152,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
 
     /* visible for testing */
     void handleReconnectRequest(PlatformOutboundInstruction platformOutboundInstruction,
-                                        ReplyChannel<PlatformInboundInstruction> replyChannel) {
+                                ReplyChannel<PlatformInboundInstruction> replyChannel) {
         logger.info("AxonServer requested reconnect");
         replyChannel.sendAck();
         reconnectHandler.run();

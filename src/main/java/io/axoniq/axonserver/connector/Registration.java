@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
- * Interface describing a registration that can be cancelled.
+ * Interface describing an instruction to perform a registration, which can be cancelled.
  */
 @FunctionalInterface
 public interface Registration {
@@ -30,13 +30,37 @@ public interface Registration {
      * Cancel the registration from which this instance was returned. Does nothing if the registration has already been
      * cancelled, or when the registration was undone by another mechanism (such as a new registration overriding this
      * one).
+     *
+     * @return a {@link CompletableFuture} of {@link Void} to react when {@code this} {@link Registration} has been
+     * canceled
      */
     CompletableFuture<Void> cancel();
 
+    /**
+     * Wait for the acknowledgement of the original instruction {@code this} {@link Registration} corresponds to. Allows
+     * for the addition of further logic to {@code this Registration}, like invoking {@link #onAck(Runnable)} for
+     * example.
+     *
+     * @param timeout the duration to wait until the operation has been acknowledged
+     * @param unit    the {@link TimeUnit} for the given {@code timeout} to wait until the operation has been
+     *                acknowledged
+     * @return {@code this} {@link Registration} to support a fluent API
+     * @throws TimeoutException     is thrown when the given {@code timeout} and {@code unit} is surpassed
+     * @throws InterruptedException is thrown when the thread waiting for the acknowledgement is interrupted
+     */
     default Registration awaitAck(long timeout, TimeUnit unit) throws TimeoutException, InterruptedException {
         return this;
     }
 
+    /**
+     * Registers the given {@code runnable} to {@code this} {@link Registration} to be executed when the acknowledgement
+     * of {@code this} {@link Registration} is received. Allows for the addition of further logic to {@code this
+     * Registration}, like invoking {@link #awaitAck(long, TimeUnit)} for example.
+     *
+     * @param runnable the {@link Runnable} to execute when the acknowledgement of {@code this} {@link Registration} is
+     *                 received
+     * @return {@code this} {@link Registration} to support a fluent API
+     */
     default Registration onAck(Runnable runnable) {
         runnable.run();
         return this;

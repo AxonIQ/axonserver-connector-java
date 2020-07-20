@@ -60,8 +60,7 @@ public class AsyncRegistration implements Registration {
                 throw (AxonServerException) e.getCause();
             } else {
                 throw new AxonServerException(
-                        ErrorCategory.INSTRUCTION_ACK_ERROR,
-                        "An instruction returned a failed acknowledgement", "", e
+                        ErrorCategory.INSTRUCTION_ACK_ERROR, "An instruction returned a failed acknowledgement", "", e
                 );
             }
         }

@@ -67,6 +67,8 @@ public interface QueryChannel {
      * a certain cut off until all acknowledgments of unsubscribing have been received.
      * <p>
      * This method should be used if a connected client wants to disconnect from AxonServer.
+     *
+     * @return a {@link CompletableFuture} of {@link Void} to react when all query handlers have been unsubscribed
      */
     CompletableFuture<Void> prepareDisconnect();
 }
