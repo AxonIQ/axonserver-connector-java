@@ -201,8 +201,11 @@ public class AxonServerManagedChannel extends ManagedChannel {
     @Override
     public <REQ, RESP> ClientCall<REQ, RESP> newCall(MethodDescriptor<REQ, RESP> methodDescriptor,
                                                      CallOptions callOptions) {
-        ensureConnected(false);
         ManagedChannel current = activeChannel.get();
+        if (current == null || current.getState(false) != ConnectivityState.READY) {
+            ensureConnected(false);
+            current = activeChannel.get();
+        }
         if (current == null) {
             return new FailingCall<>();
         }
