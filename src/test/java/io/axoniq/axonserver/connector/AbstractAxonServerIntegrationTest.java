@@ -52,7 +52,7 @@ public abstract class AbstractAxonServerIntegrationTest {
 
     @Container
     public static GenericContainer<?> axonServerContainer =
-            new GenericContainer<>("axoniq/axonserver")
+            new GenericContainer<>(System.getProperty("AXON_SERVER_IMAGE", "axoniq/axonserver"))
                     .withExposedPorts(8024, 8124)
                     .withEnv("AXONIQ_AXONSERVER_NAME", "axonserver")
                     .withEnv("AXONIQ_AXONSERVER_HOSTNAME", "localhost")
@@ -73,6 +73,7 @@ public abstract class AbstractAxonServerIntegrationTest {
 
     protected static ServerAddress axonServerAddress;
     private static ServerAddress axonServerHttpPort;
+    protected String axonServerVersion;
 
     @BeforeAll
     static void initialize() throws IOException {
@@ -80,10 +81,14 @@ public abstract class AbstractAxonServerIntegrationTest {
         axonServerHttpPort = new ServerAddress(axonServerContainer.getContainerIpAddress(), axonServerContainer.getMappedPort(8024));
         ToxiproxyClient client = new ToxiproxyClient(toxiProxyContainer.getContainerIpAddress(), toxiProxyContainer.getMappedPort(8474));
         axonServerProxy = getOrCreateProxy(client, "axonserver", "0.0.0.0:8124", "axonserver:8124");
+
     }
 
     @BeforeEach
     void prepareInstance() throws IOException {
+        JsonElement info = sendToAxonServer((r, b) -> r.get(), "/actuator/info");
+        axonServerVersion = info.getAsJsonObject().getAsJsonObject("app").get("version").getAsString();
+
         for (Toxic toxic : axonServerProxy.toxics().getAll()) {
             toxic.remove();
         }

@@ -16,6 +16,8 @@
 
 package io.axoniq.axonserver.connector.event.impl;
 
+import io.axoniq.axonserver.connector.AxonServerException;
+import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.event.AggregateEventStream;
 import io.axoniq.axonserver.connector.event.AppendEventsTransaction;
 import io.axoniq.axonserver.connector.event.EventChannel;
@@ -23,8 +25,11 @@ import io.axoniq.axonserver.connector.event.EventStream;
 import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
 import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
 import io.axoniq.axonserver.connector.impl.FutureStreamObserver;
+import io.axoniq.axonserver.grpc.InstructionAck;
+import io.axoniq.axonserver.grpc.event.CancelScheduledEventRequest;
 import io.axoniq.axonserver.grpc.event.Confirmation;
 import io.axoniq.axonserver.grpc.event.Event;
+import io.axoniq.axonserver.grpc.event.EventSchedulerGrpc;
 import io.axoniq.axonserver.grpc.event.EventStoreGrpc;
 import io.axoniq.axonserver.grpc.event.GetAggregateEventsRequest;
 import io.axoniq.axonserver.grpc.event.GetAggregateSnapshotsRequest;
@@ -33,9 +38,13 @@ import io.axoniq.axonserver.grpc.event.GetLastTokenRequest;
 import io.axoniq.axonserver.grpc.event.GetTokenAtRequest;
 import io.axoniq.axonserver.grpc.event.ReadHighestSequenceNrRequest;
 import io.axoniq.axonserver.grpc.event.ReadHighestSequenceNrResponse;
+import io.axoniq.axonserver.grpc.event.RescheduleEventRequest;
+import io.axoniq.axonserver.grpc.event.ScheduleEventRequest;
+import io.axoniq.axonserver.grpc.event.ScheduleToken;
 import io.axoniq.axonserver.grpc.event.TrackingToken;
 import io.grpc.stub.StreamObserver;
 
+import java.time.Instant;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -51,6 +60,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
     private static final TrackingToken NO_TOKEN_AVAILABLE = TrackingToken.newBuilder().setToken(-1).build();
 
     private final EventStoreGrpc.EventStoreStub eventStore;
+    private final EventSchedulerGrpc.EventSchedulerStub eventScheduler;
     private final Set<BufferedEventStream> buffers = ConcurrentHashMap.newKeySet();
     // guarded by -this-
 
@@ -63,6 +73,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
     public EventChannelImpl(ScheduledExecutorService executor, AxonServerManagedChannel channel) {
         super(executor, channel);
         eventStore = EventStoreGrpc.newStub(channel);
+        eventScheduler = EventSchedulerGrpc.newStub(channel);
     }
 
     @Override
@@ -95,6 +106,39 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
         FutureStreamObserver<Confirmation> result = new FutureStreamObserver<>(null);
         StreamObserver<Event> clientStream = eventStore.appendEvent(result);
         return new AppendEventsTransactionImpl(clientStream, result);
+    }
+
+    @Override
+    public CompletableFuture<String> scheduleEvent(Instant instant, Event event) {
+        FutureStreamObserver<ScheduleToken> responseObserver = new FutureStreamObserver<>(new AxonServerException(ErrorCategory.OTHER,
+                                                                                                                  "An unknown error occurred while scheduling an Event. No response received from Server.",
+                                                                                                                  ""));
+        eventScheduler.scheduleEvent(ScheduleEventRequest.newBuilder().build(), responseObserver);
+        return responseObserver.thenApply(ScheduleToken::getToken);
+    }
+
+    @Override
+    public CompletableFuture<InstructionAck> cancelSchedule(String token) {
+        FutureStreamObserver<InstructionAck> responseObserver = new FutureStreamObserver<>(new AxonServerException(ErrorCategory.OTHER,
+                                                                                                                   "An unknown error occurred while cancelling a scheduled Event. No response received from Server.",
+                                                                                                                   ""));
+        eventScheduler.cancelScheduledEvent(CancelScheduledEventRequest.newBuilder().setToken(token).build(),
+                                            responseObserver);
+        return responseObserver;
+    }
+
+    @Override
+    public CompletableFuture<String> reschedule(String scheduleToken, Instant instant, Event event) {
+        FutureStreamObserver<ScheduleToken> responseObserver = new FutureStreamObserver<>(new AxonServerException(ErrorCategory.OTHER,
+                                                                                                                  "An unknown error occurred while rescheduling Event. No response received from Server.",
+                                                                                                                  ""));
+        eventScheduler.rescheduleEvent(RescheduleEventRequest.newBuilder()
+                                                             .setToken(scheduleToken)
+                                                             .setEvent(event)
+                                                             .setInstant(instant.toEpochMilli())
+                                                             .build(),
+                                       responseObserver);
+        return responseObserver.thenApply(ScheduleToken::getToken);
     }
 
     @Override

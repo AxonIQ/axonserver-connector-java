@@ -16,9 +16,12 @@
 
 package io.axoniq.axonserver.connector.event;
 
+import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.event.Confirmation;
 import io.axoniq.axonserver.grpc.event.Event;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -34,10 +37,74 @@ public interface EventChannel {
     AppendEventsTransaction startAppendEventsTransaction();
 
     /**
+     * Schedule the given {@code event} to be published at given {@code instant}. The returned value can be used to
+     * cancel the schedule, or to reschedule the event to another time.
+     *
+     * @param instant The instant at which to publish the event
+     * @param event   The event to publish
+     *
+     * @return a token used to cancel the schedule
+     */
+    CompletableFuture<String> scheduleEvent(Instant instant, Event event);
+
+    /**
+     * Schedule the given {@code event} to be published after given {@code duration}. The returned value can be used to
+     * cancel the schedule, or to reschedule the event to another time.
+     *
+     * @param duration The amount of time to wait to publish the event
+     * @param event    The event to publish
+     *
+     * @return a token used to cancel the schedule
+     */
+    default CompletableFuture<String> scheduleEvent(Duration duration, Event event) {
+        return scheduleEvent(Instant.now().plus(duration), event);
+    }
+
+    /**
+     * Cancels the scheduled publication of an event for which the given {@code scheduleToken} was returned.
+     *
+     * @param scheduleToken The token provided when scheduling the event to be cancelled
+     *
+     * @return a future reference to the result of the instruction
+     */
+    CompletableFuture<InstructionAck> cancelSchedule(String scheduleToken);
+
+    /**
+     * Convenience method to cancel the scheduled event with given {@code scheduleToken} and reschedule the given {@code
+     * event} to be published at given {@code instant}. Is effectively the same as cancelling and scheduling in separate
+     * calls, but this call requires only a single round-trip to the server.
+     *
+     * @param scheduleToken The token of the event to cancel
+     * @param instant       The point in time to publish the new event
+     * @param event         The event to publish
+     *
+     * @return a future reference to the token for the new schedule
+     */
+    CompletableFuture<String> reschedule(String scheduleToken, Instant instant, Event event);
+
+    /**
+     * Convenience method to cancel the scheduled event with given {@code scheduleToken} and reschedule the given
+     * {@code
+     * event} to be published after given {@code duration}. Is effectively the same as cancelling and scheduling in
+     * separate
+     * calls, but this call requires only a single round-trip to the server.
+     *
+     * @param scheduleToken   The token of the event to cancel
+     * @param triggerDuration The point amount of time to wait to publish the event
+     * @param event           The event to publish
+     *
+     * @return a future reference to the token for the new schedule
+     */
+    default CompletableFuture<String> reschedule(String scheduleToken, Duration triggerDuration, Event event) {
+        return reschedule(scheduleToken, Instant.now().plus(triggerDuration), event);
+    }
+
+    /**
      * Append the given {@code events} to the Event Store. Prior to starting, the {@link
      * #startAppendEventsTransaction()} method should be invoked
      *
      * @param events the {@link Event}s to append to the Event Store
+     *
      * @return a {@link CompletableFuture} resolving the confirmation of the successful processing of the append
      * transaction
      */

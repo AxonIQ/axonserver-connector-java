@@ -22,14 +22,17 @@ import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
 import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.impl.StreamClosedException;
 import io.axoniq.axonserver.connector.testutils.MessageFactory;
+import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.event.Confirmation;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.EventWithToken;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -41,6 +44,7 @@ import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -200,6 +204,34 @@ class EventHandlingTest extends AbstractAxonServerIntegrationTest {
             Assertions.assertNotNull(stream.nextIfAvailable(5, SECONDS));
             Assertions.assertFalse(stream.isClosed());
         }
+    }
+
+    @Test
+    void testScheduleAndCancel() throws Exception {
+        Assumptions.assumeTrue(axonServerVersion.matches("4\\.[4-9].*"), "Version " + axonServerVersion + " does not support scheduled events");
+
+        EventChannel eventChannel = connection1.eventChannel();
+
+        CompletableFuture<String> result = eventChannel.scheduleEvent(Duration.ofDays(1), MessageFactory.createEvent("payload"));
+        String token = result.get(1, SECONDS);
+        assertNotNull(token);
+
+        InstructionAck cancelResult = eventChannel.cancelSchedule(token).get(1, SECONDS);
+        assertTrue(cancelResult.getSuccess());
+    }
+
+    @Test
+    void testCancelUnknownToken() throws Exception {
+        Assumptions.assumeTrue(axonServerVersion.matches("4\\.[4-9].*"), "Version " + axonServerVersion + " does not support scheduled events");
+
+        EventChannel eventChannel = connection1.eventChannel();
+
+        CompletableFuture<String> result = eventChannel.scheduleEvent(Duration.ofDays(1), MessageFactory.createEvent("payload"));
+        String token = result.get(1, SECONDS);
+        assertNotNull(token);
+
+        InstructionAck cancelResult = eventChannel.cancelSchedule(token).get(1, SECONDS);
+        assertTrue(cancelResult.getSuccess());
     }
 
     @Test
