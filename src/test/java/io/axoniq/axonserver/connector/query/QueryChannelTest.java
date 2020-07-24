@@ -20,6 +20,7 @@ import com.google.protobuf.ByteString;
 import io.axoniq.axonserver.connector.AbstractAxonServerIntegrationTest;
 import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
+import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.Registration;
 import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.connector.ResultStream;
@@ -28,6 +29,7 @@ import io.axoniq.axonserver.grpc.query.QueryRequest;
 import io.axoniq.axonserver.grpc.query.QueryResponse;
 import io.axoniq.axonserver.grpc.query.QueryUpdate;
 import io.axoniq.axonserver.grpc.query.SubscriptionQuery;
+import io.grpc.StatusRuntimeException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.RepeatedTest;
@@ -48,6 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 class QueryChannelTest extends AbstractAxonServerIntegrationTest {
 
@@ -185,9 +188,7 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
 
         assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
 
-        Thread.sleep(100);
-
-        assertNull(updateHandlerRef.get());
+        assertWithin(1, TimeUnit.SECONDS, () -> assertNull(updateHandlerRef.get()));
     }
 
     @RepeatedTest(20)
@@ -293,6 +294,44 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
         });
     }
 
+    @Test
+    void testUnsupportedSubscriptionQueryReturnsNoHandler() throws InterruptedException, TimeoutException {
+        String subscriptionId = UUID.randomUUID().toString();
+        SubscriptionQueryResult result = connection1.queryChannel().subscriptionQuery(QueryRequest.newBuilder()
+                                                                                                  .setMessageIdentifier(subscriptionId)
+                                                                                                  .setQuery("testQuery").build(),
+                                                                                      SerializedObject.newBuilder().setType("update").build(),
+                                                                                      100, 10);
+        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(result.updates().isClosed()));
+        try {
+            result.initialResult().get(1, TimeUnit.SECONDS);
+            fail("Expected an exception to be reported");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof StatusRuntimeException);
+            assertEquals(ErrorCategory.NO_HANDLER_FOR_QUERY.errorCode(), ((StatusRuntimeException) e.getCause()).getStatus().getDescription());
+        }
+    }
+
+    @Test
+    void testSubscriptionQueryReturnsNoUpdatesOnUnsupportedSubscription() throws InterruptedException, ExecutionException, TimeoutException {
+        String subscriptionId = UUID.randomUUID().toString();
+        connection2.queryChannel().registerQueryHandler(this::mockHandler, new QueryDefinition("testQuery", String.class))
+                   .awaitAck(1, TimeUnit.SECONDS);
+
+        SubscriptionQueryResult result = connection1.queryChannel().subscriptionQuery(QueryRequest.newBuilder()
+                                                                                                  .setMessageIdentifier(subscriptionId)
+                                                                                                  .setQuery("testQuery").build(),
+                                                                                      SerializedObject.newBuilder().setType("update").build(),
+                                                                                      100, 10);
+
+        result.initialResult().get(1, TimeUnit.SECONDS);
+        assertNull(result.updates().nextIfAvailable());
+        assertFalse(result.updates().isClosed());
+
+        result.updates().close();
+
+        assertTrue(result.updates().isClosed());
+    }
 
     private void mockHandler(QueryRequest query, ReplyChannel<QueryResponse> responseHandler) {
         responseHandler.sendLast(QueryResponse.newBuilder().setRequestIdentifier(query.getMessageIdentifier()).setPayload(query.getPayload()).build());
