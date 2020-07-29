@@ -73,7 +73,8 @@ public interface ResultStream<T> extends AutoCloseable {
      */
     T next() throws InterruptedException;
 
-    // TODO - Allow for a method the returns a CompletableFuture<T> which completes when the next available item is available (or immediately, if one is already available).
+    // TODO - Allow for a method that returns a CompletableFuture<T> which completes
+    //  when the next available item is available (or immediately, if one is already available). - issue #4
 
     /**
      * Sets the given {@code callback} to execute when data is available for reading, or the stream has been closed.

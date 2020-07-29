@@ -109,33 +109,42 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
     }
 
     @Override
-    public CompletableFuture<String> scheduleEvent(Instant instant, Event event) {
-        FutureStreamObserver<ScheduleToken> responseObserver = new FutureStreamObserver<>(new AxonServerException(ErrorCategory.OTHER,
-                                                                                                                  "An unknown error occurred while scheduling an Event. No response received from Server.",
-                                                                                                                  ""));
+    public CompletableFuture<String> scheduleEvent(Instant scheduleTime, Event event) {
+        FutureStreamObserver<ScheduleToken> responseObserver = new FutureStreamObserver<>(new AxonServerException(
+                ErrorCategory.OTHER,
+                "An unknown error occurred while scheduling an Event. No response received from Server.",
+                ""
+        ));
+
         eventScheduler.scheduleEvent(ScheduleEventRequest.newBuilder().build(), responseObserver);
         return responseObserver.thenApply(ScheduleToken::getToken);
     }
 
     @Override
     public CompletableFuture<InstructionAck> cancelSchedule(String token) {
-        FutureStreamObserver<InstructionAck> responseObserver = new FutureStreamObserver<>(new AxonServerException(ErrorCategory.OTHER,
-                                                                                                                   "An unknown error occurred while cancelling a scheduled Event. No response received from Server.",
-                                                                                                                   ""));
+        FutureStreamObserver<InstructionAck> responseObserver = new FutureStreamObserver<>(new AxonServerException(
+                ErrorCategory.OTHER,
+                "An unknown error occurred while cancelling a scheduled Event. No response received from Server.",
+                ""
+        ));
+
         eventScheduler.cancelScheduledEvent(CancelScheduledEventRequest.newBuilder().setToken(token).build(),
                                             responseObserver);
         return responseObserver;
     }
 
     @Override
-    public CompletableFuture<String> reschedule(String scheduleToken, Instant instant, Event event) {
-        FutureStreamObserver<ScheduleToken> responseObserver = new FutureStreamObserver<>(new AxonServerException(ErrorCategory.OTHER,
-                                                                                                                  "An unknown error occurred while rescheduling Event. No response received from Server.",
-                                                                                                                  ""));
+    public CompletableFuture<String> reschedule(String scheduleToken, Instant scheduleTime, Event event) {
+        FutureStreamObserver<ScheduleToken> responseObserver = new FutureStreamObserver<>(new AxonServerException(
+                ErrorCategory.OTHER,
+                "An unknown error occurred while rescheduling Event. No response received from Server.",
+                ""
+        ));
+
         eventScheduler.rescheduleEvent(RescheduleEventRequest.newBuilder()
                                                              .setToken(scheduleToken)
                                                              .setEvent(event)
-                                                             .setInstant(instant.toEpochMilli())
+                                                             .setInstant(scheduleTime.toEpochMilli())
                                                              .build(),
                                        responseObserver);
         return responseObserver.thenApply(ScheduleToken::getToken);

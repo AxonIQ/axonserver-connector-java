@@ -190,7 +190,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
                                                               .reduce(CompletableFuture::allOf)
                                                               .orElseGet(() -> CompletableFuture.completedFuture(null));
 
-        // TODO - Wait for all received commands to have returned their responses
+        // TODO - Wait for all received commands to have returned their responses - issue #2
 
         StreamObserver<CommandProviderOutbound> previousOutbound = outboundCommandStream.getAndSet(null);
 
@@ -204,7 +204,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
     public void disconnect() {
         commandHandlers.keySet().forEach(this::sendUnsubscribe);
 
-        // TODO - Wait for all received commands to have returned their responses
+        // TODO - Wait for all received commands to have returned their responses - issue #2
 
         commandHandlers.clear();
         doIfNotNull(outboundCommandStream.getAndSet(null), StreamObserver::onCompleted);
@@ -317,7 +317,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
         } catch (OutOfDirectMemoryError e) {
             // error thrown when Netty is out of buffer space to send this command
             // unfortunately, the API doesn't allow us to detect this prior to sending
-            // TODO - Use a backpressure mechanism when this error occurs, instead of failing directly
+            // TODO - Use a backpressure mechanism when this error occurs, instead of failing directly - issue #3
             response.completeExceptionally(new AxonServerException(ErrorCategory.COMMAND_DISPATCH_ERROR,
                                                                    "Unable to buffer message for dispatching",
                                                                    clientIdentification.getClientId(),
@@ -362,7 +362,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
         @Override
         public void onError(Throwable t) {
             if (!response.isDone()) {
-                // TODO - Check for flow control related errors and do backoff-retry.
+                // TODO - Check for flow control related errors and do backoff-retry - issue #3
                 response.completeExceptionally(new AxonServerException(ErrorCategory.COMMAND_DISPATCH_ERROR,
                                                                        "Received exception while dispatching command",
                                                                        clientId,
