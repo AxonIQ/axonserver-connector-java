@@ -73,17 +73,15 @@ public interface ResultStream<T> extends AutoCloseable {
      */
     T next() throws InterruptedException;
 
-    // TODO - Allow for a method that returns a CompletableFuture<T> which completes
-    //  when the next available item is available (or immediately, if one is already available). - issue #4
-
     /**
      * Sets the given {@code callback} to execute when data is available for reading, or the stream has been closed.
-     * Note that <em>any</em> registration will replace the previous one.
+     * Note that <em>any</em> registration will <em>replace</em> the previous one.
      * <p>
      * The callback is invoked in the publisher's thread. Invocations should be as short as possible, preferably
      * delegating to a reader thead, instead of accessing the entries directly.
      *
-     * @param callback a {{@link Runnable}} to {@link Runnable#run()} when the next entry becomes available
+     * @param callback a {{@link Runnable}} to {@link Runnable#run()} when the next entry becomes available or
+     *                 {@code null} to disable callbacks
      */
     void onAvailable(Runnable callback);
 
