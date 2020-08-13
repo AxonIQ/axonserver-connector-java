@@ -229,11 +229,18 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
         return result.thenApply(TrackingToken::getToken);
     }
 
+    /**
+     * This token which is retrieved through this method is required to be decremented by 1. Although unideal, this is
+     * required as Axon Server essentially deals with the notion of an <em>offset</em> from where to start event
+     * streaming, whilst clients dealing with the idea of a Token, the poin ton the stream to start reading from.
+     * <p>
+     * {@inheritDoc}
+     */
     @Override
     public CompletableFuture<Long> getFirstToken() {
         FutureStreamObserver<TrackingToken> result = new FutureStreamObserver<>(NO_TOKEN_AVAILABLE);
         eventStore.getFirstToken(GetFirstTokenRequest.newBuilder().build(), result);
-        return result.thenApply(TrackingToken::getToken);
+        return result.thenApply(trackingToken -> trackingToken.getToken() - 1);
     }
 
     @Override
