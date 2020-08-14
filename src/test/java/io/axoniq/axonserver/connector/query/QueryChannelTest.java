@@ -65,7 +65,7 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
     @BeforeEach
     void setUp() {
         connectionFactory1 = AxonServerConnectionFactory.forClient(getClass().getSimpleName() + "_Handler")
-                                                        .connectTimeout(1000, TimeUnit.MILLISECONDS)
+                                                        .connectTimeout(1500, TimeUnit.MILLISECONDS)
                                                         .reconnectInterval(500, TimeUnit.MILLISECONDS)
                                                         .routingServers(axonServerAddress)
                                                         .build();
@@ -73,7 +73,7 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
         connection1 = connectionFactory1.connect("default");
 
         connectionFactory2 = AxonServerConnectionFactory.forClient(getClass().getSimpleName() + "_Sender")
-                                                        .connectTimeout(1000, TimeUnit.MILLISECONDS)
+                                                        .connectTimeout(1500, TimeUnit.MILLISECONDS)
                                                         .reconnectInterval(500, TimeUnit.MILLISECONDS)
                                                         .routingServers(axonServerAddress)
                                                         .build();
@@ -187,8 +187,6 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
         axonServerProxy.enable();
 
         assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
-
-        assertWithin(1, TimeUnit.SECONDS, () -> assertNull(updateHandlerRef.get()));
     }
 
     @RepeatedTest(20)
@@ -284,7 +282,7 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
         updateHandlerRef.get().complete();
 
         ResultStream<QueryUpdate> updates = subscriptionQuery.updates();
-        assertWithin(1, TimeUnit.SECONDS, () -> assertNotNull(updates.nextIfAvailable()));
+        assertNotNull(updates.nextIfAvailable(1, TimeUnit.SECONDS));
 
         assertNull(updates.nextIfAvailable());
 
