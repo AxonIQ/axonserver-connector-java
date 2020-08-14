@@ -36,6 +36,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -235,14 +236,15 @@ class EventHandlingTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
-    void testSubscribeUsingInitialToken() throws InterruptedException {
+    void testSubscribeUsingInitialToken() throws InterruptedException, ExecutionException {
         EventChannel eventChannel = connection1.eventChannel();
         EventChannel publishingEventChannel = connection2.eventChannel();
 
         publishingEventChannel.appendEvents(MessageFactory.createEvent("event1"),
                                             MessageFactory.createEvent("event2"));
 
-        EventStream actual = eventChannel.openStream(-1, 10);
+        Long firstToken = eventChannel.getFirstToken().get();
+        EventStream actual = eventChannel.openStream(firstToken, 10);
         assertEquals("event1", actual.next().getEvent().getPayload().getData().toStringUtf8());
         assertEquals("event2", actual.next().getEvent().getPayload().getData().toStringUtf8());
         assertNull(actual.nextIfAvailable());
@@ -250,7 +252,7 @@ class EventHandlingTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
-    void testResubscribeUsingReceviedTokenContinuesOnStream() throws InterruptedException {
+    void testResubscribeUsingReceivedTokenContinuesOnStream() throws InterruptedException {
         EventChannel eventChannel = connection1.eventChannel();
         EventChannel publishingEventChannel = connection2.eventChannel();
 
@@ -260,11 +262,9 @@ class EventHandlingTest extends AbstractAxonServerIntegrationTest {
         EventStream firstStream = eventChannel.openStream(-1, 10);
         EventWithToken firstEvent = firstStream.next();
         assertEquals("event1", firstEvent.getEvent().getPayload().getData().toStringUtf8());
-        long token = firstEvent.getToken();
-        System.out.println("Token with first event is " + token);
         firstStream.close();
 
-        EventStream secondStream = eventChannel.openStream(token, 10);
+        EventStream secondStream = eventChannel.openStream(firstEvent.getToken(), 10);
         EventWithToken secondEvent = secondStream.nextIfAvailable(1, SECONDS);
         assertEquals("event2", secondEvent.getEvent().getPayload().getData().toStringUtf8());
         secondStream.close();
