@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2020. Axon Framework
+ * Copyright (c) 2020. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import static io.axoniq.axonserver.connector.impl.ObjectUtils.*;
+import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
+import static io.axoniq.axonserver.connector.impl.ObjectUtils.hasLength;
+import static io.axoniq.axonserver.connector.impl.ObjectUtils.silently;
 
 /**
  * {@link ControlChannel} implementation, serving as the overall control and instruction connection between AxonServer
