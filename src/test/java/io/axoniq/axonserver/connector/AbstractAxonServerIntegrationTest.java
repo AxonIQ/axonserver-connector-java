@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2010-2020. Axon Framework
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.wait.strategy.Wait;
+import org.testcontainers.images.PullPolicy;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.shaded.okhttp3.Call;
@@ -42,6 +43,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.time.Duration;
 import java.util.function.BiFunction;
 
 @Testcontainers
@@ -57,6 +59,7 @@ public abstract class AbstractAxonServerIntegrationTest {
                     .withEnv("AXONIQ_AXONSERVER_NAME", "axonserver")
                     .withEnv("AXONIQ_AXONSERVER_HOSTNAME", "localhost")
                     .withEnv("AXONIQ_AXONSERVER_DEVMODE_ENABLED", "true")
+                    .withImagePullPolicy(PullPolicy.ageBased(Duration.ofDays(1)))
                     .withNetwork(network)
                     .withNetworkAliases("axonserver")
                     .waitingFor(Wait.forHttp("/actuator/health").forPort(8024));
@@ -65,9 +68,9 @@ public abstract class AbstractAxonServerIntegrationTest {
     public static GenericContainer<?> toxiProxyContainer =
             new GenericContainer<>("shopify/toxiproxy")
                     .withExposedPorts(8474, 8124)
+                    .withImagePullPolicy(PullPolicy.ageBased(Duration.ofDays(1)))
                     .withNetwork(network)
                     .waitingFor(Wait.forHttp("/version").forPort(8474));
-
 
     protected static Proxy axonServerProxy;
 
