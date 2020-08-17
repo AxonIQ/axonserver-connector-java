@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2010-2020. Axon Framework
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import io.grpc.ConnectivityState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -63,15 +64,19 @@ public abstract class AbstractAxonServerChannel {
     }
 
     private void scheduleReconnect(boolean immediate) {
-        executor.schedule(() -> {
-            ConnectivityState connectivityState = channel.getState(immediate);
-            if (connectivityState == ConnectivityState.READY) {
-                connect();
-            } else {
-                logger.debug("No connection to AxonServer available. Scheduling next attempt in 500ms");
-                scheduleReconnect(false);
-            }
-        }, immediate ? 0 : 500, TimeUnit.MILLISECONDS);
+        try {
+            executor.schedule(() -> {
+                ConnectivityState connectivityState = channel.getState(immediate);
+                if (connectivityState == ConnectivityState.READY) {
+                    connect();
+                } else {
+                    logger.debug("No connection to AxonServer available. Scheduling next attempt in 500ms");
+                    scheduleReconnect(false);
+                }
+            }, immediate ? 0 : 500, TimeUnit.MILLISECONDS);
+        } catch (RejectedExecutionException e) {
+            logger.info("Ignoring reconnect request, as connector is being thus down.");
+        }
     }
 
     /**

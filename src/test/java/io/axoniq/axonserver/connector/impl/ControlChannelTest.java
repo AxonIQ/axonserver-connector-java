@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2010-2020. Axon Framework
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -155,17 +155,16 @@ class ControlChannelTest extends AbstractAxonServerIntegrationTest {
                                                             instructionHandler);
 
         assertWithin(1, TimeUnit.SECONDS, () -> {
-            sendToAxonServer(Request.Builder::patch, "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/pause?context=default");
+            sendToAxonServer(Request.Builder::patch, "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/pause?tokenStoreIdentifier=TokenStoreId&context=default");
             verify(instructionHandler).pauseProcessor();
         });
         processorInfo.set(buildEventProcessorInfo(false));
+        // these status updates are sent once per 2 seconds
 
-
-        assertWithin(1, TimeUnit.SECONDS, () -> {
-            sendToAxonServer(Request.Builder::patch, "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/start?context=default");
+        assertWithin(3, TimeUnit.SECONDS, () -> {
+            sendToAxonServer(Request.Builder::patch, "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/start?tokenStoreIdentifier=TokenStoreId&context=default");
             verify(instructionHandler).startProcessor();
         });
-
     }
 
     @Test
@@ -182,11 +181,10 @@ class ControlChannelTest extends AbstractAxonServerIntegrationTest {
                                                             instructionHandler)
                    .awaitAck(1, TimeUnit.SECONDS);
 
-
-        assertWithin(2, TimeUnit.SECONDS, () -> sendToAxonServer(Request.Builder::patch, "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/segments/merge?context=default"));
+        assertWithin(2, TimeUnit.SECONDS, () -> sendToAxonServer(Request.Builder::patch, "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/segments/merge?tokenStoreIdentifier=TokenStoreId&context=default"));
         assertWithin(1, TimeUnit.SECONDS, () -> verify(instructionHandler).mergeSegment(eq(0)));
 
-        assertWithin(2, TimeUnit.SECONDS, () -> sendToAxonServer(Request.Builder::patch, "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/segments/split?context=default"));
+        assertWithin(2, TimeUnit.SECONDS, () -> sendToAxonServer(Request.Builder::patch, "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/segments/split?tokenStoreIdentifier=TokenStoreId&context=default"));
         assertWithin(1, TimeUnit.SECONDS, () -> verify(instructionHandler).splitSegment(eq(0)));
     }
 
@@ -213,7 +211,7 @@ class ControlChannelTest extends AbstractAxonServerIntegrationTest {
         // we wait for AxonServer to request data, which is an acknowledgement that the processor was registered.
         cdl.await(3, TimeUnit.SECONDS);
 
-        sendToAxonServer(Request.Builder::patch, "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/segments/0/move?context=default&target=foo");
+        sendToAxonServer(Request.Builder::patch, "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/segments/0/move?tokenStoreIdentifier=TokenStoreId&context=default&target=foo");
 
         assertWithin(1, TimeUnit.SECONDS, () -> {
             assertTrue(instructionHandler.instructions.contains("release0"));
@@ -227,7 +225,7 @@ class ControlChannelTest extends AbstractAxonServerIntegrationTest {
                                  .setRunning(running)
                                  .setMode("Tracking")
                                  .setProcessorName("testProcessor")
-                                 .setTokenStoreIdentifier("Unique")
+                                 .setTokenStoreIdentifier("TokenStoreId")
                                  .addSegmentStatus(
                                          EventProcessorInfo.SegmentStatus.newBuilder()
                                                                          .setCaughtUp(false)
