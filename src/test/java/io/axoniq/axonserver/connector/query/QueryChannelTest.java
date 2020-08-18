@@ -130,12 +130,13 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
 
         assertWithin(3, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
 
-        Thread.sleep(100);
-
-        ResultStream<QueryResponse> result = connection2.queryChannel().query(QueryRequest.newBuilder().setQuery("testQuery").build());
-
-        QueryResponse queryResponse = result.nextIfAvailable(1, TimeUnit.SECONDS);
-        assertEquals("", queryResponse.getErrorMessage().getMessage());
+        // on some environments, the subscription action may be delayed a little
+        assertWithin(1500, TimeUnit.MILLISECONDS, () -> {
+            ResultStream<QueryResponse> result = connection2.queryChannel().query(QueryRequest.newBuilder().setQuery("testQuery").build());
+            QueryResponse queryResponse = result.nextIfAvailable(500, TimeUnit.MILLISECONDS);
+            assertNotNull(queryResponse);
+            assertEquals("", queryResponse.getErrorMessage().getMessage());
+        });
     }
 
     @Test

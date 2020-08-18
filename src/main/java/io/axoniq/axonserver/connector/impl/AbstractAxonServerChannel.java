@@ -75,7 +75,7 @@ public abstract class AbstractAxonServerChannel {
                 }
             }, immediate ? 0 : 500, TimeUnit.MILLISECONDS);
         } catch (RejectedExecutionException e) {
-            logger.info("Ignoring reconnect request, as connector is being thus down.");
+            logger.info("Ignoring reconnect request, as connector is being shut down.");
         }
     }
 
