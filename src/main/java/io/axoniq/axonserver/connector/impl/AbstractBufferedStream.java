@@ -18,6 +18,7 @@ package io.axoniq.axonserver.connector.impl;
 
 import io.axoniq.axonserver.connector.ResultStream;
 
+import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
@@ -82,6 +83,11 @@ public abstract class AbstractBufferedStream<T, R> extends FlowControlledBuffer<
     }
 
     @Override
+    public Optional<Throwable> getError() {
+        return Optional.ofNullable(super.getErrorResult());
+    }
+
+    @Override
     public void onCompleted() {
         super.onCompleted();
         onAvailableCallback.get().run();
@@ -100,7 +106,7 @@ public abstract class AbstractBufferedStream<T, R> extends FlowControlledBuffer<
             onAvailableCallback.set(NO_OP);
         } else {
             onAvailableCallback.set(callback);
-            if (peek() != null) {
+            if (isClosed() || peek() != null) {
                 callback.run();
             }
         }
@@ -120,10 +126,10 @@ public abstract class AbstractBufferedStream<T, R> extends FlowControlledBuffer<
     }
 
     /**
-     * Adds the given {@code handler} to a collection of {@link Runnable}s to be invoked when {@link #close()} is
-     * called.
+     * Adds the given {@code handler} to a collection of {@link Runnable}s to be invoked when the stream is closed by
+     * the server. Note that data may still be buffered locally for processing.
      *
-     * @param handler {@link Runnable} to invoke when {@link #close()} is invoked
+     * @param handler {@link Runnable} to invoke when the stream is closed by the server
      */
     public void onCloseRequested(Runnable handler) {
         this.closeHandlers.add(handler);
