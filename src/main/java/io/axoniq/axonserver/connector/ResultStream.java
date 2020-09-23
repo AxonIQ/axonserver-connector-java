@@ -16,6 +16,7 @@
 
 package io.axoniq.axonserver.connector;
 
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -95,8 +96,21 @@ public interface ResultStream<T> extends AutoCloseable {
     /**
      * Indicates whether the current stream is closed for further reading. Note that this method will also return {@code
      * false} in case the stream is closed by the element provider, but there are still elements awaiting consumption.
+     * <p>
+     * Check {@link #getError()} to check whether the stream was closed because of an error
      *
      * @return {@code true} if the stream is closed for further reading, otherwise {@code false}
+     * @see #getError()
      */
     boolean isClosed();
+
+    /**
+     * Returns an optional containing the exception reported by the Server, if any.
+     * <p>
+     * Note that this method may return a non-empty response, even when {@link #isClosed()} returns {@code false}, or
+     * if there are messages available for processing.
+     *
+     * @return an optional containing the exception reported by the Server, if any.
+     */
+    Optional<Throwable> getError();
 }
