@@ -190,6 +190,9 @@ public class AxonServerConnectionFactory {
                 NettyChannelBuilder.forAddress(address.getHostName(), address.getGrpcPort())
         );
 
+        builder.keepAliveTime(0L, TimeUnit.SECONDS);
+        builder.idleTimeout(600L, TimeUnit.SECONDS);
+
         if (!suppressDownloadMessage) {
             builder.intercept(new DownloadInstructionInterceptor(System.out));
         }
