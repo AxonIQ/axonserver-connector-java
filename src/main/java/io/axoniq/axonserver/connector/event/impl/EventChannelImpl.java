@@ -116,7 +116,10 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
                 ""
         ));
 
-        eventScheduler.scheduleEvent(ScheduleEventRequest.newBuilder().build(), responseObserver);
+        eventScheduler.scheduleEvent(ScheduleEventRequest.newBuilder()
+                                                         .setEvent(event)
+                                                         .setInstant(scheduleTime.toEpochMilli())
+                                                         .build(), responseObserver);
         return responseObserver.thenApply(ScheduleToken::getToken);
     }
 
