@@ -74,6 +74,16 @@ public abstract class FlowControlledBuffer<T, R> extends FlowControlledStream<T,
     }
 
     /**
+     * Returns the error result, if any was recorded. This method may also yield a non-empty result when the buffer
+     * still contains messages for processing.
+     *
+     * @return the error result, if any was recorded, or else {@code null}
+     */
+    public Throwable getErrorResult() {
+        return errorResult.get();
+    }
+
+    /**
      * Try to retrieve an entry of type {@code T} from the buffer immediately. If none is present, {@code null} will be
      * returned.
      *

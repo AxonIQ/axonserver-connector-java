@@ -65,7 +65,7 @@ public abstract class ObjectUtils {
      *
      * @param instance the object to consume by the given {@code action}, <em>if</em> it is not {@code null}
      * @param action   the {@link Consumer} to silently invoke with the given {@code instance}
-     * @param <T>the   type of the given {@code instance} and object to consume by the given {@code action}
+     * @param <T>      the   type of the given {@code instance} and object to consume by the given {@code action}
      */
     public static <T> void silently(T instance, Consumer<T> action) {
         if (instance != null) {
