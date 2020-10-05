@@ -160,6 +160,9 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
                     result.send(QueryProviderOutbound.newBuilder()
                                                      .setSubscriptionQueryResponse(subscriptionQueryUpdate)
                                                      .build());
+                    logger.debug("Subscription Query Update [id: {}] sent to client {}.",
+                                 queryUpdate.getMessageIdentifier(),
+                                 queryUpdate.getClientId());
                 }
 
                 @Override
@@ -177,6 +180,8 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
                     result.send(QueryProviderOutbound.newBuilder()
                                                      .setSubscriptionQueryResponse(subscriptionQueryResult)
                                                      .build());
+                    logger.debug("Subscription Query Update completion sent to client {}.",
+                                 complete.getClientId());
                 }
             });
             if (registration != null) {
