@@ -78,12 +78,16 @@ public class SubscriptionQueryStream extends FlowControlledStream<SubscriptionQu
     public void onNext(SubscriptionQueryResponse value) {
         switch (value.getResponseCase()) {
             case UPDATE:
+                logger.debug("Received subscription query update. Message Id: {}.", value.getMessageIdentifier());
                 updateBuffer.onNext(value.getUpdate());
                 break;
             case COMPLETE:
+                logger.debug("Received subscription query complete. Message Id: {}.", value.getMessageIdentifier());
                 updateBuffer.onCompleted();
                 break;
             case COMPLETE_EXCEPTIONALLY:
+                logger.debug("Received subscription query complete exceptionally. Message Id: {}.",
+                             value.getMessageIdentifier());
                 AxonServerException exception = new AxonServerException(
                         ErrorCategory.getFromCode(value.getCompleteExceptionally().getErrorCode()),
                         value.getCompleteExceptionally().getErrorMessage().getMessage(),
@@ -95,6 +99,8 @@ public class SubscriptionQueryStream extends FlowControlledStream<SubscriptionQu
                 }
                 break;
             case INITIAL_RESULT:
+                logger.debug("Received subscription query initial result. Message id: {}.",
+                             value.getMessageIdentifier());
                 initialResultFuture.complete(value.getInitialResult());
                 break;
             default:
