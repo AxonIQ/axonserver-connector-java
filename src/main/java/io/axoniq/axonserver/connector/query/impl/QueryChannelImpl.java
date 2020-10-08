@@ -161,8 +161,8 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
                                                      .setSubscriptionQueryResponse(subscriptionQueryUpdate)
                                                      .build());
                     logger.debug("Subscription Query Update [id: {}] for subscription {}, sent to client {}.",
-                                 subscribe.getSubscriptionIdentifier(),
                                  queryUpdate.getMessageIdentifier(),
+                                 subscribe.getSubscriptionIdentifier(),
                                  queryUpdate.getClientId());
                 }
 
