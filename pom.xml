@@ -45,7 +45,7 @@
         <log4j.version>2.13.2</log4j.version>
 
         <grpc.version>1.28.1</grpc.version>
-        <netty.tcnative.version>2.0.28.Final</netty.tcnative.version>
+        <netty.tcnative.version>2.0.34.Final</netty.tcnative.version>
         <junit.jupiter.version>5.7.0</junit.jupiter.version>
 
         <axonserver.api.version>4.4</axonserver.api.version>
