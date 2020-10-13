@@ -42,7 +42,7 @@
 
     <properties>
         <slf4j.version>1.7.30</slf4j.version>
-        <log4j.version>2.13.2</log4j.version>
+        <log4j.version>2.13.3</log4j.version>
 
         <grpc.version>1.28.1</grpc.version>
         <netty.tcnative.version>2.0.28.Final</netty.tcnative.version>
