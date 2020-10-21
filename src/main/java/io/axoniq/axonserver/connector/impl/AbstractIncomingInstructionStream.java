@@ -114,6 +114,9 @@ public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowCon
     public void onCompleted() {
         logger.debug("Stream completed from server side");
         if (unregisterOutboundStream(instructionsForPlatform)) {
+            logger.debug("Instruction stream disconnected. Scheduling reconnect");
+            Throwable t = new StreamUnexpectedlyCompletedException("Stream unexpectedly completed by server");
+            disconnectHandler.accept(t);
             instructionsForPlatform.onCompleted();
         }
     }
