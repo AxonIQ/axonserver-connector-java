@@ -271,7 +271,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
                         try {
                             s.onNext(subscribeMessage);
                         } catch (Exception e) {
-                            instructions.remove(subscribeMessage.getInstructionId());
+                            instructions.remove(subscribeMessage.getInstructionId(), future);
                             future.completeExceptionally(e);
                         }
                     })
