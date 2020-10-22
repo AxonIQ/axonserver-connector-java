@@ -143,8 +143,12 @@ class EventHandlingTest extends AbstractAxonServerIntegrationTest {
 
         AggregateEventStream stream = eventChannel.openAggregateStream("aggregate1");
         stream.cancel();
-        while (stream.hasNext()) {
-            Assertions.assertNotEquals(199, stream.next().getAggregateSequenceNumber());
+        try {
+            while (stream.hasNext()) {
+                Assertions.assertNotEquals(199, stream.next().getAggregateSequenceNumber());
+            }
+        } catch (StreamClosedException e) {
+            // that's ok, because we're reading from a stream we have closed ourselves.
         }
     }
 
