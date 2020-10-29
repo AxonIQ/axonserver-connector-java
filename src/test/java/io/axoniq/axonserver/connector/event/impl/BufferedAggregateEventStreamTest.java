@@ -2,13 +2,17 @@ package io.axoniq.axonserver.connector.event.impl;
 
 import io.axoniq.axonserver.connector.impl.StreamClosedException;
 import io.axoniq.axonserver.grpc.event.Event;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * Test class validationg the {@link BufferedAggregateEventStream}.
+ *
+ * @author Allard Buijze
+ */
 class BufferedAggregateEventStreamTest {
 
     private BufferedAggregateEventStream testSubject;
@@ -22,8 +26,7 @@ class BufferedAggregateEventStreamTest {
     void testEventStreamPropagatesErrorOnHasNext() {
         testSubject.onError(new RuntimeException("Mock"));
 
-        Assertions.assertThrows(StreamClosedException.class,
-                                () -> testSubject.hasNext());
+        assertThrows(StreamClosedException.class, () -> testSubject.hasNext());
     }
 
     @Test
@@ -36,7 +39,6 @@ class BufferedAggregateEventStreamTest {
         assertEquals(Event.getDefaultInstance(), testSubject.next());
         assertTrue(testSubject.hasNext());
         assertEquals(Event.getDefaultInstance(), testSubject.next());
-        Assertions.assertThrows(StreamClosedException.class,
-                                () -> testSubject.hasNext());
+        assertThrows(StreamClosedException.class, () -> testSubject.hasNext());
     }
 }
