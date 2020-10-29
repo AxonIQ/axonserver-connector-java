@@ -9,8 +9,10 @@ updates:
   labels:
     - "Type: Dependency Upgrade"
     - "Priority 1: Must"
+    - "Status: In Progress"
   # Add reviewers
   reviewers:
     - "MGathier"
     - "saratry"
     - "smcvb"
+  milestone: 5
