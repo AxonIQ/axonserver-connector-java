@@ -33,6 +33,8 @@ import java.util.function.Consumer;
  *
  * @param <IN>  the type of instructions received by this stream
  * @param <OUT> the type of instructions returned by this stream
+ * @author Allard Buijze
+ * @since 4.4
  */
 public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowControlledStream<IN, OUT> {
 

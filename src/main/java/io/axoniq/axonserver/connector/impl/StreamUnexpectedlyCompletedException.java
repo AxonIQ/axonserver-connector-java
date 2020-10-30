@@ -8,7 +8,6 @@ package io.axoniq.axonserver.connector.impl;
  */
 public class StreamUnexpectedlyCompletedException extends RuntimeException {
 
-
     /**
      * Constructs a new instance of {@link StreamUnexpectedlyCompletedException}.
      */
