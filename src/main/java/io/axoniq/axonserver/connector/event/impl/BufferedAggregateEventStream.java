@@ -18,6 +18,7 @@ package io.axoniq.axonserver.connector.event.impl;
 
 import io.axoniq.axonserver.connector.event.AggregateEventStream;
 import io.axoniq.axonserver.connector.impl.FlowControlledBuffer;
+import io.axoniq.axonserver.connector.impl.StreamClosedException;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.GetAggregateEventsRequest;
@@ -72,6 +73,12 @@ public class BufferedAggregateEventStream
             cancel();
             Thread.currentThread().interrupt();
             return false;
+        }
+        if (peeked == null) {
+            Throwable errorResult = getErrorResult();
+            if (errorResult != null) {
+                throw new StreamClosedException(errorResult);
+            }
         }
         return peeked != null;
     }

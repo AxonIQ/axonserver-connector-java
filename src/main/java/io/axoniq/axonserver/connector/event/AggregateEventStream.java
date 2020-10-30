@@ -46,12 +46,16 @@ public interface AggregateEventStream {
      * available for reading.
      *
      * @return {@code true} if a message is available, or {@code false} if the stream has reached the end
+     * @throws StreamClosedException if the stream has been closed prematurely because of an error or on client request
      */
     boolean hasNext();
 
     /**
      * Close this stream for further reading, notifying the provider of Events to stop streaming them. Any event already
      * emitted by the sender may still be consumed.
+     * <p>
+     * Note that after calling {@code cancel}, {@link #hasNext()} may throw a {@link StreamClosedException} if the
+     * cancellation caused the stream to close before the last message was received.
      */
     void cancel();
 

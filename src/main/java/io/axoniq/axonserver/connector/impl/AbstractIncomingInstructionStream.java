@@ -33,6 +33,8 @@ import java.util.function.Consumer;
  *
  * @param <IN>  the type of instructions received by this stream
  * @param <OUT> the type of instructions returned by this stream
+ * @author Allard Buijze
+ * @since 4.4
  */
 public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowControlledStream<IN, OUT> {
 
@@ -114,6 +116,9 @@ public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowCon
     public void onCompleted() {
         logger.debug("Stream completed from server side");
         if (unregisterOutboundStream(instructionsForPlatform)) {
+            logger.debug("Instruction stream disconnected. Scheduling reconnect");
+            Throwable t = new StreamUnexpectedlyCompletedException("Stream unexpectedly completed by server");
+            disconnectHandler.accept(t);
             instructionsForPlatform.onCompleted();
         }
     }
