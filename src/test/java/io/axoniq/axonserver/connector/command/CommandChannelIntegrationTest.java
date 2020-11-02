@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -38,6 +39,7 @@ import static io.axoniq.axonserver.connector.impl.ObjectUtils.silently;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
@@ -72,6 +74,21 @@ class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     void tearDown() {
         silently(connectionFactory1, AxonServerConnectionFactory::shutdown);
         silently(connectionFactory2, AxonServerConnectionFactory::shutdown);
+    }
+
+    @Test
+    void testSubscribeWhileDisconnected() throws IOException {
+        CommandChannel commandChannel = connection1.commandChannel();
+        assertWithin(2, TimeUnit.SECONDS, connection1::isReady);
+
+        logger.info("Closing TCP connection to AxonServer");
+        axonServerProxy.disable();
+
+        assertWithin(2, TimeUnit.SECONDS, () -> assertTrue(connection1.isConnectionFailed()));
+
+        Registration result = commandChannel
+                .registerCommandHandler(r -> CompletableFuture.completedFuture(CommandResponse.getDefaultInstance()), 100, "test");
+        assertNotNull(result);
     }
 
     @Test
