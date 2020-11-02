@@ -40,13 +40,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class CommandChannelTest extends AbstractAxonServerIntegrationTest {
+class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
     private AxonServerConnectionFactory connectionFactory1;
     private AxonServerConnection connection1;
     private AxonServerConnectionFactory connectionFactory2;
     private AxonServerConnection connection2;
-    private static final Logger logger = LoggerFactory.getLogger(CommandChannelTest.class);
+    private static final Logger logger = LoggerFactory.getLogger(CommandChannelIntegrationTest.class);
 
     @BeforeEach
     void setUp() {

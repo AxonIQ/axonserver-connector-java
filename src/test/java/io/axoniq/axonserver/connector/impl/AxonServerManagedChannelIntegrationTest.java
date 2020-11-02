@@ -43,7 +43,7 @@ import static org.mockito.Matchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 
-class AxonServerManagedChannelTest extends AbstractAxonServerIntegrationTest {
+class AxonServerManagedChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
     private final List<ServerAddress> connectAttempts = new CopyOnWriteArrayList<>();
     private AxonServerManagedChannel testSubject;

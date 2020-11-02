@@ -50,7 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class EventHandlingTest extends AbstractAxonServerIntegrationTest {
+class EventHandlingIntegrationTest extends AbstractAxonServerIntegrationTest {
 
     private AxonServerConnectionFactory client1;
     private AxonServerConnection connection1;
