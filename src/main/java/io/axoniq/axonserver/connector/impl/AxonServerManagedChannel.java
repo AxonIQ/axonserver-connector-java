@@ -426,7 +426,7 @@ public class AxonServerManagedChannel extends ManagedChannel {
 
         @Override
         public void sendMessage(REQ message) {
-            throw new StatusRuntimeException(Status.UNAVAILABLE);
+            // ignore these messages. The returning stream has already given an error
         }
     }
 }
