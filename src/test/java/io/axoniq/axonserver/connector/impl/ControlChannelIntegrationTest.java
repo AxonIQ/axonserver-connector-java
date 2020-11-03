@@ -54,10 +54,10 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-class ControlChannelTest extends AbstractAxonServerIntegrationTest {
+class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
     private AxonServerConnectionFactory client;
-    private static final Logger logger = LoggerFactory.getLogger(ControlChannelTest.class);
+    private static final Logger logger = LoggerFactory.getLogger(ControlChannelIntegrationTest.class);
 
     @AfterEach
     void tearDown() {

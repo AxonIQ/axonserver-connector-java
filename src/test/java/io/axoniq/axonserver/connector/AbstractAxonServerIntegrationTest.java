@@ -95,6 +95,7 @@ public abstract class AbstractAxonServerIntegrationTest {
         for (Toxic toxic : axonServerProxy.toxics().getAll()) {
             toxic.remove();
         }
+        axonServerProxy.enable();
         AxonServerUtils.purgeEventsFromAxonServer(axonServerHttpPort.getHostName(), axonServerHttpPort.getGrpcPort());
     }
 

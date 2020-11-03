@@ -27,7 +27,6 @@ import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
-import io.grpc.StatusRuntimeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -104,8 +103,9 @@ public class AxonServerManagedChannel extends ManagedChannel {
     private ManagedChannel connectChannel() {
         ManagedChannel connection = null;
         for (ServerAddress nodeInfo : routingServers) {
-            ManagedChannel candidate = connectionFactory.apply(nodeInfo, context);
+            ManagedChannel candidate = null;
             try {
+                candidate = connectionFactory.apply(nodeInfo, context);
                 PlatformServiceGrpc.PlatformServiceBlockingStub stub =
                         PlatformServiceGrpc.newBlockingStub(candidate)
                                            .withDeadlineAfter(connectTimeout, TimeUnit.MILLISECONDS);
@@ -139,9 +139,9 @@ public class AxonServerManagedChannel extends ManagedChannel {
                 suppressErrors.set(false);
                 lastConnectException.set(null);
                 break;
-            } catch (StatusRuntimeException sre) {
+            } catch (Exception sre) {
                 lastConnectException.set(sre);
-                shutdownNow(candidate);
+                doIfNotNull(candidate, this::shutdownNow);
                 if (!suppressErrors.getAndSet(true)) {
                     logger.warn("Connecting to AxonServer node [{}] failed.", nodeInfo, sre);
                 } else {
@@ -348,6 +348,7 @@ public class AxonServerManagedChannel extends ManagedChannel {
                 scheduleConnectionCheck(reconnectInterval);
             }
         } catch (Exception e) {
+            lastConnectException.set(e);
             doIfNotNull(newConnection, ManagedChannel::shutdown);
             if (allowReschedule) {
                 logger.info("Failed to get connection to AxonServer. Scheduling a reconnect in {}ms",
@@ -425,7 +426,7 @@ public class AxonServerManagedChannel extends ManagedChannel {
 
         @Override
         public void sendMessage(REQ message) {
-            throw new StatusRuntimeException(Status.UNAVAILABLE);
+            // ignore these messages. The returning stream has already given an error
         }
     }
 }

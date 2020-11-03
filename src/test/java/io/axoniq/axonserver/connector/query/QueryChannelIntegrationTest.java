@@ -52,7 +52,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-class QueryChannelTest extends AbstractAxonServerIntegrationTest {
+class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
     private static final CompletableFuture<Void> COMPLETED_FUTURE = CompletableFuture.completedFuture(null);
 
@@ -60,7 +60,7 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
     private AxonServerConnection connection1;
     private AxonServerConnectionFactory connectionFactory2;
     private AxonServerConnection connection2;
-    private static final Logger logger = LoggerFactory.getLogger(QueryChannelTest.class);
+    private static final Logger logger = LoggerFactory.getLogger(QueryChannelIntegrationTest.class);
 
     @BeforeEach
     void setUp() {
