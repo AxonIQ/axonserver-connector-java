@@ -216,10 +216,8 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                     return COMPLETED_FUTURE;
                 };
             }
-        }, new QueryDefinition("testQuery", "testResult"));
-
-        // we want so make sure the subscription gets a head start before we send the query for it.
-        Thread.sleep(100);
+        }, new QueryDefinition("testQuery", "testResult"))
+            .awaitAck(1, TimeUnit.SECONDS);
 
         SubscriptionQueryResult subscriptionQuery = connection2.queryChannel().subscriptionQuery(QueryRequest.newBuilder()
                                                                                                              .setMessageIdentifier(subscriptionId)
@@ -246,7 +244,7 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
-    void testClosingSubscriptionQueryFromProviderStopsUpdateStream() throws InterruptedException {
+    void testClosingSubscriptionQueryFromProviderStopsUpdateStream() throws InterruptedException, TimeoutException {
         QueryChannel queryChannel = connection1.queryChannel();
         AtomicReference<QueryHandler.UpdateHandler> updateHandlerRef = new AtomicReference<>();
         String subscriptionId = UUID.randomUUID().toString();
@@ -267,7 +265,8 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                     return COMPLETED_FUTURE;
                 };
             }
-        }, new QueryDefinition("testQuery", "testResult"));
+        }, new QueryDefinition("testQuery", "testResult"))
+            .awaitAck(1, TimeUnit.SECONDS);
 
         SubscriptionQueryResult subscriptionQuery = connection2.queryChannel().subscriptionQuery(QueryRequest.newBuilder()
                                                                                                              .setMessageIdentifier(subscriptionId)
