@@ -47,7 +47,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
 import static org.junit.jupiter.api.Assertions.*;
 
-class QueryChannelTest extends AbstractAxonServerIntegrationTest {
+class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
     private static final CompletableFuture<Void> COMPLETED_FUTURE = CompletableFuture.completedFuture(null);
 
@@ -55,7 +55,7 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
     private AxonServerConnection connection1;
     private AxonServerConnectionFactory connectionFactory2;
     private AxonServerConnection connection2;
-    private static final Logger logger = LoggerFactory.getLogger(QueryChannelTest.class);
+    private static final Logger logger = LoggerFactory.getLogger(QueryChannelIntegrationTest.class);
 
     @BeforeEach
     void setUp() {
@@ -228,10 +228,8 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
                     return COMPLETED_FUTURE;
                 };
             }
-        }, new QueryDefinition("testQuery", "testResult"));
-
-        // we want so make sure the subscription gets a head start before we send the query for it.
-        Thread.sleep(100);
+        }, new QueryDefinition("testQuery", "testResult"))
+            .awaitAck(1, TimeUnit.SECONDS);
 
         SubscriptionQueryResult subscriptionQuery = connection2.queryChannel().subscriptionQuery(QueryRequest.newBuilder()
                                                                                                              .setMessageIdentifier(subscriptionId)
@@ -258,7 +256,7 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
-    void testClosingSubscriptionQueryFromProviderStopsUpdateStream() throws InterruptedException {
+    void testClosingSubscriptionQueryFromProviderStopsUpdateStream() throws InterruptedException, TimeoutException {
         QueryChannel queryChannel = connection1.queryChannel();
         AtomicReference<QueryHandler.UpdateHandler> updateHandlerRef = new AtomicReference<>();
         String subscriptionId = UUID.randomUUID().toString();
@@ -279,7 +277,8 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
                     return COMPLETED_FUTURE;
                 };
             }
-        }, new QueryDefinition("testQuery", "testResult"));
+        }, new QueryDefinition("testQuery", "testResult"))
+            .awaitAck(1, TimeUnit.SECONDS);
 
         SubscriptionQueryResult subscriptionQuery = connection2.queryChannel().subscriptionQuery(QueryRequest.newBuilder()
                                                                                                              .setMessageIdentifier(subscriptionId)

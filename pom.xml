@@ -20,7 +20,7 @@
 
     <groupId>io.axoniq</groupId>
     <artifactId>axonserver-connector-java</artifactId>
-    <version>4.4.3-SNAPSHOT</version>
+    <version>4.4.4-SNAPSHOT</version>
 
     <name>AxonServer Connector</name>
     <description>
@@ -44,8 +44,9 @@
         <slf4j.version>1.7.30</slf4j.version>
         <log4j.version>2.13.2</log4j.version>
 
-        <grpc.version>1.28.1</grpc.version>
-        <netty.tcnative.version>2.0.28.Final</netty.tcnative.version>
+        <!-- For compatibility between grpc and tcnative, check https://github.com/grpc/grpc-java/blob/master/SECURITY.md#netty -->
+        <grpc.version>1.33.0</grpc.version>
+        <netty.tcnative.version>2.0.31.Final</netty.tcnative.version>
         <junit.jupiter.version>5.5.2</junit.jupiter.version>
 
         <axonserver.api.version>4.4</axonserver.api.version>

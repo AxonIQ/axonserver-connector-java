@@ -50,7 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class EventHandlingTest extends AbstractAxonServerIntegrationTest {
+class EventHandlingIntegrationTest extends AbstractAxonServerIntegrationTest {
 
     private AxonServerConnectionFactory client1;
     private AxonServerConnection connection1;
@@ -143,8 +143,12 @@ class EventHandlingTest extends AbstractAxonServerIntegrationTest {
 
         AggregateEventStream stream = eventChannel.openAggregateStream("aggregate1");
         stream.cancel();
-        while (stream.hasNext()) {
-            Assertions.assertNotEquals(199, stream.next().getAggregateSequenceNumber());
+        try {
+            while (stream.hasNext()) {
+                Assertions.assertNotEquals(199, stream.next().getAggregateSequenceNumber());
+            }
+        } catch (StreamClosedException e) {
+            // that's ok, because we're reading from a stream we have closed ourselves.
         }
     }
 

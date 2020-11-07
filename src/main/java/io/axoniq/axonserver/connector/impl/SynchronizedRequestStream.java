@@ -18,8 +18,8 @@ package io.axoniq.axonserver.connector.impl;
 
 import io.grpc.stub.ClientCallStreamObserver;
 
-import java.util.concurrent.atomic.AtomicBoolean;
 import javax.annotation.Nullable;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Lock-based synchronized implementation of a {@link ClientCallStreamObserver}. Acts as a wrapper of another {@code
@@ -32,6 +32,7 @@ public class SynchronizedRequestStream<T> extends ClientCallStreamObserver<T> {
 
     private final ClientCallStreamObserver<T> delegate;
     private final AtomicBoolean lock = new AtomicBoolean(false);
+    private final AtomicBoolean halfClosed = new AtomicBoolean(false);
 
     /**
      * Instantiate a {@link SynchronizedRequestStream}, delegating all operations to the given {@code requestStream}
@@ -44,6 +45,7 @@ public class SynchronizedRequestStream<T> extends ClientCallStreamObserver<T> {
 
     @Override
     public void cancel(@Nullable String message, @Nullable Throwable cause) {
+        halfClosed.set(true);
         delegate.cancel(message, cause);
     }
 
@@ -79,12 +81,18 @@ public class SynchronizedRequestStream<T> extends ClientCallStreamObserver<T> {
 
     @Override
     public void onError(Throwable t) {
-        inLock(() -> delegate.onError(t));
+        inLock(() -> {
+            delegate.onError(t);
+            halfClosed.set(true);
+        });
     }
 
     @Override
     public void onCompleted() {
-        inLock(delegate::onCompleted);
+        inLock(() -> {
+            delegate.onCompleted();
+            halfClosed.set(true);
+        });
     }
 
     private void inLock(Runnable action) {
@@ -92,7 +100,9 @@ public class SynchronizedRequestStream<T> extends ClientCallStreamObserver<T> {
             Thread.yield();
         }
         try {
-            action.run();
+            if (!halfClosed.get()) {
+                action.run();
+            }
         } finally {
             lock.set(false);
         }
