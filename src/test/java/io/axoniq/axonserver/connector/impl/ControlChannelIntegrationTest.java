@@ -159,6 +159,7 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     @Test
     void testPauseAndStartInstructionIsPickedUpByHandler() throws Exception {
         client = AxonServerConnectionFactory.forClient(getClass().getSimpleName())
+                                            .processorInfoUpdateFrequency(500, TimeUnit.MILLISECONDS)
                                             .routingServers(axonServerAddress)
                                             .build();
         AxonServerConnection connection1 = client.connect("default");
@@ -184,6 +185,7 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     @Test
     void testSplitAndMergeInstructionIsPickedUpByHandler() throws TimeoutException, InterruptedException {
         client = AxonServerConnectionFactory.forClient(getClass().getSimpleName())
+                                            .processorInfoUpdateFrequency(500, TimeUnit.MILLISECONDS)
                                             .routingServers(axonServerAddress)
                                             .build();
         AxonServerConnection connection1 = client.connect("default");
