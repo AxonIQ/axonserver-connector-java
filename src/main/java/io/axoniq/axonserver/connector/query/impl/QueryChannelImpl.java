@@ -156,10 +156,15 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
                             SubscriptionQueryResponse.newBuilder()
                                                      .setSubscriptionIdentifier(subscriptionIdentifier)
                                                      .setUpdate(queryUpdate)
+                                                     .setMessageIdentifier(queryUpdate.getMessageIdentifier())
                                                      .build();
                     result.send(QueryProviderOutbound.newBuilder()
                                                      .setSubscriptionQueryResponse(subscriptionQueryUpdate)
                                                      .build());
+                    logger.debug("Subscription Query Update [id: {}] for subscription {}, sent to client {}.",
+                                 queryUpdate.getMessageIdentifier(),
+                                 subscribe.getSubscriptionIdentifier(),
+                                 queryUpdate.getClientId());
                 }
 
                 @Override
@@ -177,6 +182,8 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
                     result.send(QueryProviderOutbound.newBuilder()
                                                      .setSubscriptionQueryResponse(subscriptionQueryResult)
                                                      .build());
+                    logger.debug("Subscription Query Update completion sent to client {}.",
+                                 complete.getClientId());
                 }
             });
             if (registration != null) {
@@ -326,7 +333,10 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
                                                      SerializedObject updateResponseType,
                                                      int bufferSize,
                                                      int fetchSize) {
-        String subscriptionId = UUID.randomUUID().toString();
+        if (!ObjectUtils.hasLength(query.getMessageIdentifier())) {
+            throw new IllegalArgumentException("QueryRequest must contain message identifier.");
+        }
+        String subscriptionId = query.getMessageIdentifier();
         CompletableFuture<QueryResponse> initialResultFuture = new CompletableFuture<>();
         SubscriptionQueryStream subscriptionStream = new SubscriptionQueryStream(
                 subscriptionId, initialResultFuture, QueryChannelImpl.this.clientIdentification.getClientId(),

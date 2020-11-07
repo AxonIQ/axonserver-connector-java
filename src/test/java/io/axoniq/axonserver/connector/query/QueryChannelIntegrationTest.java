@@ -45,12 +45,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.*;
 
 class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
@@ -140,6 +135,17 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
+    void testSubscriptionQueryDoesNotAllowEmptyMessageId() {
+        QueryChannel queryChannel = connection1.queryChannel();
+        QueryRequest queryRequest = QueryRequest.newBuilder().build();
+        SerializedObject serializedObject = SerializedObject.newBuilder().build();
+        IllegalArgumentException exception =
+                assertThrows(IllegalArgumentException.class,
+                             () -> queryChannel.subscriptionQuery(queryRequest, serializedObject, 5, 1));
+        assertEquals("QueryRequest must contain message identifier.", exception.getMessage());
+    }
+
+    @Test
     void testSubscriptionQueryCancelledOnDisconnect() throws Exception {
         connection2.controlChannel().enableHeartbeat(100, 100, TimeUnit.MILLISECONDS);
         QueryChannel queryChannel = connection1.queryChannel();
@@ -162,9 +168,15 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                 }, new QueryDefinition("testQuery", "testResult"))
                     .awaitAck(1, TimeUnit.SECONDS);
 
-        SubscriptionQueryResult subscriptionQuery = connection2.queryChannel().subscriptionQuery(QueryRequest.newBuilder().setQuery("testQuery").build(),
-                                                                                                 SerializedObject.newBuilder().setType("update").build(),
-                                                                                                 100, 10);
+        SubscriptionQueryResult subscriptionQuery = connection2.queryChannel()
+                                                               .subscriptionQuery(QueryRequest.newBuilder()
+                                                                                              .setMessageIdentifier("id")
+                                                                                              .setQuery("testQuery")
+                                                                                              .build(),
+                                                                                  SerializedObject.newBuilder()
+                                                                                                  .setType("update")
+                                                                                                  .build(),
+                                                                                  100, 10);
 
         assertWithin(1, TimeUnit.SECONDS, () ->
                 assertTrue(subscriptionQuery.initialResult().isDone())
