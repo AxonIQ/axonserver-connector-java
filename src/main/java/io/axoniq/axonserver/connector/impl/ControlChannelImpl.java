@@ -256,6 +256,8 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
             CallStreamObserver<PlatformInboundInstruction> outbound = instructionDispatcher.get();
             if (outbound != null && outbound.isReady()) {
                 infoSupplies.forEach(info -> doIfNotNull(info.get(), this::sendProcessorInfo));
+            } else {
+                logger.debug("Not sending processor info for context '{}'. Channel not ready...", context);
             }
             executor.schedule(this::sendScheduledProcessorInfo, processorInfoUpdateFrequency, TimeUnit.MILLISECONDS);
         }
