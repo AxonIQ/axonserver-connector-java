@@ -77,9 +77,11 @@ public abstract class AbstractAxonServerIntegrationTest {
     protected static ServerAddress axonServerAddress;
     private static ServerAddress axonServerHttpPort;
     protected String axonServerVersion;
+    private static OkHttpClient client;
 
     @BeforeAll
     static void initialize() throws IOException {
+        client = new OkHttpClient();
         axonServerAddress = new ServerAddress(toxiProxyContainer.getContainerIpAddress(), toxiProxyContainer.getMappedPort(8124));
         axonServerHttpPort = new ServerAddress(axonServerContainer.getContainerIpAddress(), axonServerContainer.getMappedPort(8024));
         ToxiproxyClient client = new ToxiproxyClient(toxiProxyContainer.getContainerIpAddress(), toxiProxyContainer.getMappedPort(8474));
@@ -108,7 +110,6 @@ public abstract class AbstractAxonServerIntegrationTest {
     }
 
     protected JsonElement sendToAxonServer(BiFunction<Request.Builder, RequestBody, Request.Builder> method, String path) throws IOException {
-        OkHttpClient client = new OkHttpClient();
         Call call = client.newCall(method.apply(new Request.Builder()
                                                         .url("http://" + axonServerContainer.getContainerIpAddress() + ":" + axonServerContainer.getMappedPort(8024) + path),
                                                 Util.EMPTY_REQUEST)
@@ -122,6 +123,7 @@ public abstract class AbstractAxonServerIntegrationTest {
         } else {
             read = GSON.fromJson(new InputStreamReader(result.body().byteStream()), JsonElement.class);
         }
+        result.close();
         return read;
     }
 
