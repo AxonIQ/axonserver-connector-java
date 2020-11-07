@@ -18,14 +18,24 @@ package io.axoniq.axonserver.connector.impl;
 
 import io.axoniq.axonserver.connector.AbstractAxonServerIntegrationTest;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
+import io.axoniq.axonserver.grpc.event.Confirmation;
+import io.axoniq.axonserver.grpc.event.Event;
+import io.axoniq.axonserver.grpc.event.EventStoreGrpc;
 import io.grpc.ConnectivityState;
 import io.grpc.ManagedChannel;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.grpc.netty.NettyChannelBuilder;
+import io.grpc.stub.ClientResponseObserver;
+import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
+import org.mockito.Mockito;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
@@ -121,6 +131,31 @@ class AxonServerManagedChannelIntegrationTest extends AbstractAxonServerIntegrat
         axonServerProxy.enable();
 
         assertWithin(1, TimeUnit.SECONDS, () -> assertEquals(ConnectivityState.READY, testSubject.getState(true)));
+    }
+
+    /*
+      This test asserts that the `beforeStart` is called before a connection attempt is being made,
+      so that the AxonServerManagedChannel can safely assume any upstream StreamObservers here have
+      been registered with the different communication channels (e.g. ControlChannel) before any
+      errors are reported back.
+     */
+    @Test
+    void testCallOnDisconnectedChannelFailImmediately() throws IOException {
+        axonServerProxy.disable();
+
+        EventStoreGrpc.EventStoreStub stub = EventStoreGrpc.newStub(testSubject);
+
+        ClientResponseObserver<Event, Confirmation> observer = mock(ClientResponseObserver.class);
+        StreamObserver<Event> upstream = stub.appendEvent(observer);
+
+        InOrder inOrder = Mockito.inOrder(observer);
+        inOrder.verify(observer).beforeStart(any());
+        inOrder.verify(observer).onError(any());
+        inOrder.verifyNoMoreInteractions();
+
+        // these should not throw an exception
+        upstream.onNext(Event.getDefaultInstance());
+        upstream.onError(new StatusRuntimeException(Status.ABORTED));
     }
 
     @RepeatedTest(20)

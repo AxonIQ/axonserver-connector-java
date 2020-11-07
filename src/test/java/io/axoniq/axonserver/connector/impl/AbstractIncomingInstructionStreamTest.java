@@ -1,17 +1,34 @@
+/*
+ * Copyright (c) 2020. AxonIQ
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.axoniq.axonserver.connector.impl;
 
 import io.axoniq.axonserver.connector.InstructionHandler;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.InstructionAck;
+import io.grpc.stub.CallStreamObserver;
 import io.grpc.stub.ClientCallStreamObserver;
-import io.grpc.stub.StreamObserver;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 /**
  * Test class validating the {{@link AbstractIncomingInstructionStream}}.
@@ -28,7 +45,8 @@ class AbstractIncomingInstructionStreamTest {
     void testOnCompleted() {
         AtomicReference<Throwable> disconnectHandlerThrowable = new AtomicReference<>();
         AbstractIncomingInstructionStream<Object, Object> testSubject = new TestAbstractIncomingInstructionStreamImpl(
-                CLIENT_ID, PERMITS, PERMITS_BATCH, disconnectHandlerThrowable::set, true
+                CLIENT_ID, PERMITS, PERMITS_BATCH, disconnectHandlerThrowable::set, r -> {
+        }, true
         );
         //noinspection unchecked
         ClientCallStreamObserver<Object> mockedClientCallStreamObserver = mock(ClientCallStreamObserver.class);
@@ -51,8 +69,9 @@ class AbstractIncomingInstructionStreamTest {
                                                          int permits,
                                                          int permitsBatch,
                                                          Consumer<Throwable> disconnectHandler,
+                                                         Consumer<CallStreamObserver<Object>> onStartHandler,
                                                          boolean unregisterOutboundStreamResponse) {
-            super(clientId, permits, permitsBatch, disconnectHandler);
+            super(clientId, permits, permitsBatch, disconnectHandler, onStartHandler);
             this.unregisterOutboundStreamResponse = unregisterOutboundStreamResponse;
         }
 
@@ -72,7 +91,7 @@ class AbstractIncomingInstructionStreamTest {
         }
 
         @Override
-        protected boolean unregisterOutboundStream(StreamObserver<Object> expected) {
+        protected boolean unregisterOutboundStream(CallStreamObserver<Object> expected) {
             return this.unregisterOutboundStreamResponse;
         }
 
