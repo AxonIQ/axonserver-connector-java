@@ -298,6 +298,9 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
             }
             try {
                 dispatcher.onNext(instruction);
+                if (!hasLength(instructionId)) {
+                    result.complete(InstructionAck.newBuilder().setSuccess(true).build());
+                }
             } catch (Exception e) {
                 awaitingAck.remove(instructionId);
                 result.completeExceptionally(e);
