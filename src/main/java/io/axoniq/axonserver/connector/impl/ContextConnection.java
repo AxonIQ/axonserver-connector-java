@@ -50,6 +50,7 @@ public class ContextConnection implements AxonServerConnection {
     private final AtomicReference<QueryChannelImpl> queryChannel = new AtomicReference<>();
     private final ScheduledExecutorService executorService;
     private final AxonServerManagedChannel connection;
+    private final String context;
 
     /**
      * Construct a {@link ContextConnection} carrying context information.
@@ -71,6 +72,7 @@ public class ContextConnection implements AxonServerConnection {
         this.clientIdentification = clientIdentification;
         this.executorService = executorService;
         this.connection = connection;
+        this.context = context;
         this.controlChannel = new ControlChannelImpl(clientIdentification,
                                                      context,
                                                      executorService,
@@ -138,7 +140,7 @@ public class ContextConnection implements AxonServerConnection {
     @Override
     public CommandChannel commandChannel() {
         CommandChannelImpl channel = this.commandChannel.updateAndGet(
-                getIfNull(() -> new CommandChannelImpl(clientIdentification, 5000, 2000, executorService, connection))
+                createIfNull(() -> new CommandChannelImpl(clientIdentification, context, 5000, 2000, executorService, connection))
         );
         return ensureConnected(channel);
     }
@@ -146,7 +148,7 @@ public class ContextConnection implements AxonServerConnection {
     @Override
     public EventChannel eventChannel() {
         EventChannelImpl channel = this.eventChannel.updateAndGet(
-                getIfNull(() -> new EventChannelImpl(executorService, connection))
+                createIfNull(() -> new EventChannelImpl(executorService, connection))
         );
         return ensureConnected(channel);
     }
@@ -154,12 +156,12 @@ public class ContextConnection implements AxonServerConnection {
     @Override
     public QueryChannel queryChannel() {
         QueryChannelImpl channel = this.queryChannel.updateAndGet(
-                getIfNull(() -> new QueryChannelImpl(clientIdentification, 5000, 2000, executorService, connection))
+                createIfNull(() -> new QueryChannelImpl(clientIdentification, context, 5000, 2000, executorService, connection))
         );
         return ensureConnected(channel);
     }
 
-    private <T> UnaryOperator<T> getIfNull(Supplier<T> factory) {
+    private <T> UnaryOperator<T> createIfNull(Supplier<T> factory) {
         return existing -> existing == null ? factory.get() : existing;
     }
 

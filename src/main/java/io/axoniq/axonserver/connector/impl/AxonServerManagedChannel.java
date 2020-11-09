@@ -139,13 +139,13 @@ public class AxonServerManagedChannel extends ManagedChannel {
                 suppressErrors.set(false);
                 lastConnectException.set(null);
                 break;
-            } catch (Exception sre) {
-                lastConnectException.set(sre);
+            } catch (Exception e) {
+                lastConnectException.set(e);
                 doIfNotNull(candidate, this::shutdownNow);
                 if (!suppressErrors.getAndSet(true)) {
-                    logger.warn("Connecting to AxonServer node [{}] failed.", nodeInfo, sre);
+                    logger.warn("Connecting to AxonServer node [{}] failed.", nodeInfo, e);
                 } else {
-                    logger.warn("Connecting to AxonServer node [{}] failed: {}", nodeInfo, sre.getMessage());
+                    logger.warn("Connecting to AxonServer node [{}] failed: {}", nodeInfo, e.getMessage());
                 }
             }
         }
