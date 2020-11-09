@@ -431,8 +431,8 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
                                      int permits,
                                      int permitsBatch,
                                      Consumer<Throwable> disconnectHandler,
-                                     Consumer<CallStreamObserver<CommandProviderOutbound>> onStartHandler) {
-            super(clientId, permits, permitsBatch, disconnectHandler, onStartHandler);
+                                     Consumer<CallStreamObserver<CommandProviderOutbound>> beforeStartHandler) {
+            super(clientId, permits, permitsBatch, disconnectHandler, beforeStartHandler);
         }
 
         @Override

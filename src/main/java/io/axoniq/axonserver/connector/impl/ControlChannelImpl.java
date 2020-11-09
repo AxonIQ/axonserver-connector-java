@@ -168,12 +168,9 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
             logger.info("ControlChannel for context '{}' is already connected", context);
         } else {
             PlatformOutboundInstructionHandler responseObserver =
-                    new PlatformOutboundInstructionHandler(clientIdentification.getClientId(), this::handleDisconnect,
-                                                           upstream -> {
-                                                               StreamObserver<PlatformInboundInstruction> previous =
-                                                                       instructionDispatcher.getAndSet(upstream);
-                                                               silently(previous, StreamObserver::onCompleted);
-                                                           });
+                    new PlatformOutboundInstructionHandler(clientIdentification.getClientId(),
+                                                           this::handleDisconnect,
+                                                           this::registerOutboundStream);
             logger.debug("Opening instruction stream for context '{}'", context);
             //noinspection ResultOfMethodCallIgnored
             platformServiceStub.openStream(responseObserver);
@@ -191,6 +188,12 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
                 instructionsForPlatform.onError(e);
             }
         }
+    }
+
+    private void registerOutboundStream(CallStreamObserver<PlatformInboundInstruction> upstream) {
+        StreamObserver<PlatformInboundInstruction> previous =
+                instructionDispatcher.getAndSet(upstream);
+        silently(previous, StreamObserver::onCompleted);
     }
 
     @Override
@@ -322,8 +325,8 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
 
         public PlatformOutboundInstructionHandler(String clientId,
                                                   Consumer<Throwable> disconnectHandler,
-                                                  Consumer<CallStreamObserver<PlatformInboundInstruction>> onStartHandler) {
-            super(clientId, 0, 0, disconnectHandler, onStartHandler);
+                                                  Consumer<CallStreamObserver<PlatformInboundInstruction>> beforeStartHandler) {
+            super(clientId, 0, 0, disconnectHandler, beforeStartHandler);
         }
 
         @Override

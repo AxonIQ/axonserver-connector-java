@@ -198,11 +198,11 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
             return;
         }
         IncomingQueryInstructionStream responseObserver = new IncomingQueryInstructionStream(
-                clientIdentification.getClientId(), permits, permitsBatch, e -> scheduleReconnect(),
-                upstream -> {
-                    StreamObserver<QueryProviderOutbound> previous = outboundQueryStream.getAndSet(upstream);
-                    ObjectUtils.silently(previous, StreamObserver::onCompleted);
-                }
+                clientIdentification.getClientId(),
+                permits,
+                permitsBatch,
+                e -> scheduleReconnect(),
+                this::registerOutboundStream
         );
 
         //noinspection ResultOfMethodCallIgnored
@@ -214,6 +214,11 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
         ));
         responseObserver.enableFlowControl();
         logger.info("QueryChannel for context '{}' connected, {} registrations resubscribed", context, queryHandlers.size());
+    }
+
+    private void registerOutboundStream(CallStreamObserver<QueryProviderOutbound> upstream) {
+        StreamObserver<QueryProviderOutbound> previous = outboundQueryStream.getAndSet(upstream);
+        ObjectUtils.silently(previous, StreamObserver::onCompleted);
     }
 
     private QueryProviderOutbound buildSubscribeMessage(String queryName, String resultName, String instructionId) {
@@ -559,8 +564,8 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
                                               int permits,
                                               int permitsBatch,
                                               Consumer<Throwable> disconnectHandler,
-                                              Consumer<CallStreamObserver<QueryProviderOutbound>> onStartHandler) {
-            super(clientId, permits, permitsBatch, disconnectHandler, onStartHandler);
+                                              Consumer<CallStreamObserver<QueryProviderOutbound>> beforeStartHandler) {
+            super(clientId, permits, permitsBatch, disconnectHandler, beforeStartHandler);
         }
 
         @Override

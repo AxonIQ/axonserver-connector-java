@@ -51,27 +51,27 @@ public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowCon
 
     private final Consumer<Throwable> disconnectHandler;
 
-    private final Consumer<CallStreamObserver<OUT>> onStartHandler;
+    private final Consumer<CallStreamObserver<OUT>> beforeStartHandler;
     private CallStreamObserver<OUT> instructionsForPlatform;
 
     /**
      * Construct an {@link AbstractIncomingInstructionStream}.
      *
-     * @param clientId          the client identifier whom initiated this instruction stream
-     * @param permits           the number of permits this stream should receive
-     * @param permitsBatch      the number of permits to be consumed prior to requesting new permits
-     * @param disconnectHandler a {@link Consumer} of {@link Throwable} invoked when this stream errors out
-     * @param onStartHandler    the handler to call when the upstream connection is available. Note that the call has
-     *                          not started yet at this point.
+     * @param clientId           the client identifier whom initiated this instruction stream
+     * @param permits            the number of permits this stream should receive
+     * @param permitsBatch       the number of permits to be consumed prior to requesting new permits
+     * @param disconnectHandler  a {@link Consumer} of {@link Throwable} invoked when this stream errors out
+     * @param beforeStartHandler the handler to invoke when the upstream connection is available. Note that the gRPC
+     *                           call has not started yet at this point.
      */
     protected AbstractIncomingInstructionStream(String clientId,
                                                 int permits,
                                                 int permitsBatch,
                                                 Consumer<Throwable> disconnectHandler,
-                                                Consumer<CallStreamObserver<OUT>> onStartHandler) {
+                                                Consumer<CallStreamObserver<OUT>> beforeStartHandler) {
         super(clientId, permits, permitsBatch);
         this.disconnectHandler = disconnectHandler;
-        this.onStartHandler = onStartHandler;
+        this.beforeStartHandler = beforeStartHandler;
     }
 
     @Override
@@ -144,7 +144,7 @@ public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowCon
         SynchronizedRequestStream<OUT> synchronizedRequestStream = new SynchronizedRequestStream<>(requestStream);
         super.beforeStart(synchronizedRequestStream);
         this.instructionsForPlatform = synchronizedRequestStream;
-        this.onStartHandler.accept(getInstructionsForPlatform());
+        this.beforeStartHandler.accept(getInstructionsForPlatform());
     }
 
     /**

@@ -69,9 +69,9 @@ class AbstractIncomingInstructionStreamTest {
                                                          int permits,
                                                          int permitsBatch,
                                                          Consumer<Throwable> disconnectHandler,
-                                                         Consumer<CallStreamObserver<Object>> onStartHandler,
+                                                         Consumer<CallStreamObserver<Object>> beforeStartHandler,
                                                          boolean unregisterOutboundStreamResponse) {
-            super(clientId, permits, permitsBatch, disconnectHandler, onStartHandler);
+            super(clientId, permits, permitsBatch, disconnectHandler, beforeStartHandler);
             this.unregisterOutboundStreamResponse = unregisterOutboundStreamResponse;
         }
 
