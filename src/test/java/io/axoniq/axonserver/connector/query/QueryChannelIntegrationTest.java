@@ -45,14 +45,9 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.*;
 
-class QueryChannelTest extends AbstractAxonServerIntegrationTest {
+class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
     private static final CompletableFuture<Void> COMPLETED_FUTURE = CompletableFuture.completedFuture(null);
 
@@ -60,7 +55,7 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
     private AxonServerConnection connection1;
     private AxonServerConnectionFactory connectionFactory2;
     private AxonServerConnection connection2;
-    private static final Logger logger = LoggerFactory.getLogger(QueryChannelTest.class);
+    private static final Logger logger = LoggerFactory.getLogger(QueryChannelIntegrationTest.class);
 
     @BeforeEach
     void setUp() {
@@ -140,6 +135,17 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
+    void testSubscriptionQueryDoesNotAllowEmptyMessageId() {
+        QueryChannel queryChannel = connection1.queryChannel();
+        QueryRequest queryRequest = QueryRequest.newBuilder().build();
+        SerializedObject serializedObject = SerializedObject.newBuilder().build();
+        IllegalArgumentException exception =
+                assertThrows(IllegalArgumentException.class,
+                             () -> queryChannel.subscriptionQuery(queryRequest, serializedObject, 5, 1));
+        assertEquals("QueryRequest must contain message identifier.", exception.getMessage());
+    }
+
+    @Test
     void testSubscriptionQueryCancelledOnDisconnect() throws Exception {
         connection2.controlChannel().enableHeartbeat(100, 100, TimeUnit.MILLISECONDS);
         QueryChannel queryChannel = connection1.queryChannel();
@@ -162,9 +168,15 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
                 }, new QueryDefinition("testQuery", "testResult"))
                     .awaitAck(1, TimeUnit.SECONDS);
 
-        SubscriptionQueryResult subscriptionQuery = connection2.queryChannel().subscriptionQuery(QueryRequest.newBuilder().setQuery("testQuery").build(),
-                                                                                                 SerializedObject.newBuilder().setType("update").build(),
-                                                                                                 100, 10);
+        SubscriptionQueryResult subscriptionQuery = connection2.queryChannel()
+                                                               .subscriptionQuery(QueryRequest.newBuilder()
+                                                                                              .setMessageIdentifier("id")
+                                                                                              .setQuery("testQuery")
+                                                                                              .build(),
+                                                                                  SerializedObject.newBuilder()
+                                                                                                  .setType("update")
+                                                                                                  .build(),
+                                                                                  100, 10);
 
         assertWithin(1, TimeUnit.SECONDS, () ->
                 assertTrue(subscriptionQuery.initialResult().isDone())
@@ -216,10 +228,8 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
                     return COMPLETED_FUTURE;
                 };
             }
-        }, new QueryDefinition("testQuery", "testResult"));
-
-        // we want so make sure the subscription gets a head start before we send the query for it.
-        Thread.sleep(100);
+        }, new QueryDefinition("testQuery", "testResult"))
+            .awaitAck(1, TimeUnit.SECONDS);
 
         SubscriptionQueryResult subscriptionQuery = connection2.queryChannel().subscriptionQuery(QueryRequest.newBuilder()
                                                                                                              .setMessageIdentifier(subscriptionId)
@@ -246,7 +256,7 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
-    void testClosingSubscriptionQueryFromProviderStopsUpdateStream() throws InterruptedException {
+    void testClosingSubscriptionQueryFromProviderStopsUpdateStream() throws InterruptedException, TimeoutException {
         QueryChannel queryChannel = connection1.queryChannel();
         AtomicReference<QueryHandler.UpdateHandler> updateHandlerRef = new AtomicReference<>();
         String subscriptionId = UUID.randomUUID().toString();
@@ -267,7 +277,8 @@ class QueryChannelTest extends AbstractAxonServerIntegrationTest {
                     return COMPLETED_FUTURE;
                 };
             }
-        }, new QueryDefinition("testQuery", "testResult"));
+        }, new QueryDefinition("testQuery", "testResult"))
+            .awaitAck(1, TimeUnit.SECONDS);
 
         SubscriptionQueryResult subscriptionQuery = connection2.queryChannel().subscriptionQuery(QueryRequest.newBuilder()
                                                                                                              .setMessageIdentifier(subscriptionId)

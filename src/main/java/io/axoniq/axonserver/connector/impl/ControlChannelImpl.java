@@ -31,6 +31,7 @@ import io.axoniq.axonserver.grpc.control.Heartbeat;
 import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformServiceGrpc;
+import io.grpc.stub.CallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,7 +65,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
     private final ScheduledExecutorService executor;
     private final long processorInfoUpdateFrequency;
     private final Runnable reconnectHandler;
-    private final AtomicReference<StreamObserver<PlatformInboundInstruction>> instructionDispatcher = new AtomicReference<>();
+    private final AtomicReference<CallStreamObserver<PlatformInboundInstruction>> instructionDispatcher = new AtomicReference<>();
     private final Map<PlatformOutboundInstruction.RequestCase, InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction>> instructionHandlers =
             new EnumMap<>(PlatformOutboundInstruction.RequestCase.class);
     private final HeartbeatMonitor heartbeatMonitor;
@@ -155,7 +156,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
     /* visible for testing */
     void handleReconnectRequest(PlatformOutboundInstruction platformOutboundInstruction,
                                 ReplyChannel<PlatformInboundInstruction> replyChannel) {
-        logger.info("AxonServer requested reconnect");
+        logger.info("AxonServer requested reconnect for context '{}'", context);
         replyChannel.sendAck();
         reconnectHandler.run();
     }
@@ -164,18 +165,17 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
     public synchronized void connect() {
         StreamObserver<PlatformInboundInstruction> existing = instructionDispatcher.get();
         if (existing != null) {
-            logger.info("Not connecting - connection already present");
+            logger.info("ControlChannel for context '{}' is already connected", context);
         } else {
             PlatformOutboundInstructionHandler responseObserver =
-                    new PlatformOutboundInstructionHandler(clientIdentification.getClientId(), this::handleDisconnect);
-            logger.debug("Opening instruction stream");
+                    new PlatformOutboundInstructionHandler(clientIdentification.getClientId(),
+                                                           this::handleDisconnect,
+                                                           this::registerOutboundStream);
+            logger.debug("Opening instruction stream for context '{}'", context);
             //noinspection ResultOfMethodCallIgnored
             platformServiceStub.openStream(responseObserver);
             StreamObserver<PlatformInboundInstruction> instructionsForPlatform =
                     responseObserver.getInstructionsForPlatform();
-            StreamObserver<PlatformInboundInstruction> previous =
-                    instructionDispatcher.getAndSet(instructionsForPlatform);
-            silently(previous, StreamObserver::onCompleted);
 
             try {
                 logger.info("Connected instruction stream for context '{}'. Sending client identification", context);
@@ -188,6 +188,12 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
                 instructionsForPlatform.onError(e);
             }
         }
+    }
+
+    private void registerOutboundStream(CallStreamObserver<PlatformInboundInstruction> upstream) {
+        StreamObserver<PlatformInboundInstruction> previous =
+                instructionDispatcher.getAndSet(upstream);
+        silently(previous, StreamObserver::onCompleted);
     }
 
     @Override
@@ -250,7 +256,12 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
                 sendScheduledProcessorInfo();
             }
         } else {
-            infoSupplies.forEach(info -> doIfNotNull(info.get(), this::sendProcessorInfo));
+            CallStreamObserver<PlatformInboundInstruction> outbound = instructionDispatcher.get();
+            if (outbound != null && outbound.isReady()) {
+                infoSupplies.forEach(info -> doIfNotNull(info.get(), this::sendProcessorInfo));
+            } else {
+                logger.debug("Not sending processor info for context '{}'. Channel not ready...", context);
+            }
             executor.schedule(this::sendScheduledProcessorInfo, processorInfoUpdateFrequency, TimeUnit.MILLISECONDS);
         }
     }
@@ -292,6 +303,9 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
             }
             try {
                 dispatcher.onNext(instruction);
+                if (!hasLength(instructionId)) {
+                    result.complete(InstructionAck.newBuilder().setSuccess(true).build());
+                }
             } catch (Exception e) {
                 awaitingAck.remove(instructionId);
                 result.completeExceptionally(e);
@@ -309,8 +323,10 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
     private class PlatformOutboundInstructionHandler
             extends AbstractIncomingInstructionStream<PlatformOutboundInstruction, PlatformInboundInstruction> {
 
-        public PlatformOutboundInstructionHandler(String clientId, Consumer<Throwable> disconnectHandler) {
-            super(clientId, 0, 0, disconnectHandler);
+        public PlatformOutboundInstructionHandler(String clientId,
+                                                  Consumer<Throwable> disconnectHandler,
+                                                  Consumer<CallStreamObserver<PlatformInboundInstruction>> beforeStartHandler) {
+            super(clientId, 0, 0, disconnectHandler, beforeStartHandler);
         }
 
         @Override
@@ -332,7 +348,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
         }
 
         @Override
-        protected boolean unregisterOutboundStream(StreamObserver<PlatformInboundInstruction> expected) {
+        protected boolean unregisterOutboundStream(CallStreamObserver<PlatformInboundInstruction> expected) {
             heartbeatMonitor.pause();
             boolean disconnected = instructionDispatcher.compareAndSet(expected, null);
             if (disconnected) {

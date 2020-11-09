@@ -23,8 +23,10 @@ import io.axoniq.axonserver.connector.AbstractAxonServerIntegrationTest;
 import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
 import io.axoniq.axonserver.connector.ReplyChannel;
+import io.axoniq.axonserver.connector.control.ControlChannel;
 import io.axoniq.axonserver.connector.control.ProcessorInstructionHandler;
 import io.axoniq.axonserver.connector.event.EventStream;
+import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo;
 import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
@@ -54,10 +56,10 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-class ControlChannelTest extends AbstractAxonServerIntegrationTest {
+class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
     private AxonServerConnectionFactory client;
-    private static final Logger logger = LoggerFactory.getLogger(ControlChannelTest.class);
+    private static final Logger logger = LoggerFactory.getLogger(ControlChannelIntegrationTest.class);
 
     @AfterEach
     void tearDown() {
@@ -143,8 +145,21 @@ class ControlChannelTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
+    public void instructionsWithoutInstructionIdAreCompletedImmediately() {
+        client = AxonServerConnectionFactory.forClient(getClass().getSimpleName())
+                                            .routingServers(axonServerAddress)
+                                            .build();
+        ControlChannel controlChannel = client.connect("default")
+                                              .controlChannel();
+
+        CompletableFuture<InstructionAck> result = controlChannel.sendInstruction(PlatformInboundInstruction.getDefaultInstance());
+        assertTrue(result.isDone());
+    }
+
+    @Test
     void testPauseAndStartInstructionIsPickedUpByHandler() throws Exception {
         client = AxonServerConnectionFactory.forClient(getClass().getSimpleName())
+                                            .processorInfoUpdateFrequency(500, TimeUnit.MILLISECONDS)
                                             .routingServers(axonServerAddress)
                                             .build();
         AxonServerConnection connection1 = client.connect("default");
@@ -170,6 +185,7 @@ class ControlChannelTest extends AbstractAxonServerIntegrationTest {
     @Test
     void testSplitAndMergeInstructionIsPickedUpByHandler() throws TimeoutException, InterruptedException {
         client = AxonServerConnectionFactory.forClient(getClass().getSimpleName())
+                                            .processorInfoUpdateFrequency(500, TimeUnit.MILLISECONDS)
                                             .routingServers(axonServerAddress)
                                             .build();
         AxonServerConnection connection1 = client.connect("default");

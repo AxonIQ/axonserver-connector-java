@@ -20,6 +20,7 @@ import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.InstructionHandler;
 import io.axoniq.axonserver.grpc.ErrorMessage;
 import io.axoniq.axonserver.grpc.InstructionAck;
+import io.grpc.stub.CallStreamObserver;
 import io.grpc.stub.ClientCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
@@ -50,22 +51,27 @@ public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowCon
 
     private final Consumer<Throwable> disconnectHandler;
 
-    private StreamObserver<OUT> instructionsForPlatform;
+    private final Consumer<CallStreamObserver<OUT>> beforeStartHandler;
+    private CallStreamObserver<OUT> instructionsForPlatform;
 
     /**
      * Construct an {@link AbstractIncomingInstructionStream}.
      *
-     * @param clientId          the client identifier whom initiated this instruction stream
-     * @param permits           the number of permits this stream should receive
-     * @param permitsBatch      the number of permits to be consumed prior to requesting new permits
-     * @param disconnectHandler a {@link Consumer} of {@link Throwable} invoked when this stream errors out
+     * @param clientId           the client identifier whom initiated this instruction stream
+     * @param permits            the number of permits this stream should receive
+     * @param permitsBatch       the number of permits to be consumed prior to requesting new permits
+     * @param disconnectHandler  a {@link Consumer} of {@link Throwable} invoked when this stream errors out
+     * @param beforeStartHandler the handler to invoke when the upstream connection is available. Note that the gRPC
+     *                           call has not started yet at this point.
      */
-    public AbstractIncomingInstructionStream(String clientId,
-                                             int permits,
-                                             int permitsBatch,
-                                             Consumer<Throwable> disconnectHandler) {
+    protected AbstractIncomingInstructionStream(String clientId,
+                                                int permits,
+                                                int permitsBatch,
+                                                Consumer<Throwable> disconnectHandler,
+                                                Consumer<CallStreamObserver<OUT>> beforeStartHandler) {
         super(clientId, permits, permitsBatch);
         this.disconnectHandler = disconnectHandler;
+        this.beforeStartHandler = beforeStartHandler;
     }
 
     @Override
@@ -138,6 +144,7 @@ public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowCon
         SynchronizedRequestStream<OUT> synchronizedRequestStream = new SynchronizedRequestStream<>(requestStream);
         super.beforeStart(synchronizedRequestStream);
         this.instructionsForPlatform = synchronizedRequestStream;
+        this.beforeStartHandler.accept(getInstructionsForPlatform());
     }
 
     /**
@@ -145,7 +152,7 @@ public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowCon
      *
      * @return the {@link StreamObserver} of type {@code OUT} serving as the outbound instruction channel
      */
-    public StreamObserver<OUT> getInstructionsForPlatform() {
+    public ClientCallStreamObserver<OUT> getInstructionsForPlatform() {
         return outboundStream();
     }
 
@@ -154,7 +161,8 @@ public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowCon
      * StreamObserver}. Will return {@code true} if they matched and {@code false} otherwise.
      *
      * @param expected the expected {@link StreamObserver} to be unregistered
+     *
      * @return {@code true} if the outbound stream was successfully unregistered, {@code false} otherwise
      */
-    protected abstract boolean unregisterOutboundStream(StreamObserver<OUT> expected);
+    protected abstract boolean unregisterOutboundStream(CallStreamObserver<OUT> expected);
 }
