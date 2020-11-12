@@ -111,9 +111,11 @@ public abstract class AbstractAxonServerChannel {
     public abstract void disconnect();
 
     /**
-     * Validate whether this channel is connected with AxonServer.
+     * Validate whether this channel has all required streams connected with AxonServer. If the state of the channel
+     * does not require any active streams, it is considered ready and will return {@code true}.
      *
-     * @return {@code true} if this channel is connected with AxonServer, {@code false} otherwise
+     * @return {@code true} if this channel is connected with AxonServer or does not require any active connections,
+     * {@code false} otherwise
      */
-    public abstract boolean isConnected();
+    public abstract boolean isReady();
 }

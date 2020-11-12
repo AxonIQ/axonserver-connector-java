@@ -157,7 +157,13 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
     }
 
     @Override
-    public synchronized void connect() {
+    public void connect() {
+        if (!commandHandlers.isEmpty()) {
+            doCreateCommandStream();
+        }
+    }
+
+    private synchronized void doCreateCommandStream() {
         if (outboundCommandStream.get() != null) {
             logger.debug("CommandChannel for context '{}' is already connected", context);
             return;
@@ -220,14 +226,17 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
     }
 
     @Override
-    public boolean isConnected() {
-        return outboundCommandStream.get() != null;
+    public boolean isReady() {
+        return outboundCommandStream.get() != null || commandHandlers.isEmpty();
     }
 
     @Override
     public Registration registerCommandHandler(Function<Command, CompletableFuture<CommandResponse>> handler,
                                                int loadFactor,
                                                String... commandNames) {
+        if (commandHandlers.isEmpty()) {
+            doCreateCommandStream();
+        }
         CompletableFuture<Void> subscriptionResult = CompletableFuture.completedFuture(null);
         CommandHandler commandHandler = new CommandHandler(handler, loadFactor);
         for (String commandName : commandNames) {
@@ -274,10 +283,15 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
         CompletableFuture<Void> ack = new CompletableFuture<>();
         if (hasLength(instruction.getInstructionId())) {
             instructionsAwaitingAck.put(instruction.getInstructionId(), ack);
+            ack.whenComplete((r, e) -> instructionsAwaitingAck.remove(instruction.getInstructionId(), ack));
         } else {
             ack.complete(null);
         }
-        doIfNotNull(outboundCommandStream.get(), s -> s.onNext(instruction));
+        doIfNotNull(outboundCommandStream.get(), s -> s.onNext(instruction))
+                .orElse(() -> ack.completeExceptionally(new AxonServerException(ErrorCategory.INSTRUCTION_ACK_ERROR,
+                                                                                "Unable to send instruction: no connection to AxonServer",
+                                                                                clientIdentification.getClientId())));
+
         return ack;
     }
 

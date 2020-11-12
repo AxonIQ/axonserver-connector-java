@@ -143,7 +143,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
     }
 
     private CompletableFuture<InstructionAck> sendHeartBeat() {
-        if (!isConnected()) {
+        if (!isReady()) {
             return CompletableFuture.completedFuture(null);
         }
         PlatformInboundInstruction heartbeatMessage =
@@ -198,7 +198,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
     }
 
     @Override
-    public void reconnect() {
+    public synchronized void reconnect() {
         doIfNotNull(instructionDispatcher.getAndSet(null), StreamObserver::onCompleted);
         scheduleImmediateReconnect();
     }
@@ -217,7 +217,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
     }
 
     @Override
-    public void disconnect() {
+    public synchronized void disconnect() {
         heartbeatMonitor.disableHeartbeat();
         StreamObserver<PlatformInboundInstruction> dispatcher = instructionDispatcher.getAndSet(null);
         if (dispatcher != null) {
@@ -317,7 +317,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
     }
 
     @Override
-    public boolean isConnected() {
+    public boolean isReady() {
         return instructionDispatcher.get() != null;
     }
 
