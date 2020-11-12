@@ -49,6 +49,7 @@ import io.axoniq.axonserver.grpc.query.QueryUpdateComplete;
 import io.axoniq.axonserver.grpc.query.SubscriptionQuery;
 import io.axoniq.axonserver.grpc.query.SubscriptionQueryRequest;
 import io.axoniq.axonserver.grpc.query.SubscriptionQueryResponse;
+import io.grpc.Status;
 import io.grpc.stub.CallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
@@ -208,7 +209,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
                 clientIdentification.getClientId(),
                 permits,
                 permitsBatch,
-                e -> scheduleReconnect(),
+                e -> scheduleReconnect(Status.fromThrowable(e)),
                 this::registerOutboundStream
         );
 

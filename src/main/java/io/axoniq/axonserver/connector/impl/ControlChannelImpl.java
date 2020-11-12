@@ -31,6 +31,7 @@ import io.axoniq.axonserver.grpc.control.Heartbeat;
 import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformServiceGrpc;
+import io.grpc.Status;
 import io.grpc.stub.CallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
@@ -204,7 +205,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
 
     private void handleDisconnect(Throwable cause) {
         failOpenInstructions(cause);
-        scheduleReconnect();
+        scheduleReconnect(Status.fromThrowable(cause));
     }
 
     private void failOpenInstructions(Throwable cause) {

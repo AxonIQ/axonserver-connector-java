@@ -17,6 +17,7 @@
 package io.axoniq.axonserver.connector.impl;
 
 import io.grpc.ConnectivityState;
+import io.grpc.Status;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,43 +38,58 @@ public abstract class AbstractAxonServerChannel {
     /**
      * Instantiate an {@link AbstractAxonServerChannel}.
      *
-     * @param executor                 a {@link ScheduledExecutorService} used to invoke {@link #scheduleReconnect()} in
-     *                                 a separate thread
-     * @param axonServerManagedChannel the {@link AxonServerManagedChannel} used to validate whether {@link
-     *                                 #scheduleReconnect()} is succeeded or should be tried again
+     * @param executor                 a {@link ScheduledExecutorService} used to schedule reconnections
+     * @param axonServerManagedChannel the {@link AxonServerManagedChannel} used to vconnect to AxonServer
      */
-    public AbstractAxonServerChannel(ScheduledExecutorService executor,
-                                     AxonServerManagedChannel axonServerManagedChannel) {
+    protected AbstractAxonServerChannel(ScheduledExecutorService executor,
+                                        AxonServerManagedChannel axonServerManagedChannel) {
         this.executor = executor;
         this.channel = axonServerManagedChannel;
     }
 
     /**
-     * Schedule an attempt to reconnect with AxonServer.
+     * Schedule an attempt to reconnect with AxonServer. Depending on the {@code disconnectReason}, the reconnect
+     * attempt will be executed within 500ms or 5000ms.
+     *
+     * @param disconnectReason The reason why the previous connection failed.
      */
-    protected void scheduleReconnect() {
-        scheduleReconnect(false);
+    protected void scheduleReconnect(Status disconnectReason) {
+        switch (disconnectReason.getCode()) {
+            case NOT_FOUND:
+            case PERMISSION_DENIED:
+            case UNIMPLEMENTED:
+            case UNAUTHENTICATED:
+            case FAILED_PRECONDITION:
+            case INVALID_ARGUMENT:
+            case RESOURCE_EXHAUSTED:
+                scheduleReconnect(5000);
+                break;
+            default:
+                scheduleReconnect(500);
+                break;
+        }
     }
+
 
     /**
      * Schedule an immediate attempt to reconnect with AxonServer.
      */
     protected void scheduleImmediateReconnect() {
         logger.debug("Scheduling immediate reconnect");
-        scheduleReconnect(true);
+        scheduleReconnect(0);
     }
 
-    private void scheduleReconnect(boolean immediate) {
+    private void scheduleReconnect(int delay) {
         try {
             executor.schedule(() -> {
-                ConnectivityState connectivityState = channel.getState(immediate);
+                ConnectivityState connectivityState = channel.getState(delay == 0);
                 if (connectivityState == ConnectivityState.READY) {
                     connect();
                 } else {
                     logger.debug("No connection to AxonServer available. Scheduling next attempt in 500ms");
-                    scheduleReconnect(false);
+                    scheduleReconnect(500);
                 }
-            }, immediate ? 0 : 500, TimeUnit.MILLISECONDS);
+            }, delay, TimeUnit.MILLISECONDS);
         } catch (RejectedExecutionException e) {
             logger.info("Ignoring reconnect request, as connector is being shut down.");
         }

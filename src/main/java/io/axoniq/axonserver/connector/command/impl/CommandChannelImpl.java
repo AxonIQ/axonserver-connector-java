@@ -40,6 +40,7 @@ import io.axoniq.axonserver.grpc.command.CommandResponse;
 import io.axoniq.axonserver.grpc.command.CommandServiceGrpc;
 import io.axoniq.axonserver.grpc.command.CommandSubscription;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
+import io.grpc.Status;
 import io.grpc.stub.CallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import io.netty.util.internal.OutOfDirectMemoryError;
@@ -187,7 +188,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
         instructionsAwaitingAck.keySet().forEach(
                 k -> doIfNotNull(instructionsAwaitingAck.remove(k), f -> f.completeExceptionally(error))
         );
-        scheduleReconnect();
+        scheduleReconnect(Status.fromThrowable(error));
     }
 
     @Override
