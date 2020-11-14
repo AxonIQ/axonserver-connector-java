@@ -16,7 +16,6 @@
 
 package io.axoniq.axonserver.connector.query.impl;
 
-import io.axoniq.axonserver.connector.AxonServerException;
 import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.InstructionHandler;
 import io.axoniq.axonserver.connector.Registration;
@@ -49,7 +48,6 @@ import io.axoniq.axonserver.grpc.query.QueryUpdateComplete;
 import io.axoniq.axonserver.grpc.query.SubscriptionQuery;
 import io.axoniq.axonserver.grpc.query.SubscriptionQueryRequest;
 import io.axoniq.axonserver.grpc.query.SubscriptionQueryResponse;
-import io.grpc.Status;
 import io.grpc.stub.CallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
@@ -70,12 +68,11 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
-import static io.axoniq.axonserver.connector.impl.ObjectUtils.hasLength;
 
 /**
  * {@link QueryChannel} implementation, serving as the query connection between AxonServer and a client application.
  */
-public class QueryChannelImpl extends AbstractAxonServerChannel implements QueryChannel {
+public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOutbound> implements QueryChannel {
 
     private static final Logger logger = LoggerFactory.getLogger(QueryChannelImpl.class);
 
@@ -85,7 +82,6 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
     private final Map<QueryDefinition, AtomicInteger> supportedQueries = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Set<QueryHandler>> queryHandlers = new ConcurrentHashMap<>();
     private final ConcurrentMap<Enum<?>, InstructionHandler<QueryProviderInbound, QueryProviderOutbound>> instructionHandlers = new ConcurrentHashMap<>();
-    private final ConcurrentMap<String, CompletableFuture<Void>> instructions = new ConcurrentHashMap<>();
 
     private final ClientIdentification clientIdentification;
     private final String context;
@@ -114,7 +110,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
                             int permitsBatch,
                             ScheduledExecutorService executor,
                             AxonServerManagedChannel channel) {
-        super(executor, channel);
+        super(clientIdentification, executor, channel);
         this.clientIdentification = clientIdentification;
         this.context = context;
         this.permits = permits;
@@ -128,15 +124,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
     }
 
     private void handleAck(QueryProviderInbound query, ReplyChannel<QueryProviderOutbound> result) {
-        String instructionId = query.getAck().getInstructionId();
-        CompletableFuture<Void> future = instructions.remove(instructionId);
-        if (future != null) {
-            if (query.getAck().getSuccess()) {
-                future.complete(null);
-            } else {
-                future.completeExceptionally(new AxonServerException(query.getAck().getError()));
-            }
-        }
+        processAck(query.getAck());
         result.complete();
     }
 
@@ -234,10 +222,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
 
     private void onConnectionError(Throwable error) {
         logger.info("Error on QueryChannel for context {}", context, error);
-        instructions.keySet().forEach(
-                k -> doIfNotNull(instructions.remove(k), f -> f.completeExceptionally(error))
-        );
-        scheduleReconnect(Status.fromThrowable(error));
+        scheduleReconnect(error);
     }
 
     private void registerOutboundStream(CallStreamObserver<QueryProviderOutbound> upstream) {
@@ -276,7 +261,9 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
                     QueryProviderOutbound subscribeMessage = buildSubscribeMessage(queryDefinition.getQueryName(),
                                                                                    queryDefinition.getResultType(),
                                                                                    UUID.randomUUID().toString());
-                    CompletableFuture<Void> instructionResult = sendInstruction(subscribeMessage);
+                    CompletableFuture<Void> instructionResult = sendInstruction(subscribeMessage,
+                                                                                QueryProviderOutbound::getInstructionId,
+                                                                                outboundQueryStream.get());
                     subscriptionResult = CompletableFuture.allOf(subscriptionResult, instructionResult);
                 }
                 logger.debug("Registered handler for query '{}' in context '{}'", queryDefinition, context);
@@ -299,21 +286,6 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
         });
     }
 
-    private CompletableFuture<Void> sendInstruction(QueryProviderOutbound instruction) {
-        CompletableFuture<Void> ack = new CompletableFuture<>();
-        if (hasLength(instruction.getInstructionId())) {
-            instructions.put(instruction.getInstructionId(), ack);
-            ack.whenComplete((r, e) -> instructions.remove(instruction.getInstructionId(), ack));
-        } else {
-            ack.complete(null);
-        }
-        doIfNotNull(outboundQueryStream.get(), s -> s.onNext(instruction))
-                .orElse(() -> ack.completeExceptionally(new AxonServerException(ErrorCategory.INSTRUCTION_ACK_ERROR,
-                                                                                "Unable to send instruction: no connection to AxonServer",
-                                                                                clientIdentification.getClientId())));
-        return ack;
-    }
-
     private CompletableFuture<Void> sendUnsubscribe(QueryDefinition queryDefinition) {
         String instructionId = UUID.randomUUID().toString();
         QuerySubscription unsubscribeMessage =
@@ -327,8 +299,9 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
         return sendInstruction(QueryProviderOutbound.newBuilder()
                                                     .setInstructionId(instructionId)
                                                     .setUnsubscribe(unsubscribeMessage)
-                                                    .build()
-        );
+                                                    .build(),
+                               QueryProviderOutbound::getInstructionId,
+                               outboundQueryStream.get());
     }
 
     @Override

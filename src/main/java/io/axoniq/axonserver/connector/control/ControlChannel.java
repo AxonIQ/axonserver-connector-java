@@ -18,7 +18,6 @@ package io.axoniq.axonserver.connector.control;
 
 import io.axoniq.axonserver.connector.InstructionHandler;
 import io.axoniq.axonserver.connector.Registration;
-import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo;
 import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
@@ -91,7 +90,8 @@ public interface ControlChannel {
      * asynchronously.
      *
      * @param instruction the {@link PlatformInboundInstruction} to send over this channel
+     *
      * @return a {@link CompletableFuture} of the acknowledgement of the given {@code instruction}
      */
-    CompletableFuture<InstructionAck> sendInstruction(PlatformInboundInstruction instruction);
+    CompletableFuture<Void> sendInstruction(PlatformInboundInstruction instruction);
 }

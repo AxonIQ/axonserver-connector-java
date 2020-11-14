@@ -148,7 +148,7 @@ public class ContextConnection implements AxonServerConnection {
     @Override
     public EventChannel eventChannel() {
         EventChannelImpl channel = this.eventChannel.updateAndGet(
-                createIfNull(() -> new EventChannelImpl(executorService, connection))
+                createIfNull(() -> new EventChannelImpl(clientIdentification, executorService, connection))
         );
         return ensureConnected(channel);
     }

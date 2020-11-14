@@ -32,5 +32,5 @@ public interface HeartbeatSender {
      *
      * @return a {@link CompletableFuture} containing the {@link InstructionAck} once the heartbeat has been received
      */
-    CompletableFuture<InstructionAck> sendHeartbeat();
+    CompletableFuture<Void> sendHeartbeat();
 }

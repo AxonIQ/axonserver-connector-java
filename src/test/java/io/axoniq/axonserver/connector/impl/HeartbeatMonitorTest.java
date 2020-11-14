@@ -16,7 +16,6 @@
 
 package io.axoniq.axonserver.connector.impl;
 
-import io.axoniq.axonserver.grpc.InstructionAck;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,7 +43,7 @@ import static org.mockito.Mockito.mock;
 class HeartbeatMonitorTest {
 
     private ScheduledExecutorService executor;
-    private List<CompletableFuture<?>> scheduledBeats = new CopyOnWriteArrayList<>();
+    private final List<CompletableFuture<?>> scheduledBeats = new CopyOnWriteArrayList<>();
     private Runnable nextCheckBeat;
     private long now;
     private AtomicBoolean trigger;
@@ -61,7 +60,7 @@ class HeartbeatMonitorTest {
         }).when(executor).schedule(any(Runnable.class), anyLong(), any(TimeUnit.class));
         doAnswer(inv -> nextCheckBeat = () -> {nextCheckBeat = null ; inv.getArgumentAt(0, Runnable.class).run();}).when(executor).execute(any(Runnable.class));
         HeartbeatSender mockSender = () -> {
-            CompletableFuture<InstructionAck> newBeat = new CompletableFuture<>();
+            CompletableFuture<Void> newBeat = new CompletableFuture<>();
             scheduledBeats.add(newBeat);
             return newBeat;
         };
