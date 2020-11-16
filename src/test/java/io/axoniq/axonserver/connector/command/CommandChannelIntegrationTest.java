@@ -143,7 +143,7 @@ class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     }
 
     @RepeatedTest(10)
-    void testQueryChannelConsideredConnectedWhenNoHandlersSubscribed() throws IOException, TimeoutException, InterruptedException {
+    void testCommandChannelConsideredConnectedWhenNoHandlersSubscribed() throws IOException, TimeoutException, InterruptedException {
         CommandChannelImpl commandChannel = (CommandChannelImpl) connection1.commandChannel();
         // just to make sure that no attempt was made to connect, since there are no handlers
         assertTrue(commandChannel.isReady());
