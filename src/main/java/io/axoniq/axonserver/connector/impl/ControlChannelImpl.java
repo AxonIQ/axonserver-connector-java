@@ -31,6 +31,7 @@ import io.axoniq.axonserver.grpc.control.Heartbeat;
 import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformServiceGrpc;
+import io.grpc.Status;
 import io.grpc.stub.CallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
@@ -142,7 +143,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
     }
 
     private CompletableFuture<InstructionAck> sendHeartBeat() {
-        if (!isConnected()) {
+        if (!isReady()) {
             return CompletableFuture.completedFuture(null);
         }
         PlatformInboundInstruction heartbeatMessage =
@@ -197,14 +198,14 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
     }
 
     @Override
-    public void reconnect() {
+    public synchronized void reconnect() {
         doIfNotNull(instructionDispatcher.getAndSet(null), StreamObserver::onCompleted);
         scheduleImmediateReconnect();
     }
 
     private void handleDisconnect(Throwable cause) {
         failOpenInstructions(cause);
-        scheduleReconnect();
+        scheduleReconnect(Status.fromThrowable(cause));
     }
 
     private void failOpenInstructions(Throwable cause) {
@@ -216,7 +217,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
     }
 
     @Override
-    public void disconnect() {
+    public synchronized void disconnect() {
         heartbeatMonitor.disableHeartbeat();
         StreamObserver<PlatformInboundInstruction> dispatcher = instructionDispatcher.getAndSet(null);
         if (dispatcher != null) {
@@ -316,7 +317,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel implements Con
     }
 
     @Override
-    public boolean isConnected() {
+    public boolean isReady() {
         return instructionDispatcher.get() != null;
     }
 

@@ -97,7 +97,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
     }
 
     @Override
-    public boolean isConnected() {
+    public boolean isReady() {
         return true;
     }
 

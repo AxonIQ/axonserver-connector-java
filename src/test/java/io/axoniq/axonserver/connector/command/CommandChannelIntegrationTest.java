@@ -19,12 +19,15 @@ package io.axoniq.axonserver.connector.command;
 import io.axoniq.axonserver.connector.AbstractAxonServerIntegrationTest;
 import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
+import io.axoniq.axonserver.connector.AxonServerException;
 import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.Registration;
+import io.axoniq.axonserver.connector.command.impl.CommandChannelImpl;
 import io.axoniq.axonserver.grpc.command.Command;
 import io.axoniq.axonserver.grpc.command.CommandResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +43,7 @@ import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
@@ -137,6 +141,34 @@ class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         CommandResponse commandResponse = result.get(1, TimeUnit.SECONDS);
         assertEquals("", commandResponse.getErrorMessage().getMessage());
     }
+
+    @RepeatedTest(10)
+    void testCommandChannelConsideredConnectedWhenNoHandlersSubscribed() throws IOException, TimeoutException, InterruptedException {
+        CommandChannelImpl commandChannel = (CommandChannelImpl) connection1.commandChannel();
+        // just to make sure that no attempt was made to connect, since there are no handlers
+        assertTrue(commandChannel.isReady());
+
+        // make sure no real connection can be set up
+        axonServerProxy.disable();
+        assertWithin(1, TimeUnit.SECONDS, () -> assertFalse(connection1.isConnected()));
+
+        assertTrue(commandChannel.isReady());
+        assertFalse(connection1.isConnected());
+
+        Registration registration = commandChannel.registerCommandHandler(c -> CompletableFuture.completedFuture(null),
+                                                                          100, "TestCommand");
+        AxonServerException exception = assertThrows(AxonServerException.class, () -> registration.awaitAck(1, TimeUnit.SECONDS));
+        assertEquals(ErrorCategory.INSTRUCTION_ACK_ERROR, exception.getErrorCategory());
+
+        // because of the attempt to set up a connection, it may need a few milliseconds to discover that's not possible
+        assertWithin(1, TimeUnit.SECONDS, () -> assertFalse(commandChannel.isReady()));
+
+        axonServerProxy.enable();
+
+        // verify connection is established
+        assertWithin(2, TimeUnit.SECONDS, () -> assertTrue(commandChannel.isReady()));
+    }
+
 
     @Test
     void testDispatchCommandOnDisconnectReturnsError() throws Exception {

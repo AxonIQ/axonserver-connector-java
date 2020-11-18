@@ -49,6 +49,7 @@ import io.axoniq.axonserver.grpc.query.QueryUpdateComplete;
 import io.axoniq.axonserver.grpc.query.SubscriptionQuery;
 import io.axoniq.axonserver.grpc.query.SubscriptionQueryRequest;
 import io.axoniq.axonserver.grpc.query.SubscriptionQueryResponse;
+import io.grpc.Status;
 import io.grpc.stub.CallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
@@ -81,7 +82,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
     private static final QueryResponse TERMINAL = QueryResponse.newBuilder().setErrorCode("__TERMINAL__").build();
 
     private final AtomicReference<CallStreamObserver<QueryProviderOutbound>> outboundQueryStream = new AtomicReference<>();
-    private final Set<QueryDefinition> supportedQueries = new CopyOnWriteArraySet<>();
+    private final Map<QueryDefinition, AtomicInteger> supportedQueries = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Set<QueryHandler>> queryHandlers = new ConcurrentHashMap<>();
     private final ConcurrentMap<Enum<?>, InstructionHandler<QueryProviderInbound, QueryProviderOutbound>> instructionHandlers = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, CompletableFuture<Void>> instructions = new ConcurrentHashMap<>();
@@ -128,7 +129,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
 
     private void handleAck(QueryProviderInbound query, ReplyChannel<QueryProviderOutbound> result) {
         String instructionId = query.getAck().getInstructionId();
-        CompletableFuture<Void> future = instructions.get(instructionId);
+        CompletableFuture<Void> future = instructions.remove(instructionId);
         if (future != null) {
             if (query.getAck().getSuccess()) {
                 future.complete(null);
@@ -199,7 +200,13 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
     }
 
     @Override
-    public synchronized void connect() {
+    public void connect() {
+        if (!queryHandlers.isEmpty()) {
+            doConnectQueryStream();
+        }
+    }
+
+    private synchronized void doConnectQueryStream() {
         if (outboundQueryStream.get() != null) {
             logger.debug("QueryChannel for context '{}' is already connected", context);
             return;
@@ -208,19 +215,29 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
                 clientIdentification.getClientId(),
                 permits,
                 permitsBatch,
-                e -> scheduleReconnect(),
+                this::onConnectionError,
                 this::registerOutboundStream
         );
 
         //noinspection ResultOfMethodCallIgnored
         queryServiceStub.openStream(responseObserver);
-        StreamObserver<QueryProviderOutbound> newValue = responseObserver.getInstructionsForPlatform();
+        CallStreamObserver<QueryProviderOutbound> newValue = responseObserver.getInstructionsForPlatform();
 
-        supportedQueries.forEach(k -> newValue.onNext(
+        supportedQueries.keySet().forEach(k -> newValue.onNext(
                 buildSubscribeMessage(k.getQueryName(), k.getResultType(), UUID.randomUUID().toString())
         ));
         responseObserver.enableFlowControl();
-        logger.info("QueryChannel for context '{}' connected, {} registrations resubscribed", context, queryHandlers.size());
+        if (outboundQueryStream.get() == newValue) {
+            logger.info("QueryChannel for context '{}' connected, {} registrations resubscribed", context, queryHandlers.size());
+        }
+    }
+
+    private void onConnectionError(Throwable error) {
+        logger.info("Error on QueryChannel for context {}", context, error);
+        instructions.keySet().forEach(
+                k -> doIfNotNull(instructions.remove(k), f -> f.completeExceptionally(error))
+        );
+        scheduleReconnect(Status.fromThrowable(error));
     }
 
     private void registerOutboundStream(CallStreamObserver<QueryProviderOutbound> upstream) {
@@ -246,10 +263,15 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
     public Registration registerQueryHandler(QueryHandler handler, QueryDefinition... queryDefinitions) {
         CompletableFuture<Void> subscriptionResult = CompletableFuture.completedFuture(null);
         synchronized (queryHandlerMonitor) {
+            if (queryHandlers.isEmpty()) {
+                doConnectQueryStream();
+            }
+
             for (QueryDefinition queryDefinition : queryDefinitions) {
                 this.queryHandlers.computeIfAbsent(queryDefinition.getQueryName(), k -> new CopyOnWriteArraySet<>())
                                   .add(handler);
-                boolean firstRegistration = supportedQueries.add(queryDefinition);
+                boolean firstRegistration = supportedQueries.computeIfAbsent(queryDefinition, k -> new AtomicInteger())
+                                                            .getAndIncrement() == 0;
                 if (firstRegistration) {
                     QueryProviderOutbound subscribeMessage = buildSubscribeMessage(queryDefinition.getQueryName(),
                                                                                    queryDefinition.getResultType(),
@@ -270,30 +292,26 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
                         result = CompletableFuture.allOf(result, sendUnsubscribe(def));
                         logger.debug("Unregistered handlers for query '{}' in context '{}'", def, context);
                     }
+                    supportedQueries.computeIfPresent(def, (qd, counter) -> counter.decrementAndGet() == 0 ? null : counter);
                 }
                 return result;
             }
         });
     }
 
-    private CompletableFuture<Void> sendInstruction(QueryProviderOutbound subscribeMessage) {
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        doIfNotNull(outboundQueryStream.get(),
-                    s -> {
-                        if (hasLength(subscribeMessage.getInstructionId())) {
-                            instructions.put(subscribeMessage.getInstructionId(), future);
-                        } else {
-                            future.complete(null);
-                        }
-                        try {
-                            s.onNext(subscribeMessage);
-                        } catch (Exception e) {
-                            instructions.remove(subscribeMessage.getInstructionId(), future);
-                            future.completeExceptionally(e);
-                        }
-                    })
-                .orElse(() -> future.complete(null));
-        return future;
+    private CompletableFuture<Void> sendInstruction(QueryProviderOutbound instruction) {
+        CompletableFuture<Void> ack = new CompletableFuture<>();
+        if (hasLength(instruction.getInstructionId())) {
+            instructions.put(instruction.getInstructionId(), ack);
+            ack.whenComplete((r, e) -> instructions.remove(instruction.getInstructionId(), ack));
+        } else {
+            ack.complete(null);
+        }
+        doIfNotNull(outboundQueryStream.get(), s -> s.onNext(instruction))
+                .orElse(() -> ack.completeExceptionally(new AxonServerException(ErrorCategory.INSTRUCTION_ACK_ERROR,
+                                                                                "Unable to send instruction: no connection to AxonServer",
+                                                                                clientIdentification.getClientId())));
+        return ack;
     }
 
     private CompletableFuture<Void> sendUnsubscribe(QueryDefinition queryDefinition) {
@@ -386,7 +404,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
     }
 
     @Override
-    public void disconnect() {
+    public synchronized void disconnect() {
         doIfNotNull(outboundQueryStream.getAndSet(null), StreamObserver::onCompleted);
         cancelAllSubscriptionQueries();
     }
@@ -399,7 +417,8 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
 
     @Override
     public CompletableFuture<Void> prepareDisconnect() {
-        CompletableFuture<Void> future = supportedQueries.stream()
+        CompletableFuture<Void> future = supportedQueries.keySet()
+                                                         .stream()
                                                          .map(this::sendUnsubscribe)
                                                          .reduce(CompletableFuture::allOf)
                                                          .orElseGet(() -> CompletableFuture.completedFuture(null));
@@ -412,8 +431,8 @@ public class QueryChannelImpl extends AbstractAxonServerChannel implements Query
     }
 
     @Override
-    public boolean isConnected() {
-        return outboundQueryStream.get() != null;
+    public boolean isReady() {
+        return outboundQueryStream.get() != null || queryHandlers.isEmpty();
     }
 
     private void doHandleQuery(QueryProviderInbound query, ReplyChannel<QueryResponse> responseHandler) {
