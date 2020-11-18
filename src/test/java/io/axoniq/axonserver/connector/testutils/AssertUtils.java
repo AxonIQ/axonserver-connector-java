@@ -19,6 +19,10 @@ package io.axoniq.axonserver.connector.testutils;
 import org.junit.jupiter.api.Assertions;
 
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Utility class for special assertions
@@ -56,6 +60,34 @@ public abstract class AssertUtils {
             }
             now = System.currentTimeMillis();
         } while (true);
+    }
+
+    /**
+     * Assert that the given {@code assertion} returns {@code true} within the given {@code time} and {@code unit}.
+     *
+     * @param time            an {@code int} which paired with the {@code unit} specifies the time in which the
+     *                        assertion must
+     *                        pass
+     * @param unit            a {@link TimeUnit} in which {@code time} is expressed
+     * @param booleanSupplier a {@link BooleanSupplier} returning th value to assert
+     */
+    @SuppressWarnings("Duplicates")
+    public static void assertTrueWithin(int time, TimeUnit unit, BooleanSupplier booleanSupplier) {
+        assertWithin(time, unit, () -> assertTrue(booleanSupplier));
+    }
+
+    /**
+     * Assert that the given {@code assertion} returns {@code false} within the given {@code time} and {@code unit}.
+     *
+     * @param time            an {@code int} which paired with the {@code unit} specifies the time in which the
+     *                        assertion must
+     *                        pass
+     * @param unit            a {@link TimeUnit} in which {@code time} is expressed
+     * @param booleanSupplier a {@link BooleanSupplier} returning th value to assert
+     */
+    @SuppressWarnings("Duplicates")
+    public static void assertFalseWithin(int time, TimeUnit unit, BooleanSupplier booleanSupplier) {
+        assertWithin(time, unit, () -> assertFalse(booleanSupplier));
     }
 
     @FunctionalInterface

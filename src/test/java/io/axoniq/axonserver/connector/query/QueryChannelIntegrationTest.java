@@ -44,8 +44,16 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertFalseWithin;
+import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertTrueWithin;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
@@ -99,11 +107,12 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         axonServerProxy.disable();
 
-        assertWithin(100, TimeUnit.MILLISECONDS, () -> assertFalse(connection1.isReady()));
+        assertFalseWithin(100, TimeUnit.MILLISECONDS, connection1::isReady);
 
         axonServerProxy.enable();
 
-        assertWithin(2, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
+        assertTrueWithin(2, TimeUnit.SECONDS, connection1::isReady);
+        assertTrueWithin(2, TimeUnit.SECONDS, connection2::isReady);
 
         ResultStream<QueryResponse> result2 = connection2.queryChannel().query(QueryRequest.newBuilder().setQuery("testQuery").build());
         QueryResponse actual = result2.nextIfAvailable(1, TimeUnit.SECONDS);
@@ -119,11 +128,11 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         axonServerProxy.disable();
 
-        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(connection1.isConnectionFailed()));
+        assertTrueWithin(1, TimeUnit.SECONDS, connection1::isConnectionFailed);
 
         axonServerProxy.enable();
 
-        assertWithin(3, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
+        assertTrueWithin(3, TimeUnit.SECONDS, connection1::isReady);
 
         // on some environments, the subscription action may be delayed a little
         assertWithin(1500, TimeUnit.MILLISECONDS, () -> {
@@ -178,9 +187,7 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                                                                                                   .build(),
                                                                                   100, 10);
 
-        assertWithin(1, TimeUnit.SECONDS, () ->
-                assertTrue(subscriptionQuery.initialResult().isDone())
-        );
+        assertTrueWithin(1, TimeUnit.SECONDS, () -> subscriptionQuery.initialResult().isDone());
         assertFalse(subscriptionQuery.initialResult().isCompletedExceptionally());
         assertWithin(1, TimeUnit.SECONDS, () -> assertNotNull(updateHandlerRef.get()));
 
@@ -190,8 +197,8 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         axonServerProxy.disable();
 
-        assertWithin(1, TimeUnit.SECONDS, () -> assertFalse(connection1.isConnected()));
-        assertWithin(1, TimeUnit.SECONDS, () -> assertFalse(connection2.isConnected()));
+        assertFalseWithin(1, TimeUnit.SECONDS, connection1::isConnected);
+        assertFalseWithin(1, TimeUnit.SECONDS, connection2::isConnected);
 
         assertWithin(1, TimeUnit.SECONDS, () -> {
             assertTrue(subscriptionQuery.updates().isClosed());
@@ -199,7 +206,7 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         });
         axonServerProxy.enable();
 
-        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
+        assertTrueWithin(1, TimeUnit.SECONDS, connection1::isReady);
     }
 
     @RepeatedTest(20)
