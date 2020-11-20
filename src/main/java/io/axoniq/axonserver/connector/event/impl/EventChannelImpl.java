@@ -26,6 +26,7 @@ import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
 import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
 import io.axoniq.axonserver.connector.impl.FutureStreamObserver;
 import io.axoniq.axonserver.grpc.InstructionAck;
+import io.axoniq.axonserver.grpc.control.ClientIdentification;
 import io.axoniq.axonserver.grpc.event.CancelScheduledEventRequest;
 import io.axoniq.axonserver.grpc.event.Confirmation;
 import io.axoniq.axonserver.grpc.event.Event;
@@ -70,8 +71,8 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
      * @param executor a {@link ScheduledExecutorService} used to schedule reconnects of this channel
      * @param channel  the {@link AxonServerManagedChannel} used to form the connection with AxonServer
      */
-    public EventChannelImpl(ScheduledExecutorService executor, AxonServerManagedChannel channel) {
-        super(executor, channel);
+    public EventChannelImpl(ClientIdentification clientIdentification, ScheduledExecutorService executor, AxonServerManagedChannel channel) {
+        super(clientIdentification, executor, channel);
         eventStore = EventStoreGrpc.newStub(channel);
         eventScheduler = EventSchedulerGrpc.newStub(channel);
     }
@@ -97,7 +98,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
     }
 
     @Override
-    public boolean isConnected() {
+    public boolean isReady() {
         return true;
     }
 

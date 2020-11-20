@@ -18,6 +18,7 @@ package io.axoniq.axonserver.connector.impl;
 
 import io.axoniq.axonserver.connector.AxonServerException;
 import io.axoniq.axonserver.connector.ErrorCategory;
+import io.grpc.stub.ClientCallStreamObserver;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -81,6 +82,12 @@ public abstract class FlowControlledBuffer<T, R> extends FlowControlledStream<T,
      */
     public Throwable getErrorResult() {
         return errorResult.get();
+    }
+
+    @Override
+    public void beforeStart(ClientCallStreamObserver<R> requestStream) {
+        SynchronizedRequestStream<R> synchronizedRequestStream = new SynchronizedRequestStream<>(requestStream);
+        super.beforeStart(synchronizedRequestStream);
     }
 
     /**

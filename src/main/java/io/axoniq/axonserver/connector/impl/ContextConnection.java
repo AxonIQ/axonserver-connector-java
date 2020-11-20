@@ -97,10 +97,10 @@ public class ContextConnection implements AxonServerConnection {
     @Override
     public boolean isReady() {
         return isConnected()
-                && Optional.ofNullable(commandChannel.get()).map(CommandChannelImpl::isConnected).orElse(true)
-                && Optional.ofNullable(queryChannel.get()).map(QueryChannelImpl::isConnected).orElse(true)
-                && Optional.ofNullable(eventChannel.get()).map(EventChannelImpl::isConnected).orElse(true)
-                && controlChannel.isConnected();
+                && Optional.ofNullable(commandChannel.get()).map(CommandChannelImpl::isReady).orElse(true)
+                && Optional.ofNullable(queryChannel.get()).map(QueryChannelImpl::isReady).orElse(true)
+                && Optional.ofNullable(eventChannel.get()).map(EventChannelImpl::isReady).orElse(true)
+                && controlChannel.isReady();
     }
 
     @Override
@@ -148,7 +148,7 @@ public class ContextConnection implements AxonServerConnection {
     @Override
     public EventChannel eventChannel() {
         EventChannelImpl channel = this.eventChannel.updateAndGet(
-                createIfNull(() -> new EventChannelImpl(executorService, connection))
+                createIfNull(() -> new EventChannelImpl(clientIdentification, executorService, connection))
         );
         return ensureConnected(channel);
     }
@@ -166,7 +166,7 @@ public class ContextConnection implements AxonServerConnection {
     }
 
     private <T extends AbstractAxonServerChannel> T ensureConnected(T channel) {
-        if (!channel.isConnected()) {
+        if (!channel.isReady()) {
             ConnectivityState state = connection.getState(true);
             if (state != ConnectivityState.SHUTDOWN && state != ConnectivityState.TRANSIENT_FAILURE) {
                 try {

@@ -26,7 +26,6 @@ import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.connector.control.ControlChannel;
 import io.axoniq.axonserver.connector.control.ProcessorInstructionHandler;
 import io.axoniq.axonserver.connector.event.EventStream;
-import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo;
 import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
@@ -81,7 +80,7 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         logger.info("Connection status is READY");
 
         // we make sure the heartbeat doesn't complain at first
-        long endCheck = System.currentTimeMillis() + 800;
+        long endCheck = System.currentTimeMillis() + 2000;
         while (endCheck > System.currentTimeMillis()) {
             assertTrue(connection1.isConnected());
             Thread.sleep(100);
@@ -152,7 +151,7 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         ControlChannel controlChannel = client.connect("default")
                                               .controlChannel();
 
-        CompletableFuture<InstructionAck> result = controlChannel.sendInstruction(PlatformInboundInstruction.getDefaultInstance());
+        CompletableFuture<Void> result = controlChannel.sendInstruction(PlatformInboundInstruction.getDefaultInstance());
         assertTrue(result.isDone());
     }
 

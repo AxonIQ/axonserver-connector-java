@@ -20,10 +20,12 @@ import com.google.protobuf.ByteString;
 import io.axoniq.axonserver.connector.AbstractAxonServerIntegrationTest;
 import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
+import io.axoniq.axonserver.connector.AxonServerException;
 import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.Registration;
 import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.connector.ResultStream;
+import io.axoniq.axonserver.connector.query.impl.QueryChannelImpl;
 import io.axoniq.axonserver.grpc.SerializedObject;
 import io.axoniq.axonserver.grpc.query.QueryRequest;
 import io.axoniq.axonserver.grpc.query.QueryResponse;
@@ -37,6 +39,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -111,8 +114,8 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         axonServerProxy.enable();
 
-        assertTrueWithin(2, TimeUnit.SECONDS, connection1::isReady);
-        assertTrueWithin(2, TimeUnit.SECONDS, connection2::isReady);
+        assertTrueWithin(5, TimeUnit.SECONDS, connection1::isReady);
+        assertTrueWithin(5, TimeUnit.SECONDS, connection2::isReady);
 
         ResultStream<QueryResponse> result2 = connection2.queryChannel().query(QueryRequest.newBuilder().setQuery("testQuery").build());
         QueryResponse actual = result2.nextIfAvailable(1, TimeUnit.SECONDS);
@@ -152,6 +155,33 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                 assertThrows(IllegalArgumentException.class,
                              () -> queryChannel.subscriptionQuery(queryRequest, serializedObject, 5, 1));
         assertEquals("QueryRequest must contain message identifier.", exception.getMessage());
+    }
+
+    @RepeatedTest(10)
+    void testQueryChannelConsideredConnectedWhenNoHandlersSubscribed() throws IOException, TimeoutException, InterruptedException {
+        QueryChannelImpl queryChannel = (QueryChannelImpl) connection1.queryChannel();
+        // just to make sure that no attempt was made to connect, since there are no handlers
+        assertTrue(queryChannel.isReady());
+
+        // make sure no real connection can be set up
+        axonServerProxy.disable();
+        assertWithin(1, TimeUnit.SECONDS, () -> assertFalse(connection1.isConnected()));
+
+        assertTrue(queryChannel.isReady());
+        assertFalse(connection1.isConnected());
+
+        Registration registration = queryChannel.registerQueryHandler((q, r) -> r.complete(),
+                                                                      new QueryDefinition("test", String.class));
+        AxonServerException exception = assertThrows(AxonServerException.class, () -> registration.awaitAck(1, TimeUnit.SECONDS));
+        assertEquals(ErrorCategory.INSTRUCTION_ACK_ERROR, exception.getErrorCategory());
+
+        // because of the attempt to set up a connection, it may need a few milliseconds to discover that's not possible
+        assertWithin(1, TimeUnit.SECONDS, () -> assertFalse(queryChannel.isReady()));
+
+        axonServerProxy.enable();
+
+        // verify connection is established
+        assertWithin(2, TimeUnit.SECONDS, () -> assertTrue(queryChannel.isReady()));
     }
 
     @Test
@@ -236,7 +266,9 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                 };
             }
         }, new QueryDefinition("testQuery", "testResult"))
-            .awaitAck(1, TimeUnit.SECONDS);
+                    .awaitAck(1, TimeUnit.SECONDS);
+
+        Thread.sleep(100);
 
         SubscriptionQueryResult subscriptionQuery = connection2.queryChannel().subscriptionQuery(QueryRequest.newBuilder()
                                                                                                              .setMessageIdentifier(subscriptionId)
