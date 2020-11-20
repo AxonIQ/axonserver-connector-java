@@ -40,7 +40,6 @@ import io.axoniq.axonserver.grpc.command.CommandResponse;
 import io.axoniq.axonserver.grpc.command.CommandServiceGrpc;
 import io.axoniq.axonserver.grpc.command.CommandSubscription;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
-import io.grpc.Status;
 import io.grpc.stub.CallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import io.netty.util.internal.OutOfDirectMemoryError;
@@ -58,20 +57,18 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
-import static io.axoniq.axonserver.connector.impl.ObjectUtils.hasLength;
 
 /**
  * {@link CommandChannel} implementation, serving as the command connection between AxonServer and a client
  * application.
  */
-public class CommandChannelImpl extends AbstractAxonServerChannel implements CommandChannel {
+public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProviderOutbound> implements CommandChannel {
 
     private static final Logger logger = LoggerFactory.getLogger(CommandChannelImpl.class);
 
     private final AtomicReference<CallStreamObserver<CommandProviderOutbound>> outboundCommandStream = new AtomicReference<>();
     private final ClientIdentification clientIdentification;
     private final ConcurrentMap<String, CommandHandler> commandHandlers = new ConcurrentHashMap<>();
-    private final ConcurrentMap<String, CompletableFuture<Void>> instructionsAwaitingAck = new ConcurrentHashMap<>();
     private final ConcurrentMap<CommandProviderInbound.RequestCase, InstructionHandler<CommandProviderInbound, CommandProviderOutbound>> handlers = new ConcurrentHashMap<>();
     private final int permits;
     private final int permitsBatch;
@@ -97,7 +94,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
                               int permitsBatch,
                               ScheduledExecutorService executor,
                               AxonServerManagedChannel channel) {
-        super(executor, channel);
+        super(clientIdentification, executor, channel);
         this.clientIdentification = clientIdentification;
         this.context = context;
         this.permits = permits;
@@ -144,16 +141,8 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
     }
 
     private void handleAck(CommandProviderInbound message, ReplyChannel<CommandProviderOutbound> outbound) {
-        InstructionAck ack = message.getAck();
-        CompletableFuture<Void> instructionResult = instructionsAwaitingAck.remove(ack.getInstructionId());
-        if (instructionResult == null) {
-            return;
-        }
-        if (ack.getSuccess()) {
-            instructionResult.complete(null);
-        } else {
-            instructionResult.completeExceptionally(new AxonServerException(ack.getError()));
-        }
+        processAck(message.getAck());
+        outbound.complete();
     }
 
     @Override
@@ -170,7 +159,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
         }
         IncomingCommandStream responseObserver = new IncomingCommandStream(
                 clientIdentification.getClientId(), permits, permitsBatch,
-                this::onConnectionError,
+                this::scheduleReconnect,
                 this::registerOutboundStream
         );
 
@@ -188,13 +177,6 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
     private void registerOutboundStream(CallStreamObserver<CommandProviderOutbound> upstream) {
         StreamObserver<CommandProviderOutbound> previous = outboundCommandStream.getAndSet(upstream);
         ObjectUtils.silently(previous, StreamObserver::onCompleted);
-    }
-
-    private void onConnectionError(Throwable error) {
-        instructionsAwaitingAck.keySet().forEach(
-                k -> doIfNotNull(instructionsAwaitingAck.remove(k), f -> f.completeExceptionally(error))
-        );
-        scheduleReconnect(Status.fromThrowable(error));
     }
 
     @Override
@@ -244,7 +226,9 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
             logger.info("Registered handler for command '{}' in context '{}'", commandName, context);
             String instructionId = UUID.randomUUID().toString();
             CompletableFuture<Void> ack =
-                    sendInstruction(buildSubscribeMessage(commandName, instructionId, loadFactor));
+                    sendInstruction(buildSubscribeMessage(commandName, instructionId, loadFactor),
+                                    CommandProviderOutbound::getInstructionId,
+                                    outboundCommandStream.get());
             subscriptionResult = CompletableFuture.allOf(subscriptionResult, ack);
         }
         return new AsyncRegistration(subscriptionResult, () -> unsubscribe(commandHandler, commandNames));
@@ -276,24 +260,11 @@ public class CommandChannelImpl extends AbstractAxonServerChannel implements Com
         return sendInstruction(CommandProviderOutbound.newBuilder()
                                                       .setInstructionId(instructionId)
                                                       .setUnsubscribe(unsubscribeMessage)
-                                                      .build());
+                                                      .build(),
+                               CommandProviderOutbound::getInstructionId,
+                               outboundCommandStream.get());
     }
 
-    private CompletableFuture<Void> sendInstruction(CommandProviderOutbound instruction) {
-        CompletableFuture<Void> ack = new CompletableFuture<>();
-        if (hasLength(instruction.getInstructionId())) {
-            instructionsAwaitingAck.put(instruction.getInstructionId(), ack);
-            ack.whenComplete((r, e) -> instructionsAwaitingAck.remove(instruction.getInstructionId(), ack));
-        } else {
-            ack.complete(null);
-        }
-        doIfNotNull(outboundCommandStream.get(), s -> s.onNext(instruction))
-                .orElse(() -> ack.completeExceptionally(new AxonServerException(ErrorCategory.INSTRUCTION_ACK_ERROR,
-                                                                                "Unable to send instruction: no connection to AxonServer",
-                                                                                clientIdentification.getClientId())));
-
-        return ack;
-    }
 
     private CommandProviderOutbound buildSubscribeMessage(String commandName, String instructionId, int loadFactor) {
         return CommandProviderOutbound.newBuilder()

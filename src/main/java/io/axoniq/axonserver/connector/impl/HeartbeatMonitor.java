@@ -16,6 +16,8 @@
 
 package io.axoniq.axonserver.connector.impl;
 
+import io.axoniq.axonserver.connector.AxonServerException;
+import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.grpc.control.Heartbeat;
 import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
@@ -142,7 +144,12 @@ public class HeartbeatMonitor {
             long currentInterval = this.interval.get();
             long beatTimeout = this.timeout.get();
             sender.sendHeartbeat().whenComplete((r, e) -> {
-                if (e == null) {
+
+                boolean success = e == null
+                        || (e instanceof AxonServerException && ((AxonServerException) e).getErrorCategory() == ErrorCategory.UNSUPPORTED_INSTRUCTION);
+                // if AxonServer indicates it doesn't know this instruction, we have at least reached it.
+                // We can assume the connection is alive
+                if (success) {
                     if (currentInterval != Long.MAX_VALUE) {
                         long newDeadline = nextHeartbeatDeadline.updateAndGet(
                                 currentDeadline -> Math.max(now + beatTimeout + currentInterval, currentDeadline)
