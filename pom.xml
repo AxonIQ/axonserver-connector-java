@@ -45,7 +45,7 @@
         <log4j.version>2.14.0</log4j.version>
 
         <!-- For compatibility between grpc and tcnative, check https://github.com/grpc/grpc-java/blob/master/SECURITY.md#netty -->
-        <grpc.version>1.33.1</grpc.version>
+        <grpc.version>1.34.0</grpc.version>
         <netty.tcnative.version>2.0.31.Final</netty.tcnative.version>
         <junit.jupiter.version>5.7.0</junit.jupiter.version>
 
