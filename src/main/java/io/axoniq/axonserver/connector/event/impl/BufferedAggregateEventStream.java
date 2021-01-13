@@ -22,6 +22,7 @@ import io.axoniq.axonserver.connector.impl.StreamClosedException;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.GetAggregateEventsRequest;
+import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -118,7 +119,12 @@ public class BufferedAggregateEventStream
                                            event.getAggregateSequenceNumber(),
                                            prevEvent.getAggregateSequenceNumber() + 1);
             logger.error(message);
-            this.onError(new RuntimeException(message));
+            RuntimeException invalidAggregateEventStreamException = new RuntimeException(message);
+            StreamObserver<GetAggregateEventsRequest> outboundStream = outboundStream();
+            if (outboundStream != null) {
+                outboundStream.onError(invalidAggregateEventStreamException);
+            }
+            this.onError(invalidAggregateEventStreamException);
         }
     }
 }
