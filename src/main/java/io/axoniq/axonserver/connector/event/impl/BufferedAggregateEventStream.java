@@ -23,6 +23,8 @@ import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.GetAggregateEventsRequest;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 /**
  * Buffering implementation of the {@link AggregateEventStream} used for Event Sourced Aggregates.
  */
@@ -30,7 +32,10 @@ public class BufferedAggregateEventStream
         extends FlowControlledBuffer<Event, GetAggregateEventsRequest>
         implements AggregateEventStream {
 
+    private static final Logger logger = LoggerFactory.getLogger(BufferedAggregateEventStream.class);
+
     private static final Event TERMINAL_MESSAGE = Event.newBuilder().setAggregateSequenceNumber(-1729).build();
+    private final AtomicReference<Event> lastReceivedEvent = new AtomicReference<>();
 
     private Event peeked;
 
@@ -97,5 +102,21 @@ public class BufferedAggregateEventStream
     @Override
     protected Event terminalMessage() {
         return TERMINAL_MESSAGE;
+    }
+
+    @Override
+    public void onNext(Event event) {
+        Event prevEvent = lastReceivedEvent.get();
+        if (prevEvent == null || prevEvent.getAggregateSequenceNumber() + 1 == event.getAggregateSequenceNumber()) {
+            super.onNext(event);
+            lastReceivedEvent.set(event);
+        } else {
+            String message = String.format("Invalid sequence number for aggregate %s. Received: %d, expected: %d",
+                                           event.getAggregateIdentifier(),
+                                           event.getAggregateSequenceNumber(),
+                                           prevEvent.getAggregateSequenceNumber() + 1);
+            logger.error(message);
+            this.onError(new RuntimeException(message));
+        }
     }
 }
