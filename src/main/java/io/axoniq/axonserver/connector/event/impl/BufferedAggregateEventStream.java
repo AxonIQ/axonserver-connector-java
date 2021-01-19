@@ -114,7 +114,7 @@ public class BufferedAggregateEventStream
             super.onNext(event);
             lastReceivedEvent.set(event);
         } else {
-            String message = String.format("Invalid sequence number for aggregate %s. Received: %d, expected: %d",
+            String message = String.format("Invalid sequence number for aggregate with identifier [%s]. Received seqNo: %d, expected seqNo: %d",
                                            event.getAggregateIdentifier(),
                                            event.getAggregateSequenceNumber(),
                                            prevEvent.getAggregateSequenceNumber() + 1);
