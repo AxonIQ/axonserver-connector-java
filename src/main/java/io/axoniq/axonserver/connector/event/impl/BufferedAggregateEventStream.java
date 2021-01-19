@@ -38,7 +38,7 @@ public class BufferedAggregateEventStream
     private static final Logger logger = LoggerFactory.getLogger(BufferedAggregateEventStream.class);
 
     private static final Event TERMINAL_MESSAGE = Event.newBuilder().setAggregateSequenceNumber(-1729).build();
-    private final AtomicReference<Event> lastReceivedEvent = new AtomicReference<>();
+    private final AtomicReference<Long> lastReceivedEventSequence = new AtomicReference<>();
 
     private Event peeked;
 
@@ -109,15 +109,16 @@ public class BufferedAggregateEventStream
 
     @Override
     public void onNext(Event event) {
-        Event prevEvent = lastReceivedEvent.get();
-        if (prevEvent == null || prevEvent.getAggregateSequenceNumber() + 1 == event.getAggregateSequenceNumber()) {
+        Long prevSequence = lastReceivedEventSequence.get();
+        if (prevSequence == null || prevSequence + 1L == event.getAggregateSequenceNumber()) {
             super.onNext(event);
-            lastReceivedEvent.set(event);
+            lastReceivedEventSequence.set(event.getAggregateSequenceNumber());
         } else {
-            String message = String.format("Invalid sequence number for aggregate with identifier [%s]. Received seqNo: %d, expected seqNo: %d",
-                                           event.getAggregateIdentifier(),
-                                           event.getAggregateSequenceNumber(),
-                                           prevEvent.getAggregateSequenceNumber() + 1);
+            String message = String.format(
+                    "Invalid sequence number for aggregate with identifier [%s]. Received seqNo: %d, expected seqNo: %d",
+                    event.getAggregateIdentifier(),
+                    event.getAggregateSequenceNumber(),
+                    prevSequence + 1L);
             logger.error(message);
             RuntimeException invalidAggregateEventStreamException = new RuntimeException(message);
             StreamObserver<GetAggregateEventsRequest> outboundStream = outboundStream();
