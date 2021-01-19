@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package io.axoniq.axonserver.connector.impl;
 
 import io.axoniq.axonserver.connector.ResultStream;
+import io.grpc.stub.StreamObserver;
 
 import java.util.Optional;
 import java.util.Queue;
@@ -24,6 +25,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+
+import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
 
 /**
  * An abstract {@link FlowControlledBuffer} and {@link ResultStream} implementation, used to provide a buffered stream
@@ -121,7 +124,7 @@ public abstract class AbstractBufferedStream<T, R> extends FlowControlledBuffer<
     public void close() {
         if (!clientClosed.getAndSet(true)) {
             super.close();
-            outboundStream().onCompleted();
+            doIfNotNull(outboundStream(), StreamObserver::onCompleted);
         }
     }
 
@@ -142,7 +145,7 @@ public abstract class AbstractBufferedStream<T, R> extends FlowControlledBuffer<
         Runnable closeHandler;
         do {
             closeHandler = closeHandlers.poll();
-            ObjectUtils.doIfNotNull(closeHandler, Runnable::run);
+            doIfNotNull(closeHandler, Runnable::run);
         } while (closeHandler != null);
     }
 }
