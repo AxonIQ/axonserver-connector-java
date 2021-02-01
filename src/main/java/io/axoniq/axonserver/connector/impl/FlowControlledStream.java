@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@ import org.slf4j.LoggerFactory;
 import java.lang.invoke.MethodHandles;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static io.axoniq.axonserver.connector.impl.AssertUtils.assertParameter;
+
 /**
  * Abstract implementation of a {@link ClientResponseObserver} providing flow control.
  *
@@ -38,23 +40,27 @@ public abstract class FlowControlledStream<IN, OUT> implements ClientResponseObs
     private final AtomicInteger permitsConsumed = new AtomicInteger();
     private final String clientId;
     private final int permits;
-    private final int permitsBatch;
+    private final int refillBatch;
     private final FlowControl flowControl;
     private ClientCallStreamObserver<OUT> outboundStream;
 
     /**
      * Constructs a {@link FlowControlledStream}.
      *
-     * @param clientId     the client identifier which initiated this stream
-     * @param permits      the number of permits this stream should receive
-     * @param permitsBatch the number of permits to be consumed prior to requesting new permits
+     * @param clientId    the client identifier which initiated this stream
+     * @param permits     the number of permits this stream should receive
+     * @param refillBatch the number of permits to be consumed prior to requesting new permits
      */
-    public FlowControlledStream(String clientId, int permits, int permitsBatch) {
+    protected FlowControlledStream(String clientId, int permits, int refillBatch) {
+        assertParameter(permits > 0, "Permits must be > 0");
+        assertParameter(refillBatch <= permits, "The refillBatch must be smaller than the number of permits");
+        assertParameter(clientId != null, "The clientId must not be null");
+
         this.clientId = clientId;
         this.permits = permits;
-        this.permitsBatch = permitsBatch;
+        this.refillBatch = refillBatch;
         flowControl = FlowControl.newBuilder()
-                                 .setPermits(permitsBatch)
+                                 .setPermits(refillBatch)
                                  .setClientId(clientId)
                                  .build();
     }
@@ -64,7 +70,7 @@ public abstract class FlowControlledStream<IN, OUT> implements ClientResponseObs
      * {@code 0}.
      */
     public void enableFlowControl() {
-        if (permitsBatch > 0) {
+        if (refillBatch > 0) {
             permitsConsumed.set(0);
             OUT out = buildInitialFlowControlMessage(FlowControl.newBuilder()
                                                                 .setPermits(permits)
@@ -108,17 +114,18 @@ public abstract class FlowControlledStream<IN, OUT> implements ClientResponseObs
      * consumed and will automatically ask for new permits if the {@code permitsBatch} size has been reached.
      */
     protected void markConsumed() {
-        if (permitsBatch > 0) {
+        if (refillBatch > 0) {
             int ticker = permitsConsumed.updateAndGet(current -> {
-                if (current == permitsBatch - 1) {
+                if (current == refillBatch - 1) {
                     return 0;
                 }
                 return current + 1;
             });
             if (ticker == 0) {
                 OUT permitsRequest = buildFlowControlMessage(flowControl);
+                logger.debug("Requesting additional {} permits", refillBatch);
+                outboundStream.request(refillBatch);
                 if (permitsRequest != null) {
-                    logger.debug("Requesting additional {} permits", permitsBatch);
                     outboundStream().onNext(permitsRequest);
                 }
             }
@@ -127,6 +134,9 @@ public abstract class FlowControlledStream<IN, OUT> implements ClientResponseObs
 
     @Override
     public void beforeStart(ClientCallStreamObserver<OUT> requestStream) {
+        if (refillBatch > 0) {
+            requestStream.disableAutoRequestWithInitial(permits);
+        }
         this.outboundStream = requestStream;
     }
 

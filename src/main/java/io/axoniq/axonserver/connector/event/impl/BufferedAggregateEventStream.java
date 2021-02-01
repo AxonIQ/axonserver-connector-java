@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,11 +51,23 @@ public class BufferedAggregateEventStream
 
     /**
      * Constructs a {@link BufferedAggregateEventStream} with the given {@code bufferSize}.
+     * <p>
+     * The permits will be replenished using batches of 1/8th of the given {@code bufferSize}, unless the buffer is
+     * small than 8 items, in which case permits are replenished individually, as items are consumed from the buffer.
      *
      * @param bufferSize the buffer size of the aggregate event stream
      */
     public BufferedAggregateEventStream(int bufferSize) {
-        super("unused", bufferSize, 0);
+        this(bufferSize, bufferSize >= 8 ? (bufferSize / 8) : 1);
+    }
+
+    /**
+     * Constructs a {@link BufferedAggregateEventStream} with the given {@code bufferSize}.
+     *
+     * @param bufferSize the buffer size of the aggregate event stream
+     */
+    public BufferedAggregateEventStream(int bufferSize, int refillBatch) {
+        super("unused", bufferSize, refillBatch);
     }
 
     @Override

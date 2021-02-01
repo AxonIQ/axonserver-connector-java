@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -215,7 +215,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
                                               long initialSequence,
                                               long maxSequence,
                                               int maxResults) {
-        BufferedAggregateEventStream buffer = new BufferedAggregateEventStream(maxResults);
+        BufferedAggregateEventStream buffer = new BufferedAggregateEventStream(1024);
         eventStore.listAggregateSnapshots(GetAggregateSnapshotsRequest.newBuilder()
                                                                       .setInitialSequence(initialSequence)
                                                                       .setMaxResults(maxResults)
@@ -249,7 +249,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
     }
 
     private AggregateEventStream doGetAggregateStream(GetAggregateEventsRequest request) {
-        BufferedAggregateEventStream buffer = new BufferedAggregateEventStream();
+        BufferedAggregateEventStream buffer = new BufferedAggregateEventStream(1024);
         eventStore.listAggregateEvents(request, buffer);
         return buffer;
     }
