@@ -21,6 +21,9 @@ package io.axoniq.axonserver.connector.impl;
  */
 public class AssertUtils {
 
+    private AssertUtils() {
+    }
+
     /**
      * Assert that the given {@code condition} is true, or otherwise throws an {@link IllegalArgumentException} with
      * given {@code message}.

@@ -54,7 +54,7 @@ import java.util.concurrent.ScheduledExecutorService;
 /**
  * {@link EventChannel} implementation, serving as the event connection between AxonServer and a client application.
  */
-public class EventChannelImpl extends AbstractAxonServerChannel implements EventChannel {
+public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements EventChannel {
 
     private static final ReadHighestSequenceNrResponse UNKNOWN_HIGHEST_SEQ =
             ReadHighestSequenceNrResponse.newBuilder().setToSequenceNr(-1).build();
