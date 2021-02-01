@@ -1,15 +1,34 @@
+/*
+ * Copyright (c) 2021. AxonIQ
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.axoniq.axonserver.connector.event.impl;
 
 import io.axoniq.axonserver.connector.impl.StreamClosedException;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.GetAggregateEventsRequest;
 import io.grpc.stub.ClientCallStreamObserver;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 /**
  * Test class validationg the {@link BufferedAggregateEventStream}.
@@ -19,10 +38,14 @@ import static org.mockito.Mockito.*;
 class BufferedAggregateEventStreamTest {
 
     private BufferedAggregateEventStream testSubject;
+    private ClientCallStreamObserver<GetAggregateEventsRequest> clientCallStreamObserver;
 
+    @SuppressWarnings("unchecked")
     @BeforeEach
     void setUp() {
         testSubject = new BufferedAggregateEventStream(10);
+        clientCallStreamObserver = mock(ClientCallStreamObserver.class);
+        testSubject.beforeStart(clientCallStreamObserver);
     }
 
     @Test
@@ -47,14 +70,12 @@ class BufferedAggregateEventStreamTest {
 
     @Test
     void testEventStreamErrorOnInvalidAggregateSequenceNumber() throws InterruptedException {
-        ClientCallStreamObserver clientCallStreamObserverMock = mock(ClientCallStreamObserver.class);
-        testSubject.beforeStart(clientCallStreamObserverMock);
         testSubject.onNext(Event.getDefaultInstance());
         testSubject.onNext(Event.getDefaultInstance());
 
         assertTrue(testSubject.hasNext());
         assertEquals(Event.getDefaultInstance(), testSubject.next());
-        verify(clientCallStreamObserverMock).onError(any(RuntimeException.class));
+        verify(clientCallStreamObserver).onError(any(RuntimeException.class));
         assertThrows(StreamClosedException.class, () -> testSubject.hasNext());
     }
 }
