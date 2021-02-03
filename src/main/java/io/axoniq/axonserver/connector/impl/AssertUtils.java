@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021. AxonIQ
+ * Copyright (c) 2020-2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,9 @@ package io.axoniq.axonserver.connector.impl;
 
 /**
  * Utility class to perform assertion on method parameters.
+ *
+ * @author Allard Buijze
+ * @since 4.5
  */
 public class AssertUtils {
 
