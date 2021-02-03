@@ -17,7 +17,7 @@
 package io.axoniq.axonserver.connector.impl;
 
 /**
- * Utility class to perform assertion on method parameters
+ * Utility class to perform assertion on method parameters.
  */
 public class AssertUtils {
 

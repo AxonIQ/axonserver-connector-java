@@ -53,7 +53,7 @@ public class BufferedAggregateEventStream
      * Constructs a {@link BufferedAggregateEventStream} with the given {@code bufferSize}.
      * <p>
      * The permits will be replenished using batches of 1/8th of the given {@code bufferSize}, unless the buffer is
-     * small than 8 items, in which case permits are replenished individually, as items are consumed from the buffer.
+     * smaller than 8 items, in which case permits are replenished individually, as items are consumed from the buffer.
      *
      * @param bufferSize the buffer size of the aggregate event stream
      */
