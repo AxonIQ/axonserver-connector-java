@@ -43,22 +43,11 @@ public class BufferedAggregateEventStream
     private Event peeked;
 
     /**
-     * Constructs a {@link BufferedAggregateEventStream} with a buffer size of {@link Integer#MAX_VALUE}.
+     * Constructs a {@link BufferedAggregateEventStream} with a buffer size of {@code 512} and a {@code refillBatch}
+     * of 16.
      */
     public BufferedAggregateEventStream() {
-        this(Integer.MAX_VALUE);
-    }
-
-    /**
-     * Constructs a {@link BufferedAggregateEventStream} with the given {@code bufferSize}.
-     * <p>
-     * The permits will be replenished using batches of 1/8th of the given {@code bufferSize}, unless the buffer is
-     * smaller than 8 items, in which case permits are replenished individually, as items are consumed from the buffer.
-     *
-     * @param bufferSize the buffer size of the aggregate event stream
-     */
-    public BufferedAggregateEventStream(int bufferSize) {
-        this(bufferSize, bufferSize >= 8 ? (bufferSize / 8) : 1);
+        this(512, 16);
     }
 
     /**
@@ -110,7 +99,7 @@ public class BufferedAggregateEventStream
 
     @Override
     protected GetAggregateEventsRequest buildFlowControlMessage(FlowControl flowControl) {
-        // no flow control available on this request
+        // no app-level flow control available on this request
         return null;
     }
 

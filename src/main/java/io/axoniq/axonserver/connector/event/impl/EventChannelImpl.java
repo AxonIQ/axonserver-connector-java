@@ -215,7 +215,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
                                               long initialSequence,
                                               long maxSequence,
                                               int maxResults) {
-        BufferedAggregateEventStream buffer = new BufferedAggregateEventStream(1024);
+        BufferedAggregateEventStream buffer = new BufferedAggregateEventStream();
         eventStore.listAggregateSnapshots(GetAggregateSnapshotsRequest.newBuilder()
                                                                       .setInitialSequence(initialSequence)
                                                                       .setMaxResults(maxResults)
@@ -249,7 +249,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     private AggregateEventStream doGetAggregateStream(GetAggregateEventsRequest request) {
-        BufferedAggregateEventStream buffer = new BufferedAggregateEventStream(1024);
+        BufferedAggregateEventStream buffer = new BufferedAggregateEventStream();
         eventStore.listAggregateEvents(request, buffer);
         return buffer;
     }

@@ -43,7 +43,7 @@ class BufferedAggregateEventStreamTest {
     @SuppressWarnings("unchecked")
     @BeforeEach
     void setUp() {
-        testSubject = new BufferedAggregateEventStream(10);
+        testSubject = new BufferedAggregateEventStream(10, 1);
         clientCallStreamObserver = mock(ClientCallStreamObserver.class);
         testSubject.beforeStart(clientCallStreamObserver);
     }
