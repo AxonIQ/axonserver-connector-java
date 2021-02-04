@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,10 +43,11 @@ public class BufferedAggregateEventStream
     private Event peeked;
 
     /**
-     * Constructs a {@link BufferedAggregateEventStream} with a buffer size of {@link Integer#MAX_VALUE}.
+     * Constructs a {@link BufferedAggregateEventStream} with a buffer size of {@code 512} and a {@code refillBatch}
+     * of 16.
      */
     public BufferedAggregateEventStream() {
-        this(Integer.MAX_VALUE);
+        this(512, 16);
     }
 
     /**
@@ -54,8 +55,8 @@ public class BufferedAggregateEventStream
      *
      * @param bufferSize the buffer size of the aggregate event stream
      */
-    public BufferedAggregateEventStream(int bufferSize) {
-        super("unused", bufferSize, 0);
+    public BufferedAggregateEventStream(int bufferSize, int refillBatch) {
+        super("unused", bufferSize, refillBatch);
     }
 
     @Override
@@ -98,7 +99,7 @@ public class BufferedAggregateEventStream
 
     @Override
     protected GetAggregateEventsRequest buildFlowControlMessage(FlowControl flowControl) {
-        // no flow control available on this request
+        // no app-level flow control available on this request
         return null;
     }
 

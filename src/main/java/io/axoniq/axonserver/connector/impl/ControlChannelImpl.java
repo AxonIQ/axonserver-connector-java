@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -273,7 +273,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
         public PlatformOutboundInstructionHandler(String clientId,
                                                   Consumer<Throwable> disconnectHandler,
                                                   Consumer<CallStreamObserver<PlatformInboundInstruction>> beforeStartHandler) {
-            super(clientId, 0, 0, disconnectHandler, beforeStartHandler);
+            super(clientId, 64, 8, disconnectHandler, beforeStartHandler);
         }
 
         @Override

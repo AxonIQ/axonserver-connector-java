@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ import java.util.concurrent.ScheduledExecutorService;
 /**
  * {@link EventChannel} implementation, serving as the event connection between AxonServer and a client application.
  */
-public class EventChannelImpl extends AbstractAxonServerChannel implements EventChannel {
+public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements EventChannel {
 
     private static final ReadHighestSequenceNrResponse UNKNOWN_HIGHEST_SEQ =
             ReadHighestSequenceNrResponse.newBuilder().setToSequenceNr(-1).build();
@@ -215,7 +215,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel implements Event
                                               long initialSequence,
                                               long maxSequence,
                                               int maxResults) {
-        BufferedAggregateEventStream buffer = new BufferedAggregateEventStream(maxResults);
+        BufferedAggregateEventStream buffer = new BufferedAggregateEventStream();
         eventStore.listAggregateSnapshots(GetAggregateSnapshotsRequest.newBuilder()
                                                                       .setInitialSequence(initialSequence)
                                                                       .setMaxResults(maxResults)

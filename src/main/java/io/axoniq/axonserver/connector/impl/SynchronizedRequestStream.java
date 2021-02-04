@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,6 +77,11 @@ public class SynchronizedRequestStream<T> extends ClientCallStreamObserver<T> {
     @Override
     public void onNext(T value) {
         inLock(() -> delegate.onNext(value));
+    }
+
+    @Override
+    public void disableAutoRequestWithInitial(int request) {
+        delegate.disableAutoRequestWithInitial(request);
     }
 
     @Override

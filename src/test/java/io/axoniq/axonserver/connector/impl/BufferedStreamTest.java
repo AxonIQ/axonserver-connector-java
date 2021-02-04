@@ -1,6 +1,23 @@
+/*
+ * Copyright (c) 2021. AxonIQ
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.axoniq.axonserver.connector.impl;
 
 import io.axoniq.axonserver.grpc.FlowControl;
+import io.grpc.stub.ClientCallStreamObserver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -10,14 +27,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Matchers.anyInt;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 class BufferedStreamTest {
 
     private AbstractBufferedStream<String, String> testSubject;
+    private ClientCallStreamObserver<String> mockUpstream;
 
     @BeforeEach
     void setUp() {
-        this.testSubject = new AbstractBufferedStream<String, String>("test", 100, 0) {
+        mockUpstream = mock(ClientCallStreamObserver.class);
+        this.testSubject = new AbstractBufferedStream<String, String>("test", 3, 2) {
 
             @Override
             protected String buildFlowControlMessage(FlowControl flowControl) {
@@ -29,10 +52,12 @@ class BufferedStreamTest {
                 return "__terminal__";
             }
         };
+        testSubject.beforeStart(mockUpstream);
     }
 
     @Test
     void testBufferAndCloseStream() {
+        verify(mockUpstream).disableAutoRequestWithInitial(3);
         assertNull(testSubject.nextIfAvailable());
 
         testSubject.onNext("First");
@@ -41,7 +66,13 @@ class BufferedStreamTest {
 
         assertEquals("First", testSubject.nextIfAvailable());
         assertFalse(testSubject.isClosed());
+
+        verify(mockUpstream, never()).request(anyInt());
+
         assertEquals("Second", testSubject.nextIfAvailable());
+
+        verify(mockUpstream).request(2);
+
         assertTrue(testSubject.isClosed());
     }
 

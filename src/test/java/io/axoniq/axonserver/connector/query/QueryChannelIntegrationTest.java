@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -236,7 +236,7 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         });
         axonServerProxy.enable();
 
-        assertTrueWithin(1, TimeUnit.SECONDS, connection1::isReady);
+        assertTrueWithin(2, TimeUnit.SECONDS, connection1::isReady);
     }
 
     @RepeatedTest(20)
