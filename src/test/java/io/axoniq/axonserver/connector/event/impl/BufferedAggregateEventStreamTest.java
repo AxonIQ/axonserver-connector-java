@@ -2,14 +2,11 @@ package io.axoniq.axonserver.connector.event.impl;
 
 import io.axoniq.axonserver.connector.impl.StreamClosedException;
 import io.axoniq.axonserver.grpc.event.Event;
-import io.axoniq.axonserver.grpc.event.GetAggregateEventsRequest;
-import io.grpc.stub.ClientCallStreamObserver;
 import org.junit.jupiter.api.*;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
 /**
  * Test class validationg the {@link BufferedAggregateEventStream}.
@@ -45,16 +42,4 @@ class BufferedAggregateEventStreamTest {
         assertThrows(StreamClosedException.class, () -> testSubject.hasNext());
     }
 
-    @Test
-    void testEventStreamErrorOnInvalidAggregateSequenceNumber() throws InterruptedException {
-        ClientCallStreamObserver clientCallStreamObserverMock = mock(ClientCallStreamObserver.class);
-        testSubject.beforeStart(clientCallStreamObserverMock);
-        testSubject.onNext(Event.getDefaultInstance());
-        testSubject.onNext(Event.getDefaultInstance());
-
-        assertTrue(testSubject.hasNext());
-        assertEquals(Event.getDefaultInstance(), testSubject.next());
-        verify(clientCallStreamObserverMock).onError(any(RuntimeException.class));
-        assertThrows(StreamClosedException.class, () -> testSubject.hasNext());
-    }
 }
