@@ -48,6 +48,8 @@ import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
@@ -111,6 +113,7 @@ class AxonServerManagedChannelIntegrationTest extends AbstractAxonServerIntegrat
     @Test
     void connectionReadyOnRequestConnection() {
         assertEquals(ConnectivityState.READY, testSubject.getState(true));
+        assertTrue(testSubject.isReady());
     }
 
     @Test
@@ -206,6 +209,16 @@ class AxonServerManagedChannelIntegrationTest extends AbstractAxonServerIntegrat
                                                        connectAttempts.add(address);
                                                        return localConnection.get();
                                                    });
+
+        // make sure we are properly connected, first
+        assertWithin(1, TimeUnit.SECONDS, () -> {
+            // make sure we run previously all scheduled (re)connect tasks
+            if (nextConnectTask != null) {
+                nextConnectTask.run();
+            }
+            assertSame(ConnectivityState.READY, testSubject.getState(true));
+        });
+
         // make sure we run previously all scheduled (re)connect tasks
         while (nextConnectTask != null) {
             nextConnectTask.run();

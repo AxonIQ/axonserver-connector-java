@@ -194,8 +194,8 @@ class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         CompletableFuture<CommandResponse> actual1 = commandChannel.sendCommand(Command.newBuilder().setName("testCommand").build());
 
-        assertEquals("", actual1.get(100, TimeUnit.MILLISECONDS).getErrorMessage().getMessage());
-        assertEquals("", actual1.get(100, TimeUnit.MILLISECONDS).getErrorCode());
+        assertEquals("", actual1.get(1, TimeUnit.SECONDS).getErrorMessage().getMessage());
+        assertEquals("", actual1.get(1, TimeUnit.SECONDS).getErrorCode());
 
         registration.cancel().get(2, TimeUnit.SECONDS);
 

@@ -235,7 +235,7 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         });
         axonServerProxy.enable();
 
-        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
+        assertWithin(2, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
     }
 
     @RepeatedTest(20)
