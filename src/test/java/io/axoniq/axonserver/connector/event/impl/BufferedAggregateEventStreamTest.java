@@ -26,9 +26,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 
 /**
  * Test class validationg the {@link BufferedAggregateEventStream}.
@@ -68,14 +66,4 @@ class BufferedAggregateEventStreamTest {
         assertThrows(StreamClosedException.class, () -> testSubject.hasNext());
     }
 
-    @Test
-    void testEventStreamErrorOnInvalidAggregateSequenceNumber() throws InterruptedException {
-        testSubject.onNext(Event.getDefaultInstance());
-        testSubject.onNext(Event.getDefaultInstance());
-
-        assertTrue(testSubject.hasNext());
-        assertEquals(Event.getDefaultInstance(), testSubject.next());
-        verify(clientCallStreamObserver).onError(any(RuntimeException.class));
-        assertThrows(StreamClosedException.class, () -> testSubject.hasNext());
-    }
 }
