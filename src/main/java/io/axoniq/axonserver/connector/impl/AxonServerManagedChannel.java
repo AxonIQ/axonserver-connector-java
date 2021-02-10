@@ -67,6 +67,7 @@ public class AxonServerManagedChannel extends ManagedChannel {
     private final Queue<Runnable> connectListeners = new LinkedBlockingQueue<>();
     private final AtomicLong nextAttemptTime = new AtomicLong();
     private final AtomicReference<Exception> lastConnectException = new AtomicReference<>();
+    private final AtomicBoolean scheduleGate = new AtomicBoolean();
 
     /**
      * Constructs a {@link AxonServerManagedChannel}.
@@ -97,7 +98,6 @@ public class AxonServerManagedChannel extends ManagedChannel {
         this.forcePlatformReconnect = reconnectConfiguration.isForcePlatformReconnect();
         this.connectionFactory = connectionFactory;
         this.connectTimeout = reconnectConfiguration.getTimeUnit().toMillis(reconnectConfiguration.getConnectTimeout());
-        this.executor.schedule(() -> ensureConnected(true), 100, TimeUnit.MILLISECONDS);
     }
 
     private ManagedChannel connectChannel() {
@@ -203,7 +203,7 @@ public class AxonServerManagedChannel extends ManagedChannel {
                                                      CallOptions callOptions) {
         ManagedChannel current = activeChannel.get();
         if (current == null || current.getState(false) != ConnectivityState.READY) {
-            ensureConnected(false);
+            ensureConnected();
             current = activeChannel.get();
         }
         if (current == null) {
@@ -224,7 +224,7 @@ public class AxonServerManagedChannel extends ManagedChannel {
         }
 
         if (requestConnection) {
-            ensureConnected(false);
+            ensureConnected();
         }
         ManagedChannel current = activeChannel.get();
         if (current == null) {
@@ -273,7 +273,7 @@ public class AxonServerManagedChannel extends ManagedChannel {
         doIfNotNull(activeChannel.get(), ManagedChannel::enterIdle);
     }
 
-    private void ensureConnected(boolean allowReschedule) {
+    private synchronized void ensureConnected() {
         if (shutdown.get()) {
             return;
         }
@@ -281,11 +281,9 @@ public class AxonServerManagedChannel extends ManagedChannel {
         long now = System.currentTimeMillis();
         long deadline = nextAttemptTime.getAndUpdate(d -> d > now ? d : now + reconnectInterval);
         if (deadline > now) {
-            if (allowReschedule) {
-                long timeLeft = Math.min(500, deadline - now);
-                logger.debug("Reconnect timeout still enforced. Scheduling a new connection check in {}ms", timeLeft);
-                scheduleConnectionCheck(timeLeft);
-            }
+            long timeLeft = Math.min(500, deadline - now);
+            logger.debug("Reconnect timeout still enforced. Scheduling a new connection check in {}ms", timeLeft);
+            scheduleConnectionCheck(timeLeft);
             return;
         }
         logger.debug("Checking connection state");
@@ -296,20 +294,16 @@ public class AxonServerManagedChannel extends ManagedChannel {
             if (state == ConnectivityState.TRANSIENT_FAILURE) {
                 logger.info("Connection to AxonServer lost. Attempting to reconnect...");
             }
-            createConnection(allowReschedule, current);
-        } else if (allowReschedule && (state == ConnectivityState.IDLE || state == ConnectivityState.CONNECTING)) {
+            createConnection(current);
+        } else if (state == ConnectivityState.IDLE || state == ConnectivityState.CONNECTING) {
             logger.debug("Connection is {}, checking again in 50ms", state);
             scheduleConnectionCheck(50);
         } else {
             logger.debug("Connection seems normal. {}", state);
-            if (allowReschedule) {
-                logger.debug("Registering state change handler");
-                current.notifyWhenStateChanged(ConnectivityState.READY, this::verifyConnectionStateChange);
-            }
         }
     }
 
-    private void createConnection(boolean allowReschedule, ManagedChannel current) {
+    private void createConnection(ManagedChannel current) {
         ManagedChannel newConnection = null;
         try {
             if (forcePlatformReconnect && current != null && !current.isShutdown()) {
@@ -322,10 +316,6 @@ public class AxonServerManagedChannel extends ManagedChannel {
                     // concurrency. We need to abandon the given connection
                     logger.debug("A successful Connection was concurrently set up. Closing this one.");
                     newConnection.shutdown();
-                    if (allowReschedule) {
-                        // we need to make sure the connection checked "process" is always kept alive
-                        scheduleConnectionCheck(50);
-                    }
                     return;
                 }
                 doIfNotNull(current, ManagedChannel::shutdown);
@@ -338,11 +328,9 @@ public class AxonServerManagedChannel extends ManagedChannel {
                     listener.run();
                 }
                 nextAttemptTime.set(0);
-                if (allowReschedule) {
-                    logger.debug("Registering state change handler");
-                    newConnection.notifyWhenStateChanged(ConnectivityState.READY, this::verifyConnectionStateChange);
-                }
-            } else if (allowReschedule) {
+                logger.debug("Registering state change handler");
+                newConnection.notifyWhenStateChanged(ConnectivityState.READY, this::verifyConnectionStateChange);
+            } else {
                 logger.info("Failed to get connection to AxonServer. Scheduling a reconnect in {}ms",
                             reconnectInterval);
                 scheduleConnectionCheck(reconnectInterval);
@@ -350,13 +338,9 @@ public class AxonServerManagedChannel extends ManagedChannel {
         } catch (Exception e) {
             lastConnectException.set(e);
             doIfNotNull(newConnection, ManagedChannel::shutdown);
-            if (allowReschedule) {
-                logger.info("Failed to get connection to AxonServer. Scheduling a reconnect in {}ms",
-                            reconnectInterval, e);
-                scheduleConnectionCheck(reconnectInterval);
-            } else {
-                logger.debug("Failed to get connection to AxonServer.");
-            }
+            logger.info("Failed to get connection to AxonServer. Scheduling a reconnect in {}ms",
+                        reconnectInterval, e);
+            scheduleConnectionCheck(reconnectInterval);
         }
     }
 
@@ -367,9 +351,15 @@ public class AxonServerManagedChannel extends ManagedChannel {
 
     private void scheduleConnectionCheck(long interval) {
         try {
-            executor.schedule(() -> ensureConnected(true), interval, TimeUnit.MILLISECONDS);
+            if (scheduleGate.compareAndSet(false, true)) {
+                executor.schedule(() -> {
+                    scheduleGate.set(false);
+                    ensureConnected();
+                }, interval, TimeUnit.MILLISECONDS);
+            }
         } catch (RejectedExecutionException e) {
-            logger.info("Did not schedule reconnect attempt. Connector is shut down");
+            scheduleGate.set(false);
+            logger.debug("Did not schedule reconnect attempt. Connector is shut down");
         }
     }
 
@@ -400,6 +390,16 @@ public class AxonServerManagedChannel extends ManagedChannel {
             }
             currentChannel.shutdownNow();
         }
+    }
+
+    /**
+     * Indicates whether the channel is READY, meaning is is connected to an Axon Server instance,
+     * and ready to accept calls.
+     *
+     * @return {@code true} if the connection is ready to accept calls, otherwise {@code false}
+     */
+    public boolean isReady() {
+        return getState(false) == ConnectivityState.READY;
     }
 
     private static class FailingCall<REQ, RESP> extends ClientCall<REQ, RESP> {
