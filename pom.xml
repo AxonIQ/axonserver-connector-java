@@ -448,6 +448,7 @@
                 </plugins>
             </build>
         </profile>
+
         <profile>
             <id>coverage</id>
             <build>
@@ -459,6 +460,8 @@
 
                         <executions>
                             <execution>
+                                <id>prepare-agent</id>
+                                <phase>initialize</phase>
                                 <goals>
                                     <goal>prepare-agent</goal>
                                 </goals>
@@ -472,7 +475,6 @@
                             </execution>
                         </executions>
                     </plugin>
-
                 </plugins>
             </build>
         </profile>
