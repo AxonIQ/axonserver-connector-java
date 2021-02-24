@@ -137,6 +137,10 @@ public abstract class AbstractAxonServerChannel<OUT> {
             case RESOURCE_EXHAUSTED:
                 scheduleReconnect(5000);
                 break;
+            case UNAVAILABLE:
+                channel.requestReconnect();
+                scheduleReconnect(50);
+                break;
             default:
                 scheduleReconnect(500);
                 break;

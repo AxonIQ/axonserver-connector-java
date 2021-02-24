@@ -97,7 +97,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
         this.executor = executor;
         this.processorInfoUpdateFrequency = processorInfoUpdateFrequency;
         this.reconnectHandler = reconnectHandler;
-        this.heartbeatMonitor = new HeartbeatMonitor(executor, this::sendHeartBeat, channel::forceReconnect);
+        this.heartbeatMonitor = new HeartbeatMonitor(executor, this::sendHeartBeat, channel::requestReconnect);
         this.instructionHandlers.put(PlatformOutboundInstruction.RequestCase.ACK, this::handleAck);
         this.instructionHandlers.put(PlatformOutboundInstruction.RequestCase.HEARTBEAT,
                                      (msg, reply) -> heartbeatMonitor.handleIncomingBeat(reply));
