@@ -138,13 +138,19 @@ public abstract class AbstractAxonServerChannel<OUT> {
                 scheduleReconnect(5000);
                 break;
             case UNAVAILABLE:
-                channel.requestReconnect();
+                if (shutdownOnUnavailable()) {
+                    channel.requestReconnect();
+                }
                 scheduleReconnect(50);
                 break;
             default:
                 scheduleReconnect(500);
                 break;
         }
+    }
+
+    protected boolean shutdownOnUnavailable() {
+        return false;
     }
 
 

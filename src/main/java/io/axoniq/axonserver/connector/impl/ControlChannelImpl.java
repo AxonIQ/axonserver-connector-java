@@ -267,6 +267,11 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
         return instructionDispatcher.get() != null;
     }
 
+    @Override
+    protected boolean shutdownOnUnavailable() {
+        return true;
+    }
+
     private class PlatformOutboundInstructionHandler
             extends AbstractIncomingInstructionStream<PlatformOutboundInstruction, PlatformInboundInstruction> {
 
