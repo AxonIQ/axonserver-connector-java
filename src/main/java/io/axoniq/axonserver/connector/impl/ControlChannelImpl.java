@@ -29,6 +29,7 @@ import io.axoniq.axonserver.grpc.control.Heartbeat;
 import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformServiceGrpc;
+import io.grpc.Status;
 import io.grpc.stub.CallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
@@ -71,6 +72,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
     private final Map<String, Supplier<EventProcessorInfo>> processorInfoSuppliers = new ConcurrentHashMap<>();
     private final AtomicBoolean infoSupplierActive = new AtomicBoolean();
     private final PlatformServiceGrpc.PlatformServiceStub platformServiceStub;
+    private final AxonServerManagedChannel channel;
 
     /**
      * Constructs a {@link ControlChannelImpl}.
@@ -92,6 +94,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
                               long processorInfoUpdateFrequency,
                               Runnable reconnectHandler) {
         super(clientIdentification, executor, channel);
+        this.channel = channel;
         this.clientIdentification = clientIdentification;
         this.context = context;
         this.executor = executor;
@@ -187,6 +190,12 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
 
     private void handleDisconnect(Throwable cause) {
         heartbeatMonitor.pause();
+        Status status = Status.fromThrowable(cause);
+        if (status == Status.UNAVAILABLE && channel.isReady()) {
+            // if the server is unavailable, we must trigger a reconnect
+            logger.info("Upstream unavailable. Forcing new connection.");
+            reconnectHandler.run();
+        }
         scheduleReconnect(cause);
     }
 

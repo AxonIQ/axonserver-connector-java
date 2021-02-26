@@ -17,27 +17,45 @@
 package io.axoniq.axonserver.connector.impl;
 
 import com.google.gson.JsonElement;
+import com.google.protobuf.ByteString;
 import eu.rekawek.toxiproxy.model.ToxicDirection;
 import eu.rekawek.toxiproxy.model.toxic.Timeout;
 import io.axoniq.axonserver.connector.AbstractAxonServerIntegrationTest;
 import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
 import io.axoniq.axonserver.connector.ReplyChannel;
+import io.axoniq.axonserver.connector.command.impl.CommandChannelImpl;
 import io.axoniq.axonserver.connector.control.ControlChannel;
 import io.axoniq.axonserver.connector.control.ProcessorInstructionHandler;
 import io.axoniq.axonserver.connector.event.EventStream;
+import io.axoniq.axonserver.connector.query.QueryDefinition;
+import io.axoniq.axonserver.connector.query.impl.QueryChannelImpl;
+import io.axoniq.axonserver.grpc.SerializedObject;
+import io.axoniq.axonserver.grpc.command.CommandResponse;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo;
 import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
 import io.axoniq.axonserver.grpc.control.RequestReconnect;
+import io.axoniq.axonserver.grpc.query.QueryResponse;
+import io.grpc.CallOptions;
+import io.grpc.Channel;
+import io.grpc.ClientCall;
+import io.grpc.ForwardingClientCall;
+import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
+import io.grpc.Status;
+import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.shaded.okhttp3.Request;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
@@ -48,10 +66,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
@@ -100,7 +117,7 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
-    void testEventProcessorInformationUpdated() throws TimeoutException, InterruptedException {
+    void testEventProcessorInformationUpdated() {
         client = AxonServerConnectionFactory.forClient(getClass().getSimpleName())
                                             .routingServers(axonServerAddress)
                                             .build();
@@ -112,7 +129,7 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         assertWithin(1, TimeUnit.SECONDS, () -> {
             JsonElement response = getFromAxonServer("/v1/components/" + getClass().getSimpleName() + "/processors?context=default");
-            assertEquals("testProcessor", response.getAsJsonArray().get(0).getAsJsonObject().get("name").getAsString());
+            Assertions.assertEquals("testProcessor", response.getAsJsonArray().get(0).getAsJsonObject().get("name").getAsString());
         });
     }
 
@@ -156,7 +173,7 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
-    void testPauseAndStartInstructionIsPickedUpByHandler() throws Exception {
+    void testPauseAndStartInstructionIsPickedUpByHandler() {
         client = AxonServerConnectionFactory.forClient(getClass().getSimpleName())
                                             .processorInfoUpdateFrequency(500, TimeUnit.MILLISECONDS)
                                             .routingServers(axonServerAddress)
@@ -197,10 +214,10 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                    .awaitAck(1, TimeUnit.SECONDS);
 
         assertWithin(2, TimeUnit.SECONDS, () -> sendToAxonServer(Request.Builder::patch, "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/segments/merge?tokenStoreIdentifier=TokenStoreId&context=default"));
-        assertWithin(1, TimeUnit.SECONDS, () -> verify(instructionHandler).mergeSegment(eq(0)));
+        assertWithin(1, TimeUnit.SECONDS, () -> verify(instructionHandler).mergeSegment(0));
 
         assertWithin(2, TimeUnit.SECONDS, () -> sendToAxonServer(Request.Builder::patch, "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/segments/split?tokenStoreIdentifier=TokenStoreId&context=default"));
-        assertWithin(1, TimeUnit.SECONDS, () -> verify(instructionHandler).splitSegment(eq(0)));
+        assertWithin(1, TimeUnit.SECONDS, () -> verify(instructionHandler).splitSegment(0));
     }
 
     @Test
@@ -224,13 +241,111 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
 
         // we wait for AxonServer to request data, which is an acknowledgement that the processor was registered.
-        cdl.await(3, TimeUnit.SECONDS);
+        assertTrue(cdl.await(3, TimeUnit.SECONDS));
 
         sendToAxonServer(Request.Builder::patch, "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/segments/0/move?tokenStoreIdentifier=TokenStoreId&context=default&target=foo");
 
-        assertWithin(1, TimeUnit.SECONDS, () -> {
-            assertTrue(instructionHandler.instructions.contains("release0"));
-        });
+        assertWithin(1, TimeUnit.SECONDS, () ->
+                assertTrue(instructionHandler.instructions.contains("release0")));
+    }
+
+    /*
+      Verifies that a connection is force-reset when an UNAVAILABLE error is returned on the Control Channel,
+      while the connection itself reports to be READY. This may indicate a proxy is keeping the connection open,
+      but is rejecting requests due to an unavailable backend.
+     */
+    @Test
+    void connectionForcefullyRecreatedAfterFailureOnInstructionChannelAndLiveChannel() {
+        AtomicInteger connectCounter = new AtomicInteger();
+        CallCancellingInterceptor cancellingInterceptor = new CallCancellingInterceptor();
+        client = AxonServerConnectionFactory.forClient("handler")
+                                                   .routingServers(axonServerAddress)
+                                                   .connectTimeout(1500, TimeUnit.MILLISECONDS)
+                                                   .processorInfoUpdateFrequency(500, TimeUnit.MILLISECONDS)
+                                                   .reconnectInterval(50, TimeUnit.MILLISECONDS)
+                                                   .customize(mcb -> {
+                                                       synchronized (this) {
+                                                           connectCounter.incrementAndGet();
+                                                           return mcb.intercept(cancellingInterceptor);
+                                                       }
+                                                   })
+                                                   .build();
+        AxonServerConnection connection1 = client.connect("default");
+
+        assertEquals(1, connectCounter.get());
+
+        QueryChannelImpl handlerClientQueryChannel = (QueryChannelImpl) connection1.queryChannel();
+        CommandChannelImpl handlerClientCommandChannel = (CommandChannelImpl) connection1.commandChannel();
+        ControlChannelImpl controlChannel = (ControlChannelImpl) connection1.controlChannel();
+
+        handlerClientQueryChannel.registerQueryHandler((query, responseHandler) -> responseHandler.sendLast(QueryResponse.newBuilder().setPayload(SerializedObject.newBuilder().setData(ByteString.copyFromUtf8("Response"))).build()), new QueryDefinition("echo", String.class));
+        handlerClientCommandChannel.registerCommandHandler(c -> CompletableFuture.completedFuture(CommandResponse.newBuilder().setPayload(SerializedObject.newBuilder().setData(ByteString.copyFromUtf8("Response"))).build()), 100, "echo");
+
+        assertWithin(2, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
+        logger.info("Connection status is READY");
+
+        assertEquals(1, connectCounter.get());
+
+        for (int i = 0; i < 10; i++) {
+            // waiting to recover
+            assertWithin(2, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
+            assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(controlChannel.isReady()));
+
+            logger.info("Simulating failing calls on successful connection");
+            cancellingInterceptor.cancelAll(Status.UNAVAILABLE);
+        }
+
+        logger.info("Waiting for connector to establish connection");
+        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(controlChannel.isReady()));
+        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(handlerClientQueryChannel.isReady()));
+        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(handlerClientCommandChannel.isReady()));
+
+        assertEquals(11, connectCounter.get());
+
+    }
+
+    private static class CallCancellingInterceptor implements io.grpc.ClientInterceptor {
+
+        private final Map<ClientCall<?, ?>, ClientCall.Listener<?>> calls = new ConcurrentHashMap<>();
+
+        public void cancelAll(Status status) {
+            calls.keySet().forEach(k -> {
+                logger.debug("Causing trouble on {}", k);
+                doIfNotNull(calls.remove(k), c -> c.onClose(status, null));
+            });
+        }
+
+        @Override
+        public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(MethodDescriptor<ReqT, RespT> method, CallOptions callOptions, Channel next) {
+            ClientCall<ReqT, RespT> delegate = next.newCall(method, callOptions);
+            if (!"io.axoniq.axonserver.grpc.control.PlatformService".equals(method.getServiceName()) || !"OpenStream".equals(method.getBareMethodName())) {
+                return delegate;
+            }
+            return new ForwardingClientCall<ReqT, RespT>() {
+
+                @Override
+                protected ClientCall<ReqT, RespT> delegate() {
+                    return delegate;
+                }
+
+                @Override
+                public void cancel(@Nullable String message, @Nullable Throwable cause) {
+                    calls.remove(delegate);
+                    super.cancel(message, cause);
+                }
+
+                @Override
+                public void start(Listener<RespT> responseListener, Metadata headers) {
+                    calls.put(delegate, responseListener);
+                    super.start(responseListener, headers);
+                }
+
+                @Override
+                public void halfClose() {
+                    super.halfClose();
+                }
+            };
+        }
     }
 
     private EventProcessorInfo buildEventProcessorInfo(boolean running) {

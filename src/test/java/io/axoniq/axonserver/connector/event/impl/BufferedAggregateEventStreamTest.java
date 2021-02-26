@@ -32,13 +32,14 @@ class BufferedAggregateEventStreamTest {
     @Test
     void testEventStreamPropagatesErrorOnHasNextAfterReadingAvailableEvents() throws InterruptedException {
         testSubject.onNext(Event.getDefaultInstance());
-        testSubject.onNext(Event.getDefaultInstance());
+        testSubject.onNext(Event.newBuilder().setAggregateSequenceNumber(1).build());
         testSubject.onError(new RuntimeException("Mock"));
 
         assertTrue(testSubject.hasNext());
         assertEquals(Event.getDefaultInstance(), testSubject.next());
         assertTrue(testSubject.hasNext());
-        assertEquals(Event.getDefaultInstance(), testSubject.next());
+        assertEquals(Event.newBuilder().setAggregateSequenceNumber(1).build(), testSubject.next());
         assertThrows(StreamClosedException.class, () -> testSubject.hasNext());
     }
+
 }

@@ -98,4 +98,5 @@ public class BufferedAggregateEventStream
     protected Event terminalMessage() {
         return TERMINAL_MESSAGE;
     }
+
 }
