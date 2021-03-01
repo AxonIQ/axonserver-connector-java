@@ -100,7 +100,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
         this.executor = executor;
         this.processorInfoUpdateFrequency = processorInfoUpdateFrequency;
         this.reconnectHandler = reconnectHandler;
-        this.heartbeatMonitor = new HeartbeatMonitor(executor, this::sendHeartBeat, channel::forceReconnect);
+        this.heartbeatMonitor = new HeartbeatMonitor(executor, this::sendHeartBeat, channel::requestReconnect);
         this.instructionHandlers.put(PlatformOutboundInstruction.RequestCase.ACK, this::handleAck);
         this.instructionHandlers.put(PlatformOutboundInstruction.RequestCase.HEARTBEAT,
                                      (msg, reply) -> heartbeatMonitor.handleIncomingBeat(reply));
@@ -274,6 +274,14 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
     @Override
     public boolean isReady() {
         return instructionDispatcher.get() != null;
+    }
+
+    /**
+     * @return {@code true} as for each context there will always be a long running stream
+     */
+    @Override
+    protected boolean resetConnectionOnUnavailable() {
+        return true;
     }
 
     private class PlatformOutboundInstructionHandler

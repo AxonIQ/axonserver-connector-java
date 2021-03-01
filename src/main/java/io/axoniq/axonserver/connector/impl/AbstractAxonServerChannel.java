@@ -137,10 +137,28 @@ public abstract class AbstractAxonServerChannel<OUT> {
             case RESOURCE_EXHAUSTED:
                 scheduleReconnect(5000);
                 break;
+            case UNAVAILABLE:
+                if (resetConnectionOnUnavailable()) {
+                    channel.requestReconnect();
+                }
+                scheduleReconnect(50);
+                break;
             default:
                 scheduleReconnect(500);
                 break;
         }
+    }
+
+    /**
+     * Returns {@code true} if this channel is responsible for resetting the gRPC channel on UNAVAILABLE status.
+     * If the long running streams to Axon Server fail with an UNAVAILABLE status, the wrapped {@link
+     * AxonServerManagedChannel}
+     * should be reset by one of the long running streams.
+     *
+     * @return {@code true} if this channel is responsible for resetting the gRPC channel on UNAVAILABLE status
+     */
+    protected boolean resetConnectionOnUnavailable() {
+        return false;
     }
 
 
