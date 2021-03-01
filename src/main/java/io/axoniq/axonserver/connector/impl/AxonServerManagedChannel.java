@@ -30,7 +30,6 @@ import io.grpc.Status;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
@@ -42,6 +41,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
+import javax.annotation.Nullable;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
 
@@ -368,28 +368,11 @@ public class AxonServerManagedChannel extends ManagedChannel {
      */
     public void requestReconnect() {
         logger.info("Reconnect requested. Closing current connection");
-        doIfNotNull(activeChannel.get(), c -> {
+        doIfNotNull(activeChannel.getAndSet(null), c -> {
             c.shutdown();
             executor.schedule(c::shutdownNow, 5, TimeUnit.SECONDS);
         });
-    }
-
-    /**
-     * Forcefully perform a reconnect of this {@link ManagedChannel} implementation by shutting down the current
-     * connection.
-     */
-    public void forceReconnect() {
-        logger.info("Forceful reconnect required. Closing current connection");
-        ManagedChannel currentChannel = activeChannel.get();
-        if (currentChannel != null) {
-            currentChannel.shutdown();
-            try {
-                currentChannel.awaitTermination(5, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            currentChannel.shutdownNow();
-        }
+        nextAttemptTime.set(0);
     }
 
     /**
