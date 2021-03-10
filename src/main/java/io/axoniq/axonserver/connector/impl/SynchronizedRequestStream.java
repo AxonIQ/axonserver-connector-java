@@ -18,7 +18,6 @@ package io.axoniq.axonserver.connector.impl;
 
 import io.grpc.stub.ClientCallStreamObserver;
 
-import javax.annotation.Nullable;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -44,7 +43,7 @@ public class SynchronizedRequestStream<T> extends ClientCallStreamObserver<T> {
     }
 
     @Override
-    public void cancel(@Nullable String message, @Nullable Throwable cause) {
+    public void cancel(String message, Throwable cause) {
         halfClosed.set(true);
         delegate.cancel(message, cause);
     }

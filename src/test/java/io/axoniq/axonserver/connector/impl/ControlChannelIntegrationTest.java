@@ -44,7 +44,6 @@ import io.grpc.ForwardingClientCall;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
-import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -255,17 +254,17 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
       but is rejecting requests due to an unavailable backend.
      */
     @Test
-    void connectionForcefullyRecreatedAfterFailureOnInstructionChannelAndLiveChannel() {
+    void connectionForcefullyRecreatedAfterFailureOnInstructionChannelAndLiveChannel() throws InterruptedException {
         AtomicInteger connectCounter = new AtomicInteger();
         CallCancellingInterceptor cancellingInterceptor = new CallCancellingInterceptor();
         client = AxonServerConnectionFactory.forClient("handler")
-                                                   .routingServers(axonServerAddress)
-                                                   .connectTimeout(1500, TimeUnit.MILLISECONDS)
-                                                   .processorInfoUpdateFrequency(500, TimeUnit.MILLISECONDS)
-                                                   .reconnectInterval(50, TimeUnit.MILLISECONDS)
-                                                   .customize(mcb -> {
-                                                       synchronized (this) {
-                                                           connectCounter.incrementAndGet();
+                                            .routingServers(axonServerAddress)
+                                            .connectTimeout(1500, TimeUnit.MILLISECONDS)
+                                            .processorInfoUpdateFrequency(500, TimeUnit.MILLISECONDS)
+                                            .reconnectInterval(50, TimeUnit.MILLISECONDS)
+                                            .customize(mcb -> {
+                                                synchronized (this) {
+                                                    connectCounter.incrementAndGet();
                                                            return mcb.intercept(cancellingInterceptor);
                                                        }
                                                    })
@@ -329,7 +328,7 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                 }
 
                 @Override
-                public void cancel(@Nullable String message, @Nullable Throwable cause) {
+                public void cancel(String message, Throwable cause) {
                     calls.remove(delegate);
                     super.cancel(message, cause);
                 }

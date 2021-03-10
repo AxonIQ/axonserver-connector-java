@@ -276,14 +276,6 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
         return instructionDispatcher.get() != null;
     }
 
-    /**
-     * @return {@code true} as for each context there will always be a long running stream
-     */
-    @Override
-    protected boolean resetConnectionOnUnavailable() {
-        return true;
-    }
-
     private class PlatformOutboundInstructionHandler
             extends AbstractIncomingInstructionStream<PlatformOutboundInstruction, PlatformInboundInstruction> {
 

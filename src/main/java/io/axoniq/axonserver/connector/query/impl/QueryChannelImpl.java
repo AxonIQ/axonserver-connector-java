@@ -266,7 +266,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                                                                                 outboundQueryStream.get());
                     subscriptionResult = CompletableFuture.allOf(subscriptionResult, instructionResult);
                 }
-                logger.debug("Registered handler for query '{}' in context '{}'", queryDefinition, context);
+                logger.info("Registered handler for query '{}' in context '{}'", queryDefinition, context);
             }
         }
         return new AsyncRegistration(subscriptionResult, () -> {
