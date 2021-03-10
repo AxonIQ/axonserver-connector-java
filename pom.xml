@@ -448,7 +448,6 @@
                 </plugins>
             </build>
         </profile>
-
         <profile>
             <id>coverage</id>
             <build>
@@ -475,6 +474,7 @@
                             </execution>
                         </executions>
                     </plugin>
+
                 </plugins>
             </build>
         </profile>

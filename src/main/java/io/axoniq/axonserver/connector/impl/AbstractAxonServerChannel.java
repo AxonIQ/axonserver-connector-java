@@ -138,9 +138,6 @@ public abstract class AbstractAxonServerChannel<OUT> {
                 scheduleReconnect(5000);
                 break;
             case UNAVAILABLE:
-                if (resetConnectionOnUnavailable()) {
-                    channel.requestReconnect();
-                }
                 scheduleReconnect(50);
                 break;
             default:
@@ -148,19 +145,6 @@ public abstract class AbstractAxonServerChannel<OUT> {
                 break;
         }
     }
-
-    /**
-     * Returns {@code true} if this channel is responsible for resetting the gRPC channel on UNAVAILABLE status.
-     * If the long running streams to Axon Server fail with an UNAVAILABLE status, the wrapped {@link
-     * AxonServerManagedChannel}
-     * should be reset by one of the long running streams.
-     *
-     * @return {@code true} if this channel is responsible for resetting the gRPC channel on UNAVAILABLE status
-     */
-    protected boolean resetConnectionOnUnavailable() {
-        return false;
-    }
-
 
     /**
      * Schedule an immediate attempt to reconnect with AxonServer.
@@ -173,7 +157,7 @@ public abstract class AbstractAxonServerChannel<OUT> {
     private void scheduleReconnect(int delay) {
         try {
             executor.schedule(() -> {
-                ConnectivityState connectivityState = channel.getState(delay == 0);
+                ConnectivityState connectivityState = channel.getState(false);
                 if (connectivityState == ConnectivityState.READY) {
                     connect();
                 } else {

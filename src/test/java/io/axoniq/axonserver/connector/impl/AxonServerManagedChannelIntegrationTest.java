@@ -47,6 +47,7 @@ import java.util.function.Supplier;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -108,6 +109,7 @@ class AxonServerManagedChannelIntegrationTest extends AbstractAxonServerIntegrat
     @Test
     void connectionIdleOnCreation() {
         assertEquals(ConnectivityState.IDLE, testSubject.getState(false));
+        assertFalse(testSubject.isReady());
     }
 
     @Test
@@ -115,6 +117,29 @@ class AxonServerManagedChannelIntegrationTest extends AbstractAxonServerIntegrat
         assertEquals(ConnectivityState.READY, testSubject.getState(true));
         assertTrue(testSubject.isReady());
     }
+
+    @Test
+    void requestReconnectSchedulesImmediateReconnect() throws IOException {
+        assertEquals(ConnectivityState.READY, testSubject.getState(true));
+
+        testSubject.getState(true);
+
+        testSubject.requestReconnect();
+
+        // we can't simply assert immediately, because the reconnect is triggered by the state change detector,
+        // which runs on another thread.
+        assertWithin(10, TimeUnit.MILLISECONDS, () -> {
+            assertNotNull(nextConnectTask);
+        });
+        assertEquals(ConnectivityState.IDLE, testSubject.getState(false));
+
+        nextConnectTask.run();
+
+        assertWithin(1, TimeUnit.SECONDS, () -> {
+            assertEquals(ConnectivityState.READY, testSubject.getState(false));
+        });
+    }
+
 
     @Test
     void connectionIdleWhenConnectionInterrupted() throws Exception {

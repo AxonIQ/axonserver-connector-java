@@ -254,17 +254,17 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
       but is rejecting requests due to an unavailable backend.
      */
     @Test
-    void connectionForcefullyRecreatedAfterFailureOnInstructionChannelAndLiveChannel() {
+    void connectionForcefullyRecreatedAfterFailureOnInstructionChannelAndLiveChannel() throws InterruptedException {
         AtomicInteger connectCounter = new AtomicInteger();
         CallCancellingInterceptor cancellingInterceptor = new CallCancellingInterceptor();
         client = AxonServerConnectionFactory.forClient("handler")
-                                                   .routingServers(axonServerAddress)
-                                                   .connectTimeout(1500, TimeUnit.MILLISECONDS)
-                                                   .processorInfoUpdateFrequency(500, TimeUnit.MILLISECONDS)
-                                                   .reconnectInterval(50, TimeUnit.MILLISECONDS)
-                                                   .customize(mcb -> {
-                                                       synchronized (this) {
-                                                           connectCounter.incrementAndGet();
+                                            .routingServers(axonServerAddress)
+                                            .connectTimeout(1500, TimeUnit.MILLISECONDS)
+                                            .processorInfoUpdateFrequency(500, TimeUnit.MILLISECONDS)
+                                            .reconnectInterval(50, TimeUnit.MILLISECONDS)
+                                            .customize(mcb -> {
+                                                synchronized (this) {
+                                                    connectCounter.incrementAndGet();
                                                            return mcb.intercept(cancellingInterceptor);
                                                        }
                                                    })
