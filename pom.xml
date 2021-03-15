@@ -42,7 +42,7 @@
 
     <properties>
         <slf4j.version>1.7.30</slf4j.version>
-        <log4j.version>2.14.0</log4j.version>
+        <log4j.version>2.14.1</log4j.version>
 
         <!-- For compatibility between grpc and tcnative, check https://github.com/grpc/grpc-java/blob/master/SECURITY.md#netty -->
         <grpc.version>1.36.0</grpc.version>
