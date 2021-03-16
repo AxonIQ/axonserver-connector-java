@@ -49,7 +49,7 @@
         <netty.tcnative.version>2.0.34.Final</netty.tcnative.version>
         <junit.jupiter.version>5.7.1</junit.jupiter.version>
 
-        <axonserver.api.version>4.4</axonserver.api.version>
+        <axonserver.api.version>4.5-SNAPSHOT</axonserver.api.version>
 
         <jacoco-maven-plugin.version>0.8.6</jacoco-maven-plugin.version>
     </properties>
