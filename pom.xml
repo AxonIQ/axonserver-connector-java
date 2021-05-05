@@ -51,7 +51,7 @@
 
         <axonserver.api.version>4.5</axonserver.api.version>
 
-        <jacoco-maven-plugin.version>0.8.6</jacoco-maven-plugin.version>
+        <jacoco-maven-plugin.version>0.8.7</jacoco-maven-plugin.version>
     </properties>
 
     <dependencyManagement>
