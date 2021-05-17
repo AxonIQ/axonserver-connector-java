@@ -47,7 +47,7 @@
         <!-- For compatibility between grpc and tcnative, check https://github.com/grpc/grpc-java/blob/master/SECURITY.md#netty -->
         <grpc.version>1.37.0</grpc.version>
         <netty.tcnative.version>2.0.34.Final</netty.tcnative.version>
-        <junit.jupiter.version>5.7.1</junit.jupiter.version>
+        <junit.jupiter.version>5.7.2</junit.jupiter.version>
 
         <axonserver.api.version>4.5</axonserver.api.version>
 
