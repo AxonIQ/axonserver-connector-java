@@ -33,6 +33,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -45,6 +49,7 @@ import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -120,7 +125,7 @@ class EventHandlingIntegrationTest extends AbstractAxonServerIntegrationTest {
         AggregateEventStream stream = eventChannel.openAggregateStream("aggregate1");
         assertTrue(stream.hasNext());
         Assertions.assertEquals("event1", stream.next().getPayload().getData().toStringUtf8());
-        Assertions.assertFalse(stream.hasNext());
+        assertFalse(stream.hasNext());
     }
 
     @Test
@@ -207,7 +212,7 @@ class EventHandlingIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         try (ResultStream<EventWithToken> stream = eventChannel.openStream(-1, 64)) {
             Assertions.assertNotNull(stream.nextIfAvailable(5, SECONDS));
-            Assertions.assertFalse(stream.isClosed());
+            assertFalse(stream.isClosed());
         }
     }
 
@@ -272,5 +277,115 @@ class EventHandlingIntegrationTest extends AbstractAxonServerIntegrationTest {
         EventWithToken secondEvent = secondStream.nextIfAvailable(1, SECONDS);
         assertEquals("event2", secondEvent.getEvent().getPayload().getData().toStringUtf8());
         secondStream.close();
+    }
+
+    @Test
+    void testQueryEvents_WithLive() throws InterruptedException {
+        EventChannel eventChannel = connection1.eventChannel();
+        EventChannel publishingEventChannel = connection2.eventChannel();
+
+        publishingEventChannel.appendEvents(MessageFactory.createDomainEvent("event1", "test", 0),
+                                            MessageFactory.createDomainEvent("event2", "test", 1))
+                              .join();
+        publishingEventChannel.appendSnapshot(MessageFactory.createDomainEvent("snapshot1", "test", 0))
+                              .join();
+
+        ResultStream<EventQueryResultEntry> queryResults = eventChannel.queryEvents("", true);
+        List<EventQueryResultEntry> actualValues = new ArrayList<>();
+        EventQueryResultEntry row;
+        while ((row = queryResults.nextIfAvailable(500, MILLISECONDS)) != null) {
+            actualValues.add(row);
+        }
+        assertEquals(new HashSet<>(Arrays.asList("event1", "event2")),
+                     actualValues.stream().map(i -> i.getValueAsString("payloadData")).collect(Collectors.toSet()));
+        assertNull(queryResults.nextIfAvailable(100, MILLISECONDS));
+
+        publishingEventChannel.appendEvents(MessageFactory.createEvent("event3"));
+        assertNotNull(queryResults.nextIfAvailable(100, MILLISECONDS));
+
+        assertFalse(queryResults.isClosed());
+
+        queryResults.close();
+        assertWithin(1, SECONDS, () -> assertTrue(queryResults.isClosed()));
+    }
+
+    @Test
+    void testQueryEvents_WithoutLive() throws InterruptedException {
+        EventChannel eventChannel = connection1.eventChannel();
+        EventChannel publishingEventChannel = connection2.eventChannel();
+
+        publishingEventChannel.appendEvents(MessageFactory.createDomainEvent("event1", "test", 0),
+                                            MessageFactory.createDomainEvent("event2", "test", 1))
+                              .join();
+        publishingEventChannel.appendSnapshot(MessageFactory.createDomainEvent("snapshot1", "test", 0))
+                              .join();
+
+        ResultStream<EventQueryResultEntry> queryResults = eventChannel.queryEvents("", false);
+        List<EventQueryResultEntry> actualValues = new ArrayList<>();
+        EventQueryResultEntry row;
+        while ((row = queryResults.nextIfAvailable(500, MILLISECONDS)) != null) {
+            actualValues.add(row);
+        }
+        assertEquals(new HashSet<>(Arrays.asList("event1", "event2")),
+                     actualValues.stream().map(i -> i.getValueAsString("payloadData")).collect(Collectors.toSet()));
+        assertNull(queryResults.nextIfAvailable(100, MILLISECONDS));
+
+        // we're not reading live events. Server should indicate end of stream.
+        assertWithin(1, SECONDS, () -> assertTrue(queryResults.isClosed()));
+    }
+
+    @Test
+    void testQuerySnapshotEvents_WithLive() throws InterruptedException {
+        EventChannel eventChannel = connection1.eventChannel();
+        EventChannel publishingEventChannel = connection2.eventChannel();
+
+        publishingEventChannel.appendEvents(MessageFactory.createDomainEvent("event1", "test", 0),
+                                            MessageFactory.createDomainEvent("event2", "test", 1))
+                              .join();
+        publishingEventChannel.appendSnapshot(MessageFactory.createDomainEvent("snapshot1", "test", 0))
+                              .join();
+
+        ResultStream<EventQueryResultEntry> queryResults = eventChannel.querySnapshotEvents("", true);
+        List<EventQueryResultEntry> actualValues = new ArrayList<>();
+        EventQueryResultEntry row;
+        while ((row = queryResults.nextIfAvailable(500, MILLISECONDS)) != null) {
+            actualValues.add(row);
+        }
+        assertEquals(Collections.singleton("snapshot1"),
+                     actualValues.stream().map(i -> i.getValueAsString("payloadData")).collect(Collectors.toSet()));
+        assertNull(queryResults.nextIfAvailable(100, MILLISECONDS));
+
+        publishingEventChannel.appendSnapshot(MessageFactory.createDomainEvent("snapshot2", "test", 1));
+        assertNotNull(queryResults.nextIfAvailable(100, MILLISECONDS));
+
+        assertFalse(queryResults.isClosed());
+
+        queryResults.close();
+        assertWithin(1, SECONDS, () -> assertTrue(queryResults.isClosed()));
+    }
+
+    @Test
+    void testQuerySnapshotEvents_WithoutLive() throws InterruptedException {
+        EventChannel eventChannel = connection1.eventChannel();
+        EventChannel publishingEventChannel = connection2.eventChannel();
+
+        publishingEventChannel.appendEvents(MessageFactory.createDomainEvent("event1", "test", 0),
+                                            MessageFactory.createDomainEvent("event2", "test", 1))
+                              .join();
+        publishingEventChannel.appendSnapshot(MessageFactory.createDomainEvent("snapshot1", "test", 0))
+                              .join();
+
+        ResultStream<EventQueryResultEntry> queryResults = eventChannel.querySnapshotEvents("", false);
+        List<EventQueryResultEntry> actualValues = new ArrayList<>();
+        EventQueryResultEntry row;
+        while ((row = queryResults.nextIfAvailable(500, MILLISECONDS)) != null) {
+            actualValues.add(row);
+        }
+        assertEquals(Collections.singleton("snapshot1"),
+                     actualValues.stream().map(i -> i.getValueAsString("payloadData")).collect(Collectors.toSet()));
+        assertNull(queryResults.nextIfAvailable(100, MILLISECONDS));
+
+        // we're not reading live events. Server should indicate end of stream.
+        assertWithin(1, SECONDS, () -> assertTrue(queryResults.isClosed()));
     }
 }

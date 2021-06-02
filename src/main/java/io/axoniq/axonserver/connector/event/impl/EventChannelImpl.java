@@ -18,13 +18,17 @@ package io.axoniq.axonserver.connector.event.impl;
 
 import io.axoniq.axonserver.connector.AxonServerException;
 import io.axoniq.axonserver.connector.ErrorCategory;
+import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.event.AggregateEventStream;
 import io.axoniq.axonserver.connector.event.AppendEventsTransaction;
 import io.axoniq.axonserver.connector.event.EventChannel;
+import io.axoniq.axonserver.connector.event.EventQueryResultEntry;
 import io.axoniq.axonserver.connector.event.EventStream;
 import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
+import io.axoniq.axonserver.connector.impl.AbstractBufferedStream;
 import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
 import io.axoniq.axonserver.connector.impl.FutureStreamObserver;
+import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
 import io.axoniq.axonserver.grpc.event.CancelScheduledEventRequest;
@@ -37,19 +41,30 @@ import io.axoniq.axonserver.grpc.event.GetAggregateSnapshotsRequest;
 import io.axoniq.axonserver.grpc.event.GetFirstTokenRequest;
 import io.axoniq.axonserver.grpc.event.GetLastTokenRequest;
 import io.axoniq.axonserver.grpc.event.GetTokenAtRequest;
+import io.axoniq.axonserver.grpc.event.QueryEventsRequest;
+import io.axoniq.axonserver.grpc.event.QueryEventsResponse;
+import io.axoniq.axonserver.grpc.event.QueryValue;
 import io.axoniq.axonserver.grpc.event.ReadHighestSequenceNrRequest;
 import io.axoniq.axonserver.grpc.event.ReadHighestSequenceNrResponse;
 import io.axoniq.axonserver.grpc.event.RescheduleEventRequest;
+import io.axoniq.axonserver.grpc.event.RowResponse;
 import io.axoniq.axonserver.grpc.event.ScheduleEventRequest;
 import io.axoniq.axonserver.grpc.event.ScheduleToken;
 import io.axoniq.axonserver.grpc.event.TrackingToken;
 import io.grpc.stub.StreamObserver;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 /**
  * {@link EventChannel} implementation, serving as the event connection between AxonServer and a client application.
@@ -248,9 +263,184 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
         return result.thenApply(TrackingToken::getToken);
     }
 
+    @Override
+    public ResultStream<EventQueryResultEntry> queryEvents(String queryExpression, boolean liveStream) {
+        return doQueryEvent(queryExpression, liveStream, false);
+    }
+
+    @Override
+    public ResultStream<EventQueryResultEntry> querySnapshotEvents(String queryExpression, boolean liveStream) {
+        return doQueryEvent(queryExpression, liveStream, true);
+    }
+
+    private ResultStream<EventQueryResultEntry> doQueryEvent(String queryExpression, boolean liveStream, boolean querySnapshots) {
+        EventQueryResponseStream stream = new EventQueryResponseStream(queryExpression, liveStream, querySnapshots);
+        //noinspection ResultOfMethodCallIgnored
+        eventStore.queryEvents(stream);
+        stream.enableFlowControl();
+        return new MappedResultStream<>(stream, r -> new EventQueryResultEntryAdapter(r, stream.columnNames::get));
+    }
+
     private AggregateEventStream doGetAggregateStream(GetAggregateEventsRequest request) {
         BufferedAggregateEventStream buffer = new BufferedAggregateEventStream();
         eventStore.listAggregateEvents(request, buffer);
         return buffer;
+    }
+
+    private static class EventQueryResponseStream extends AbstractBufferedStream<QueryEventsResponse, QueryEventsRequest> {
+
+        private static final QueryEventsResponse TERMINAL_MESSAGE = QueryEventsResponse.newBuilder().setRow(RowResponse.newBuilder().addIdValues(QueryValue.newBuilder().setTextValue("__terminal__"))).build();
+
+        private final String query;
+        private final boolean liveStream;
+        private final boolean querySnapshots;
+        private final AtomicReference<List<String>> columnNames = new AtomicReference<>();
+
+        public EventQueryResponseStream(String query, boolean liveStream, boolean querySnapshots) {
+            super("unused", 100, 25);
+            this.query = query;
+            this.liveStream = liveStream;
+            this.querySnapshots = querySnapshots;
+        }
+
+        @Override
+        public void onNext(QueryEventsResponse value) {
+            switch (value.getDataCase()) {
+                case COLUMNS:
+                    columnNames.set(value.getColumns().getColumnList());
+                    markConsumed();
+                    break;
+                case ROW:
+                    super.onNext(value);
+                    break;
+                default:
+                    markConsumed();
+                    // no-op
+            }
+        }
+
+        @Override
+        protected QueryEventsRequest buildInitialFlowControlMessage(FlowControl flowControl) {
+            return QueryEventsRequest.newBuilder()
+                                     .setQuery(query)
+                                     .setLiveEvents(liveStream)
+                                     .setNumberOfPermits(flowControl.getPermits())
+                                     .setQuerySnapshots(querySnapshots)
+                                     .build();
+        }
+
+        @Override
+        protected QueryEventsRequest buildFlowControlMessage(FlowControl flowControl) {
+            return QueryEventsRequest.newBuilder().setNumberOfPermits(flowControl.getPermits()).build();
+        }
+
+        @Override
+        protected QueryEventsResponse terminalMessage() {
+            return TERMINAL_MESSAGE;
+        }
+    }
+
+    private static class MappedResultStream<I, T> implements ResultStream<T> {
+
+        private final ResultStream<I> delegate;
+        private final Function<I, T> mapper;
+
+        public MappedResultStream(ResultStream<I> delegate, Function<I, T> mapper) {
+            this.delegate = delegate;
+            this.mapper = mapper;
+        }
+
+        @Override
+        public T peek() {
+            return transform(delegate.peek());
+        }
+
+        @Override
+        public T nextIfAvailable() {
+            return transform(delegate.nextIfAvailable());
+        }
+
+        @Override
+        public T nextIfAvailable(long timeout, TimeUnit unit) throws InterruptedException {
+            return transform(delegate.nextIfAvailable(timeout, unit));
+        }
+
+        @Override
+        public T next() throws InterruptedException {
+            return transform(delegate.next());
+        }
+
+        @Override
+        public void onAvailable(Runnable callback) {
+            delegate.onAvailable(callback);
+        }
+
+        @Override
+        public void close() {
+            delegate.close();
+        }
+
+        @Override
+        public boolean isClosed() {
+            return delegate.isClosed();
+        }
+
+        @Override
+        public Optional<Throwable> getError() {
+            return delegate.getError();
+        }
+
+        private T transform(I next) {
+            if (next == null) {
+                return null;
+            }
+            return mapper.apply(next);
+        }
+    }
+
+    private static class EventQueryResultEntryAdapter implements EventQueryResultEntry {
+        private final QueryEventsResponse response;
+        private final Supplier<List<String>> columnNames;
+
+        public EventQueryResultEntryAdapter(QueryEventsResponse response, Supplier<List<String>> columnNames) {
+            this.columnNames = columnNames;
+            this.response = response;
+        }
+
+        @Override
+        public List<String> columns() {
+            return columnNames.get();
+        }
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public <R> R getValue(String column) {
+            return (R) unwrap(response.getRow().getValuesMap().getOrDefault(column, QueryValue.getDefaultInstance()));
+        }
+
+        @Override
+        public List<Object> getIdentifiers() {
+            return response.getRow().getIdValuesList().stream().map(this::unwrap).collect(Collectors.toList());
+        }
+
+        @Override
+        public List<Object> getSortValues() {
+            return response.getRow().getSortValuesList().stream().map(this::unwrap).collect(Collectors.toList());
+        }
+
+        private Object unwrap(QueryValue value) {
+            switch (value.getDataCase()) {
+                case TEXT_VALUE:
+                    return value.getTextValue();
+                case NUMBER_VALUE:
+                    return value.getNumberValue();
+                case BOOLEAN_VALUE:
+                    return value.getBooleanValue();
+                case DOUBLE_VALUE:
+                    return value.getDoubleValue();
+                default:
+                    return null;
+            }
+        }
     }
 }
