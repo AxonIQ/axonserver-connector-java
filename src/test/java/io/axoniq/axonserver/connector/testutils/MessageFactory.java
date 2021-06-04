@@ -22,7 +22,13 @@ import io.axoniq.axonserver.grpc.event.Event;
 
 import java.util.UUID;
 
+/**
+ * Utility class to construct messages, like an {@link Event}.
+ *
+ * @author Allard Buijze
+ */
 public class MessageFactory {
+
     public static Event createEvent(String payload) {
         return Event.newBuilder().setPayload(SerializedObject.newBuilder()
                                                              .setData(ByteString.copyFromUtf8(payload))

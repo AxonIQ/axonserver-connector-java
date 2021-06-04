@@ -26,11 +26,7 @@ import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.event.Confirmation;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.EventWithToken;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -46,16 +42,22 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
+import static io.axoniq.axonserver.connector.testutils.MessageFactory.createDomainEvent;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.*;
 
 class EventHandlingIntegrationTest extends AbstractAxonServerIntegrationTest {
+
+    private static final String QUERY_EXPRESSION_ALL = "";
+    private static final boolean LIVE = true;
+    private static final boolean NOT_LIVE = false;
+
+    private static final String EVENT_PAYLOAD_ONE = "event1";
+    private static final String EVENT_PAYLOAD_TWO = "event2";
+    private static final String SNAPSHOT_PAYLOAD = "snapshot1";
+    private static final String AGGREGATE_IDENTIFIER = "test";
 
     private AxonServerConnectionFactory client1;
     private AxonServerConnection connection1;
@@ -113,18 +115,18 @@ class EventHandlingIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         publishingEventChannel.startAppendEventsTransaction()
                               .appendEvent(MessageFactory.createEvent("event0"))
-                              .appendEvent(MessageFactory.createEvent("event1").toBuilder()
+                              .appendEvent(MessageFactory.createEvent(EVENT_PAYLOAD_ONE).toBuilder()
                                                          .setAggregateIdentifier("aggregate1")
                                                          .setAggregateSequenceNumber(0)
                                                          .setAggregateType("Aggregate")
                                                          .build())
-                              .appendEvent(MessageFactory.createEvent("event2"))
+                              .appendEvent(MessageFactory.createEvent(EVENT_PAYLOAD_TWO))
                               .commit()
                               .join();
 
         AggregateEventStream stream = eventChannel.openAggregateStream("aggregate1");
         assertTrue(stream.hasNext());
-        Assertions.assertEquals("event1", stream.next().getPayload().getData().toStringUtf8());
+        Assertions.assertEquals(EVENT_PAYLOAD_ONE, stream.next().getPayload().getData().toStringUtf8());
         assertFalse(stream.hasNext());
     }
 
@@ -136,12 +138,12 @@ class EventHandlingIntegrationTest extends AbstractAxonServerIntegrationTest {
         for (int i = 0; i < 200; i++) {
             publishingEventChannel.startAppendEventsTransaction()
                                   .appendEvent(MessageFactory.createEvent("event0"))
-                                  .appendEvent(MessageFactory.createEvent("event1").toBuilder()
+                                  .appendEvent(MessageFactory.createEvent(EVENT_PAYLOAD_ONE).toBuilder()
                                                              .setAggregateIdentifier("aggregate1")
                                                              .setAggregateSequenceNumber(i)
                                                              .setAggregateType("Aggregate")
                                                              .build())
-                                  .appendEvent(MessageFactory.createEvent("event2"))
+                                  .appendEvent(MessageFactory.createEvent(EVENT_PAYLOAD_TWO))
                                   .commit()
                                   .join();
         }
@@ -164,12 +166,12 @@ class EventHandlingIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         publishingEventChannel.startAppendEventsTransaction()
                               .appendEvent(MessageFactory.createEvent("event0"))
-                              .appendEvent(MessageFactory.createEvent("event1").toBuilder()
+                              .appendEvent(MessageFactory.createEvent(EVENT_PAYLOAD_ONE).toBuilder()
                                                          .setAggregateIdentifier("aggregate1")
                                                          .setAggregateSequenceNumber(0)
                                                          .setAggregateType("Aggregate")
                                                          .build())
-                              .appendEvent(MessageFactory.createEvent("event2"))
+                              .appendEvent(MessageFactory.createEvent(EVENT_PAYLOAD_TWO))
                               .commit()
                               .join();
 
@@ -177,8 +179,7 @@ class EventHandlingIntegrationTest extends AbstractAxonServerIntegrationTest {
         Stream<Event> stream = aggregateStream.asStream();
         List<Event> asList = stream.collect(Collectors.toList());
         Assertions.assertEquals(1, asList.size());
-        Assertions.assertEquals("event1", asList.get(0).getPayload().getData().toStringUtf8());
-
+        Assertions.assertEquals(EVENT_PAYLOAD_ONE, asList.get(0).getPayload().getData().toStringUtf8());
     }
 
     @Test
@@ -187,7 +188,7 @@ class EventHandlingIntegrationTest extends AbstractAxonServerIntegrationTest {
         EventChannel publishingEventChannel = connection2.eventChannel();
 
         assertTrue(publishingEventChannel.startAppendEventsTransaction()
-                                         .appendEvent(MessageFactory.createEvent("event1"))
+                                         .appendEvent(MessageFactory.createEvent(EVENT_PAYLOAD_ONE))
                                          .commit()
                                          .get()
                                          .getSuccess());
@@ -218,11 +219,15 @@ class EventHandlingIntegrationTest extends AbstractAxonServerIntegrationTest {
 
     @Test
     void testScheduleAndCancel() throws Exception {
-        Assumptions.assumeTrue(axonServerVersion.matches("4\\.[4-9].*"), "Version " + axonServerVersion + " does not support scheduled events");
+        assumeTrue(
+                axonServerVersion.matches("4\\.[4-9].*"),
+                "Version " + axonServerVersion + " does not support scheduled events"
+        );
 
         EventChannel eventChannel = connection1.eventChannel();
 
-        CompletableFuture<String> result = eventChannel.scheduleEvent(Duration.ofDays(1), MessageFactory.createEvent("payload"));
+        CompletableFuture<String> result =
+                eventChannel.scheduleEvent(Duration.ofDays(1), MessageFactory.createEvent("payload"));
         String token = result.get(1, SECONDS);
         assertNotNull(token);
 
@@ -232,11 +237,15 @@ class EventHandlingIntegrationTest extends AbstractAxonServerIntegrationTest {
 
     @Test
     void testCancelUnknownToken() throws Exception {
-        Assumptions.assumeTrue(axonServerVersion.matches("4\\.[4-9].*"), "Version " + axonServerVersion + " does not support scheduled events");
+        assumeTrue(
+                axonServerVersion.matches("4\\.[4-9].*"),
+                "Version " + axonServerVersion + " does not support scheduled events"
+        );
 
         EventChannel eventChannel = connection1.eventChannel();
 
-        CompletableFuture<String> result = eventChannel.scheduleEvent(Duration.ofDays(1), MessageFactory.createEvent("payload"));
+        CompletableFuture<String> result =
+                eventChannel.scheduleEvent(Duration.ofDays(1), MessageFactory.createEvent("payload"));
         String token = result.get(1, SECONDS);
         assertNotNull(token);
 
@@ -249,13 +258,13 @@ class EventHandlingIntegrationTest extends AbstractAxonServerIntegrationTest {
         EventChannel eventChannel = connection1.eventChannel();
         EventChannel publishingEventChannel = connection2.eventChannel();
 
-        publishingEventChannel.appendEvents(MessageFactory.createEvent("event1"),
-                                            MessageFactory.createEvent("event2"));
+        publishingEventChannel.appendEvents(MessageFactory.createEvent(EVENT_PAYLOAD_ONE),
+                                            MessageFactory.createEvent(EVENT_PAYLOAD_TWO));
 
         Long firstToken = eventChannel.getFirstToken().get();
         EventStream actual = eventChannel.openStream(firstToken, 10);
-        assertEquals("event1", actual.next().getEvent().getPayload().getData().toStringUtf8());
-        assertEquals("event2", actual.next().getEvent().getPayload().getData().toStringUtf8());
+        assertEquals(EVENT_PAYLOAD_ONE, actual.next().getEvent().getPayload().getData().toStringUtf8());
+        assertEquals(EVENT_PAYLOAD_TWO, actual.next().getEvent().getPayload().getData().toStringUtf8());
         assertNull(actual.nextIfAvailable());
         actual.close();
     }
@@ -265,17 +274,17 @@ class EventHandlingIntegrationTest extends AbstractAxonServerIntegrationTest {
         EventChannel eventChannel = connection1.eventChannel();
         EventChannel publishingEventChannel = connection2.eventChannel();
 
-        publishingEventChannel.appendEvents(MessageFactory.createEvent("event1"),
-                                            MessageFactory.createEvent("event2"));
+        publishingEventChannel.appendEvents(MessageFactory.createEvent(EVENT_PAYLOAD_ONE),
+                                            MessageFactory.createEvent(EVENT_PAYLOAD_TWO));
 
         EventStream firstStream = eventChannel.openStream(-1, 10);
         EventWithToken firstEvent = firstStream.next();
-        assertEquals("event1", firstEvent.getEvent().getPayload().getData().toStringUtf8());
+        assertEquals(EVENT_PAYLOAD_ONE, firstEvent.getEvent().getPayload().getData().toStringUtf8());
         firstStream.close();
 
         EventStream secondStream = eventChannel.openStream(firstEvent.getToken(), 10);
         EventWithToken secondEvent = secondStream.nextIfAvailable(1, SECONDS);
-        assertEquals("event2", secondEvent.getEvent().getPayload().getData().toStringUtf8());
+        assertEquals(EVENT_PAYLOAD_TWO, secondEvent.getEvent().getPayload().getData().toStringUtf8());
         secondStream.close();
     }
 
@@ -284,24 +293,24 @@ class EventHandlingIntegrationTest extends AbstractAxonServerIntegrationTest {
         EventChannel eventChannel = connection1.eventChannel();
         EventChannel publishingEventChannel = connection2.eventChannel();
 
-        publishingEventChannel.appendEvents(MessageFactory.createDomainEvent("event1", "test", 0),
-                                            MessageFactory.createDomainEvent("event2", "test", 1))
+        publishingEventChannel.appendEvents(createDomainEvent(EVENT_PAYLOAD_ONE, AGGREGATE_IDENTIFIER, 0),
+                                            createDomainEvent(EVENT_PAYLOAD_TWO, AGGREGATE_IDENTIFIER, 1))
                               .join();
-        publishingEventChannel.appendSnapshot(MessageFactory.createDomainEvent("snapshot1", "test", 0))
+        publishingEventChannel.appendSnapshot(createDomainEvent("snapshot1", AGGREGATE_IDENTIFIER, 0))
                               .join();
 
-        ResultStream<EventQueryResultEntry> queryResults = eventChannel.queryEvents("", true);
+        ResultStream<EventQueryResultEntry> queryResults = eventChannel.queryEvents(QUERY_EXPRESSION_ALL, LIVE);
         List<EventQueryResultEntry> actualValues = new ArrayList<>();
         EventQueryResultEntry row;
         while ((row = queryResults.nextIfAvailable(500, MILLISECONDS)) != null) {
             actualValues.add(row);
         }
-        assertEquals(new HashSet<>(Arrays.asList("event1", "event2")),
+        assertEquals(new HashSet<>(Arrays.asList(EVENT_PAYLOAD_ONE, EVENT_PAYLOAD_TWO)),
                      actualValues.stream().map(i -> i.getValueAsString("payloadData")).collect(Collectors.toSet()));
         assertNull(queryResults.nextIfAvailable(100, MILLISECONDS));
 
         publishingEventChannel.appendEvents(MessageFactory.createEvent("event3"));
-        assertNotNull(queryResults.nextIfAvailable(100, MILLISECONDS));
+        assertNotNull(queryResults.nextIfAvailable(500, MILLISECONDS));
 
         assertFalse(queryResults.isClosed());
 
@@ -314,19 +323,19 @@ class EventHandlingIntegrationTest extends AbstractAxonServerIntegrationTest {
         EventChannel eventChannel = connection1.eventChannel();
         EventChannel publishingEventChannel = connection2.eventChannel();
 
-        publishingEventChannel.appendEvents(MessageFactory.createDomainEvent("event1", "test", 0),
-                                            MessageFactory.createDomainEvent("event2", "test", 1))
+        publishingEventChannel.appendEvents(createDomainEvent(EVENT_PAYLOAD_ONE, AGGREGATE_IDENTIFIER, 0),
+                                            createDomainEvent(EVENT_PAYLOAD_TWO, AGGREGATE_IDENTIFIER, 1))
                               .join();
-        publishingEventChannel.appendSnapshot(MessageFactory.createDomainEvent("snapshot1", "test", 0))
+        publishingEventChannel.appendSnapshot(createDomainEvent(SNAPSHOT_PAYLOAD, AGGREGATE_IDENTIFIER, 0))
                               .join();
 
-        ResultStream<EventQueryResultEntry> queryResults = eventChannel.queryEvents("", false);
+        ResultStream<EventQueryResultEntry> queryResults = eventChannel.queryEvents(QUERY_EXPRESSION_ALL, NOT_LIVE);
         List<EventQueryResultEntry> actualValues = new ArrayList<>();
         EventQueryResultEntry row;
         while ((row = queryResults.nextIfAvailable(500, MILLISECONDS)) != null) {
             actualValues.add(row);
         }
-        assertEquals(new HashSet<>(Arrays.asList("event1", "event2")),
+        assertEquals(new HashSet<>(Arrays.asList(EVENT_PAYLOAD_ONE, EVENT_PAYLOAD_TWO)),
                      actualValues.stream().map(i -> i.getValueAsString("payloadData")).collect(Collectors.toSet()));
         assertNull(queryResults.nextIfAvailable(100, MILLISECONDS));
 
@@ -339,24 +348,24 @@ class EventHandlingIntegrationTest extends AbstractAxonServerIntegrationTest {
         EventChannel eventChannel = connection1.eventChannel();
         EventChannel publishingEventChannel = connection2.eventChannel();
 
-        publishingEventChannel.appendEvents(MessageFactory.createDomainEvent("event1", "test", 0),
-                                            MessageFactory.createDomainEvent("event2", "test", 1))
+        publishingEventChannel.appendEvents(createDomainEvent(EVENT_PAYLOAD_ONE, AGGREGATE_IDENTIFIER, 0),
+                                            createDomainEvent(EVENT_PAYLOAD_TWO, AGGREGATE_IDENTIFIER, 1))
                               .join();
-        publishingEventChannel.appendSnapshot(MessageFactory.createDomainEvent("snapshot1", "test", 0))
+        publishingEventChannel.appendSnapshot(createDomainEvent(SNAPSHOT_PAYLOAD, AGGREGATE_IDENTIFIER, 0))
                               .join();
 
-        ResultStream<EventQueryResultEntry> queryResults = eventChannel.querySnapshotEvents("", true);
+        ResultStream<EventQueryResultEntry> queryResults = eventChannel.querySnapshotEvents(QUERY_EXPRESSION_ALL, LIVE);
         List<EventQueryResultEntry> actualValues = new ArrayList<>();
         EventQueryResultEntry row;
         while ((row = queryResults.nextIfAvailable(500, MILLISECONDS)) != null) {
             actualValues.add(row);
         }
-        assertEquals(Collections.singleton("snapshot1"),
+        assertEquals(Collections.singleton(SNAPSHOT_PAYLOAD),
                      actualValues.stream().map(i -> i.getValueAsString("payloadData")).collect(Collectors.toSet()));
         assertNull(queryResults.nextIfAvailable(100, MILLISECONDS));
 
-        publishingEventChannel.appendSnapshot(MessageFactory.createDomainEvent("snapshot2", "test", 1));
-        assertNotNull(queryResults.nextIfAvailable(100, MILLISECONDS));
+        publishingEventChannel.appendSnapshot(createDomainEvent("snapshot2", AGGREGATE_IDENTIFIER, 1));
+        assertNotNull(queryResults.nextIfAvailable(500, MILLISECONDS));
 
         assertFalse(queryResults.isClosed());
 
@@ -369,19 +378,20 @@ class EventHandlingIntegrationTest extends AbstractAxonServerIntegrationTest {
         EventChannel eventChannel = connection1.eventChannel();
         EventChannel publishingEventChannel = connection2.eventChannel();
 
-        publishingEventChannel.appendEvents(MessageFactory.createDomainEvent("event1", "test", 0),
-                                            MessageFactory.createDomainEvent("event2", "test", 1))
+        publishingEventChannel.appendEvents(createDomainEvent(EVENT_PAYLOAD_ONE, AGGREGATE_IDENTIFIER, 0),
+                                            createDomainEvent(EVENT_PAYLOAD_TWO, AGGREGATE_IDENTIFIER, 1))
                               .join();
-        publishingEventChannel.appendSnapshot(MessageFactory.createDomainEvent("snapshot1", "test", 0))
+        publishingEventChannel.appendSnapshot(createDomainEvent(SNAPSHOT_PAYLOAD, AGGREGATE_IDENTIFIER, 0))
                               .join();
 
-        ResultStream<EventQueryResultEntry> queryResults = eventChannel.querySnapshotEvents("", false);
+        ResultStream<EventQueryResultEntry> queryResults =
+                eventChannel.querySnapshotEvents(QUERY_EXPRESSION_ALL, NOT_LIVE);
         List<EventQueryResultEntry> actualValues = new ArrayList<>();
         EventQueryResultEntry row;
         while ((row = queryResults.nextIfAvailable(500, MILLISECONDS)) != null) {
             actualValues.add(row);
         }
-        assertEquals(Collections.singleton("snapshot1"),
+        assertEquals(Collections.singleton(SNAPSHOT_PAYLOAD),
                      actualValues.stream().map(i -> i.getValueAsString("payloadData")).collect(Collectors.toSet()));
         assertNull(queryResults.nextIfAvailable(100, MILLISECONDS));
 

@@ -273,12 +273,17 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
         return doQueryEvent(queryExpression, liveStream, true);
     }
 
-    private ResultStream<EventQueryResultEntry> doQueryEvent(String queryExpression, boolean liveStream, boolean querySnapshots) {
-        EventQueryResponseStream stream = new EventQueryResponseStream(queryExpression, liveStream, querySnapshots);
+    private ResultStream<EventQueryResultEntry> doQueryEvent(String queryExpression,
+                                                             boolean liveStream,
+                                                             boolean querySnapshots) {
+        EventQueryResponseStream responseStream =
+                new EventQueryResponseStream(queryExpression, liveStream, querySnapshots);
         //noinspection ResultOfMethodCallIgnored
-        eventStore.queryEvents(stream);
-        stream.enableFlowControl();
-        return new MappedResultStream<>(stream, r -> new EventQueryResultEntryAdapter(r, stream.columnNames::get));
+        eventStore.queryEvents(responseStream);
+        responseStream.enableFlowControl();
+        return new MappedResultStream<>(
+                responseStream, r -> new EventQueryResultEntryAdapter(r, responseStream.columnNames::get)
+        );
     }
 
     private AggregateEventStream doGetAggregateStream(GetAggregateEventsRequest request) {
@@ -287,9 +292,16 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
         return buffer;
     }
 
-    private static class EventQueryResponseStream extends AbstractBufferedStream<QueryEventsResponse, QueryEventsRequest> {
+    private static class EventQueryResponseStream
+            extends AbstractBufferedStream<QueryEventsResponse, QueryEventsRequest> {
 
-        private static final QueryEventsResponse TERMINAL_MESSAGE = QueryEventsResponse.newBuilder().setRow(RowResponse.newBuilder().addIdValues(QueryValue.newBuilder().setTextValue("__terminal__"))).build();
+        private static final QueryEventsResponse TERMINAL_MESSAGE =
+                QueryEventsResponse.newBuilder()
+                                   .setRow(
+                                           RowResponse.newBuilder()
+                                                      .addIdValues(QueryValue.newBuilder().setTextValue("__terminal__"))
+                                   )
+                                   .build();
 
         private final String query;
         private final boolean liveStream;
@@ -304,14 +316,14 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
         }
 
         @Override
-        public void onNext(QueryEventsResponse value) {
-            switch (value.getDataCase()) {
+        public void onNext(QueryEventsResponse queryResponse) {
+            switch (queryResponse.getDataCase()) {
                 case COLUMNS:
-                    columnNames.set(value.getColumns().getColumnList());
+                    columnNames.set(queryResponse.getColumns().getColumnList());
                     markConsumed();
                     break;
                 case ROW:
-                    super.onNext(value);
+                    super.onNext(queryResponse);
                     break;
                 default:
                     markConsumed();
@@ -331,7 +343,9 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
 
         @Override
         protected QueryEventsRequest buildFlowControlMessage(FlowControl flowControl) {
-            return QueryEventsRequest.newBuilder().setNumberOfPermits(flowControl.getPermits()).build();
+            return QueryEventsRequest.newBuilder()
+                                     .setNumberOfPermits(flowControl.getPermits())
+                                     .build();
         }
 
         @Override
@@ -399,6 +413,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     private static class EventQueryResultEntryAdapter implements EventQueryResultEntry {
+
         private final QueryEventsResponse response;
         private final Supplier<List<String>> columnNames;
 
@@ -415,17 +430,25 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
         @SuppressWarnings("unchecked")
         @Override
         public <R> R getValue(String column) {
-            return (R) unwrap(response.getRow().getValuesMap().getOrDefault(column, QueryValue.getDefaultInstance()));
+            return (R) unwrap(response.getRow()
+                                      .getValuesMap()
+                                      .getOrDefault(column, QueryValue.getDefaultInstance()));
         }
 
         @Override
         public List<Object> getIdentifiers() {
-            return response.getRow().getIdValuesList().stream().map(this::unwrap).collect(Collectors.toList());
+            return response.getRow()
+                           .getIdValuesList().stream()
+                           .map(this::unwrap)
+                           .collect(Collectors.toList());
         }
 
         @Override
         public List<Object> getSortValues() {
-            return response.getRow().getSortValuesList().stream().map(this::unwrap).collect(Collectors.toList());
+            return response.getRow()
+                           .getSortValuesList().stream()
+                           .map(this::unwrap)
+                           .collect(Collectors.toList());
         }
 
         private Object unwrap(QueryValue value) {

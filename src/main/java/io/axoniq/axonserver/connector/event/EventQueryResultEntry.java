@@ -22,16 +22,18 @@ import java.util.List;
  * Represents a single result from an Event Query.
  * <p>
  * Entries may represent an update to previous entries. The {@link #getIdentifiers()} result will be equal to the entry
- * that is an update for. The number of entries will be the same for all results of the same query
+ * that it is an update for. The number of entries will be the same for all results of the same query.
  * <p>
  * If entries represent an ordered result, the {@link #getSortValues()} will return a list of values to sort on. The
  * number of values will be equal in all entries for the same query.
+ *
+ * @author Allard Buijze
+ * @since 4.5.1
  */
 public interface EventQueryResultEntry {
 
     /**
-     * The list of columns returned by the query. Will return the same value for all result entries of the same
-     * query.
+     * The list of columns returned by the query. Will return the same value for all result entries of the same query.
      *
      * @return the names of the columns returned in this entry
      */
@@ -42,9 +44,8 @@ public interface EventQueryResultEntry {
      * <p>
      * The returned value can be a {@link String}, {@link Double}, {@link Long} or {@link Boolean}
      *
-     * @param column The name of the column to return the data for
+     * @param column the name of the column to return the data for
      * @param <R>    the type to cast the result to
-     *
      * @return the value associated with the given column
      */
     <R> R getValue(String column);
@@ -58,18 +59,17 @@ public interface EventQueryResultEntry {
     List<Object> getIdentifiers();
 
     /**
-     * Returns the list of values to use to compare the order of this entry to other entries. Two
-     * entries with the same sort values cannot be considered equal, but rather don't have a defined order between them.
+     * Returns the list of values to use to compare the order of this entry to other entries. Two entries with the same
+     * sort values cannot be considered equal, but rather don't have a defined order between them.
      *
      * @return the values to compare the order of entries
      */
     List<Object> getSortValues();
 
     /**
-     * Returns the String value associated with the given column
+     * Returns the {@code String} value associated with the given column.
      *
-     * @param column The name of the column to return the value for
-     *
+     * @param column the name of the column to return the value for
      * @return the value associated with the column
      * @throws ClassCastException when the value associated with the column is not a {@code String}
      */
@@ -78,10 +78,9 @@ public interface EventQueryResultEntry {
     }
 
     /**
-     * Returns the {@code long} value associated with the given column
+     * Returns the {@code long} value associated with the given column.
      *
-     * @param column The name of the column to return the value for
-     *
+     * @param column the name of the column to return the value for
      * @return the value associated with the column
      * @throws ClassCastException when the value associated with the column is not a {@code long}
      */
@@ -90,10 +89,9 @@ public interface EventQueryResultEntry {
     }
 
     /**
-     * Returns the {@code double} value associated with the given column
+     * Returns the {@code double} value associated with the given column.
      *
-     * @param column The name of the column to return the value for
-     *
+     * @param column the name of the column to return the value for
      * @return the value associated with the column
      * @throws ClassCastException when the value associated with the column is not a {@code double}
      */
@@ -102,15 +100,13 @@ public interface EventQueryResultEntry {
     }
 
     /**
-     * Returns the {@code boolean} value associated with the given column
+     * Returns the {@code boolean} value associated with the given column.
      *
-     * @param column The name of the column to return the value for
-     *
+     * @param column the name of the column to return the value for
      * @return the value associated with the column
      * @throws ClassCastException when the value associated with the column is not a {@code boolean}
      */
     default boolean getValueAsBoolean(String column) {
         return getValue(column);
     }
-
 }
