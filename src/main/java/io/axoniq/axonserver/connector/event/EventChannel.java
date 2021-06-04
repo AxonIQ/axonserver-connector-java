@@ -16,6 +16,7 @@
 
 package io.axoniq.axonserver.connector.event;
 
+import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.event.Confirmation;
 import io.axoniq.axonserver.grpc.event.Event;
@@ -53,7 +54,7 @@ public interface EventChannel {
      * cancel the schedule, or to reschedule the event to another time.
      *
      * @param scheduleTime The scheduleTime at which to publish the event
-     * @param event   The event to publish
+     * @param event        The event to publish
      * @return a token used to cancel the schedule
      */
     CompletableFuture<String> scheduleEvent(Instant scheduleTime, Event event);
@@ -322,4 +323,26 @@ public interface EventChannel {
      * given {@code instant}
      */
     CompletableFuture<Long> getTokenAt(long instant);
+
+    /**
+     * Queries the Event Store for events using given {@code queryExpression}. The given {@code liveStream} indicates
+     * whether the query should complete when the end of the Event Stream is reached, or if the query should continue
+     * processing events as they are stored.
+     *
+     * @param queryExpression a valid Event Stream Query Language expression
+     * @param liveStream      whether to continue processing live events
+     * @return a ResultStream containing the query results
+     */
+    ResultStream<EventQueryResultEntry> queryEvents(String queryExpression, boolean liveStream);
+
+    /**
+     * Queries the Event Store for snapshot events using given {@code queryExpression}. The given {@code liveStream}
+     * indicates whether the query should complete when the end of the Snapshot Event Stream is reached, or if the query
+     * should continue processing snapshot events as they are stored.
+     *
+     * @param queryExpression a valid Event Stream Query Language expression
+     * @param liveStream      whether to continue processing live snapshot events
+     * @return a ResultStream containing the query results
+     */
+    ResultStream<EventQueryResultEntry> querySnapshotEvents(String queryExpression, boolean liveStream);
 }
