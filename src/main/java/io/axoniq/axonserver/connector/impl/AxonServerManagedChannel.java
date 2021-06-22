@@ -65,6 +65,7 @@ public class AxonServerManagedChannel extends ManagedChannel {
     private final AtomicBoolean suppressErrors = new AtomicBoolean();
     private final Queue<Runnable> connectListeners = new LinkedBlockingQueue<>();
     private final AtomicLong nextAttemptTime = new AtomicLong();
+    private final AtomicLong connectionDeadline = new AtomicLong();
     private final AtomicReference<Exception> lastConnectException = new AtomicReference<>();
     private final AtomicBoolean scheduleGate = new AtomicBoolean();
 
@@ -281,10 +282,10 @@ public class AxonServerManagedChannel extends ManagedChannel {
         ManagedChannel current = activeChannel.get();
 
         ConnectivityState state = current == null ? ConnectivityState.SHUTDOWN : current.getState(true);
+        long now = System.currentTimeMillis();
         switch (state) {
             case TRANSIENT_FAILURE:
             case SHUTDOWN:
-                long now = System.currentTimeMillis();
                 long deadline = nextAttemptTime.getAndUpdate(d -> d > now ? d : now + reconnectInterval);
                 if (deadline > now) {
                     long timeLeft = Math.min(500, deadline - now);
@@ -292,15 +293,32 @@ public class AxonServerManagedChannel extends ManagedChannel {
                     scheduleConnectionCheck(timeLeft);
                     return;
                 }
-                if (state == ConnectivityState.TRANSIENT_FAILURE) {
+
+                if (current != null) {
                     logger.info("Connection to AxonServer lost. Attempting to reconnect...");
                 }
                 createConnection(current);
                 break;
+            case CONNECTING:
+                long connectDeadline = connectionDeadline.getAndUpdate(d -> d > now ? d : now + connectTimeout);
+                // if connectDeadline == 0, then this is the first time we're in CONNECTING state. We should give that
+                // connection a chance. If it's not 0, then a deadline has been set.
+                if (connectDeadline != 0 && connectDeadline < now) {
+                    logger.info("Unable to recover current connection to AxonServer. Attempting to reconnect...");
+                    createConnection(current);
+                } else {
+                    scheduleConnectionCheck(Math.min(500, connectDeadline - now));
+                }
+                break;
             case READY:
+                if (forcePlatformReconnect) {
+                    // by forcing a non-0 value, it will reconnect automatically when the connection switches to
+                    // CONNECTING state from here. When forcePlatformReconnect is enabled, we want this more aggressive
+                    // reconnection
+                    connectionDeadline.set(1);
+                }
                 logger.debug("Connection is {}", state);
                 break;
-            case CONNECTING:
             case IDLE:
             default:
                 logger.debug("Connection is {}, checking again in 50ms", state);
@@ -327,6 +345,8 @@ public class AxonServerManagedChannel extends ManagedChannel {
             if (logger.isInfoEnabled()) {
                 logger.info("Successfully connected to {}", newConnection.authority());
             }
+            // a new connection, so deadlines should be reset
+            connectionDeadline.set(0);
             nextAttemptTime.set(0);
             logger.debug("Registering state change handler");
             newConnection.notifyWhenStateChanged(ConnectivityState.READY, () -> verifyConnectionStateChange(newConnection));
