@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021. AxonIQ
+ * Copyright (c) 2020-2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.Registration;
 import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.connector.ResultStream;
+import io.axoniq.axonserver.connector.impl.ContextConnection;
 import io.axoniq.axonserver.connector.query.impl.QueryChannelImpl;
 import io.axoniq.axonserver.grpc.SerializedObject;
 import io.axoniq.axonserver.grpc.query.QueryRequest;
@@ -40,13 +41,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
+import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertFalseWithin;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertTrueWithin;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
@@ -99,14 +106,15 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         registration.cancel().join();
 
+        Thread.sleep(100); // An ACK will only confirm receipt of the instruction, not the processing of it.
+
         ResultStream<QueryResponse> result = connection2.queryChannel().query(QueryRequest.newBuilder().setQuery("testQuery").build());
 
-        assertWithin(2, TimeUnit.SECONDS, () -> {
+        QueryResponse queryResponse = result.nextIfAvailable(2, TimeUnit.SECONDS);
 
-            QueryResponse queryResponse = result.nextIfAvailable(100, TimeUnit.MILLISECONDS);
-            assertNotNull(queryResponse);
-            assertTrue(queryResponse.hasErrorMessage());
-        });
+        assertNotNull(queryResponse);
+
+        assertTrue(queryResponse.hasErrorMessage());
 
         axonServerProxy.disable();
 
@@ -342,6 +350,93 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
             assertNull(updateHandlerRef.get(), "Expected UpdateHandler to be unregistered");
         });
     }
+
+    @Test
+    void testReconnectFinishesQueriesInTransit() throws InterruptedException {
+        Queue<ReplyChannel<QueryResponse>> queriesInProgress = new ConcurrentLinkedQueue<>();
+        QueryChannel queryChannel = connection1.queryChannel();
+        queryChannel.registerQueryHandler((command, reply) -> {
+            CompletableFuture<QueryResponse> result = new CompletableFuture<>();
+            queriesInProgress.add(reply);
+        }, new QueryDefinition("testQuery", String.class));
+
+        QueryChannel queryChannel2 = connection2.queryChannel();
+
+        assertWithin(1, TimeUnit.SECONDS, () -> connection1.isReady());
+
+        Thread.sleep(100); // this is because #5 (https://github.com/AxonIQ/axonserver-connector-java/issues/5) isn't implemented yet
+
+        List<ResultStream<QueryResponse>> actual = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            actual.add(queryChannel2.query(QueryRequest.newBuilder().setQuery("testQuery").build()));
+        }
+
+        assertWithin(1, TimeUnit.SECONDS, () -> assertEquals(10, queriesInProgress.size()));
+
+        ((ContextConnection) connection1).getManagedChannel().requestReconnect();
+        ((QueryChannelImpl) connection1.queryChannel()).reconnect();
+
+        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
+
+        while (!queriesInProgress.isEmpty()) {
+            doIfNotNull(queriesInProgress.poll(), r -> r.sendLast(QueryResponse.newBuilder().setPayload(SerializedObject.newBuilder().setType("java.lang.String").setData(ByteString.copyFromUtf8("Works"))).build()));
+        }
+
+        List<QueryResponse> actualMessages = actual.stream().map(r -> {
+            try {
+                return r.nextIfAvailable(1, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                return null;
+            }
+        }).collect(Collectors.toList());
+        actualMessages.forEach(r -> {
+            assertFalse(r.hasErrorMessage());
+        });
+
+    }
+
+    @Test
+    void testDisconnectFinishesQueriesInTransit() throws InterruptedException {
+        Queue<ReplyChannel<QueryResponse>> queriesInProgress = new ConcurrentLinkedQueue<>();
+        QueryChannel queryChannel = connection1.queryChannel();
+        queryChannel.registerQueryHandler((command, reply) -> {
+            CompletableFuture<QueryResponse> result = new CompletableFuture<>();
+            queriesInProgress.add(reply);
+        }, new QueryDefinition("testQuery", String.class));
+
+        QueryChannel queryChannel2 = connection2.queryChannel();
+
+        assertWithin(1, TimeUnit.SECONDS, () -> connection1.isReady());
+
+        Thread.sleep(100); // this is because #5 (https://github.com/AxonIQ/axonserver-connector-java/issues/5) isn't implemented yet
+
+        List<ResultStream<QueryResponse>> actual = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            actual.add(queryChannel2.query(QueryRequest.newBuilder().setQuery("testQuery").build()));
+        }
+
+        assertWithin(1, TimeUnit.SECONDS, () -> assertEquals(10, queriesInProgress.size()));
+
+        // a call to disconnect waits for disconnection to be completed. That isn't compatible with our test here.
+        CompletableFuture.runAsync(() -> connection1.disconnect());
+
+        while (!queriesInProgress.isEmpty()) {
+            doIfNotNull(queriesInProgress.poll(), r -> r.sendLast(QueryResponse.newBuilder().setPayload(SerializedObject.newBuilder().setType("java.lang.String").setData(ByteString.copyFromUtf8("Works"))).build()));
+        }
+
+        List<QueryResponse> actualMessages = actual.stream().map(r -> {
+            try {
+                return r.nextIfAvailable(1, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                return fail(e);
+            }
+        }).collect(Collectors.toList());
+        actualMessages.forEach(r -> {
+            assertFalse(r.hasErrorMessage());
+        });
+
+    }
+
 
     @Test
     void testUnsupportedSubscriptionQueryReturnsNoHandler() throws InterruptedException, TimeoutException {
