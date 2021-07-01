@@ -326,6 +326,10 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                 // this is a one-way stream. No need to close it.
             }
         };
+        if ("".equals(query.getMessageIdentifier())) {
+            logger.debug("No message identifier has been set on the query. Adding a random identifier now.");
+            query = query.toBuilder().setMessageIdentifier(UUID.randomUUID().toString()).build();
+        }
         queryServiceStub.query(query, results);
         return results;
     }
