@@ -140,6 +140,7 @@ class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         assertWithin(3, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
 
+        // an ACK is not a guarantee that the registration has also been fully processed...
         Thread.sleep(100);
 
         CompletableFuture<CommandResponse> result = connection2.commandChannel().sendCommand(Command.newBuilder().setName("testCommand").build());
@@ -149,7 +150,7 @@ class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     }
 
     @RepeatedTest(10)
-    void testCommandChannelConsideredConnectedWhenNoHandlersSubscribed() throws IOException, TimeoutException, InterruptedException {
+    void testCommandChannelConsideredReadyWhenNoHandlersSubscribed() throws IOException, TimeoutException, InterruptedException {
         CommandChannelImpl commandChannel = (CommandChannelImpl) connection1.commandChannel();
         // just to make sure that no attempt was made to connect, since there are no handlers
         assertTrue(commandChannel.isReady());
@@ -190,7 +191,8 @@ class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         assertWithin(1, TimeUnit.SECONDS, () -> connection1.isReady());
 
-        Thread.sleep(100); // this is because #5 (https://github.com/AxonIQ/axonserver-connector-java/issues/5) isn't implemented yet
+        // an ACK is not a guarantee that the registration has also been fully processed...
+        Thread.sleep(100);
 
         List<CompletableFuture<CommandResponse>> actual = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
@@ -233,7 +235,8 @@ class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         assertWithin(1, TimeUnit.SECONDS, () -> connection1.isReady());
 
-        Thread.sleep(100); // this is because #5 (https://github.com/AxonIQ/axonserver-connector-java/issues/5) isn't implemented yet
+        // an ACK is not a guarantee that the registration has also been fully processed...
+        Thread.sleep(100);
 
         List<CompletableFuture<CommandResponse>> actual = new ArrayList<>();
         for (int i = 0; i < 10; i++) {

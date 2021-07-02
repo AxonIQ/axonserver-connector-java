@@ -93,6 +93,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
     private final Map<String, Set<Registration>> subscriptionQueries = new ConcurrentHashMap<>();
     private final QueryServiceGrpc.QueryServiceStub queryServiceStub;
     private final Set<CompletableFuture<?>> queriesInProgress = ConcurrentHashMap.newKeySet();
+    private final AtomicBoolean subscriptionsCompleted = new AtomicBoolean(false);
 
     /**
      * Constructs a {@link QueryChannelImpl}.
@@ -200,6 +201,9 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
             logger.debug("QueryChannel for context '{}' is already connected", context);
             return;
         }
+
+        this.subscriptionsCompleted.set(queryHandlers.isEmpty());
+
         IncomingQueryInstructionStream responseObserver = new IncomingQueryInstructionStream(
                 clientIdentification.getClientId(),
                 permits,
@@ -212,13 +216,17 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         queryServiceStub.openStream(responseObserver);
         CallStreamObserver<QueryProviderOutbound> newValue = responseObserver.getInstructionsForPlatform();
 
-        supportedQueries.keySet().forEach(k -> newValue.onNext(
-                buildSubscribeMessage(k.getQueryName(), k.getResultType(), UUID.randomUUID().toString())
-        ));
+        supportedQueries.keySet().stream()
+                        .map(queryDef -> sendInstruction(buildSubscribeMessage(queryDef.getQueryName(), queryDef.getResultType(), UUID.randomUUID().toString()),
+                                                         QueryProviderOutbound::getInstructionId,
+                                                         newValue))
+                        .reduce(CompletableFuture::allOf)
+                        .map(f -> f.exceptionally(e -> null))
+                        .orElse(CompletableFuture.completedFuture(null))
+                        .thenRun(() -> subscriptionsCompleted.set(true));
+
+        logger.info("QueryChannel for context '{}' connected, {} registrations resubscribed", context, queryHandlers.size());
         responseObserver.enableFlowControl();
-        if (outboundQueryStream.get() == newValue) {
-            logger.info("QueryChannel for context '{}' connected, {} registrations resubscribed", context, queryHandlers.size());
-        }
     }
 
     private void onConnectionError(Throwable error) {
@@ -421,7 +429,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
 
     @Override
     public boolean isReady() {
-        return outboundQueryStream.get() != null || queryHandlers.isEmpty();
+        return queryHandlers.isEmpty() || (outboundQueryStream.get() != null && subscriptionsCompleted.get());
     }
 
     private void doHandleQuery(QueryProviderInbound query, ReplyChannel<QueryResponse> responseHandler) {
