@@ -136,6 +136,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         if (registration != null) {
             registration.forEach(Registration::cancel);
         }
+        result.complete();
     }
 
     private void subscribeToQueryUpdates(QueryProviderInbound query, ReplyChannel<QueryProviderOutbound> result) {
@@ -187,6 +188,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                 ).add(registration);
             }
         });
+        result.complete();
     }
 
     @Override
@@ -573,7 +575,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
 
                     @Override
                     public void complete() {
-                        result.sendAck();
+                        result.complete();
                     }
 
                     @Override
