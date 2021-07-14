@@ -64,6 +64,8 @@ public class ContextConnection implements AxonServerConnection {
      * @param connection                   the {@link AxonServerManagedChannel} used to form the connections with
      *                                     AxonServer
      * @param processorInfoUpdateFrequency the update frequency in milliseconds of event processor information
+     * @param commandPermits               the number of permits for command streams
+     * @param queryPermits                 the number of permits for query streams
      * @param context                      the context this connection belongs to
      */
     public ContextConnection(ClientIdentification clientIdentification,
