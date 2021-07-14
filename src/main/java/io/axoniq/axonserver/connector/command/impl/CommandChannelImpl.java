@@ -177,7 +177,10 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
         commandHandlers.entrySet().stream()
                        .map(e -> sendSubscribe(e.getKey(), e.getValue().getLoadFactor(), newValue))
                        .reduce(CompletableFuture::allOf)
-                       .map(cf -> cf.exceptionally(e -> null))
+                       .map(cf -> cf.exceptionally(e -> {
+                           logger.warn("An error occurred while registering command handlers", e);
+                           return null;
+                       }))
                        .orElse(CompletableFuture.completedFuture(null))
                        .thenRun(() -> subscriptionsCompleted.set(true));
 
@@ -203,14 +206,19 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
                                                               .stream()
                                                               .map(this::sendUnsubscribe)
                                                               .reduce(CompletableFuture::allOf)
-                                                              .map(cf -> cf.exceptionally(e -> null))
+                                                              .map(cf -> cf.exceptionally(e -> {
+                                                                  logger.warn("An error occurred while unregistering command handlers", e);
+                                                                  return null;
+                                                              }))
                                                               .orElseGet(() -> CompletableFuture.completedFuture(null));
 
         StreamObserver<CommandProviderOutbound> previousOutbound = outboundCommandStream.getAndSet(null);
 
         unsubscribed
                 .thenCompose(r -> {
-                    logger.info("Waiting for {} commands to be completed", inProgressCommands.size());
+                    if (!inProgressCommands.isEmpty()) {
+                        logger.info("Waiting for {} commands to be completed", inProgressCommands.size());
+                    }
                     return CompletableFuture.allOf(inProgressCommands.stream()
                                                                      .reduce(CompletableFuture::allOf)
                                                                      .map(cf -> cf.exceptionally(e -> null))
@@ -295,8 +303,8 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
                                        .stream()
                                        .anyMatch(pi -> pi.getKey() == ProcessingKey.ROUTING_KEY);
         String messageIdentifier = "".equals(command.getMessageIdentifier())
-                ? UUID.randomUUID().toString()
-                : command.getMessageIdentifier();
+                                   ? UUID.randomUUID().toString()
+                                   : command.getMessageIdentifier();
 
         Command.Builder toSend = Command.newBuilder(command)
                                         .setMessageIdentifier(messageIdentifier)

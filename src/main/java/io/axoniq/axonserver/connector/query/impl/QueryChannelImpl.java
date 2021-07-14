@@ -221,7 +221,10 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                                                          QueryProviderOutbound::getInstructionId,
                                                          newValue))
                         .reduce(CompletableFuture::allOf)
-                        .map(f -> f.exceptionally(e -> null))
+                        .map(cf -> cf.exceptionally(e -> {
+                            logger.warn("An error occurred while registering query handlers", e);
+                            return null;
+                        }))
                         .orElse(CompletableFuture.completedFuture(null))
                         .thenRun(() -> subscriptionsCompleted.set(true));
 
@@ -417,7 +420,10 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                                                          .stream()
                                                          .map(this::sendUnsubscribe)
                                                          .reduce(CompletableFuture::allOf)
-                                                         .map(cf -> cf.exceptionally(e -> null))
+                                                         .map(cf -> cf.exceptionally(e -> {
+                                                             logger.warn("An error occurred while unregistering query handlers", e);
+                                                             return null;
+                                                         }))
                                                          .orElseGet(() -> CompletableFuture.completedFuture(null));
         cancelAllSubscriptionQueries();
         return future;
@@ -437,10 +443,10 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
     }
 
     private void doHandleQuery(QueryRequest query, ReplyChannel<QueryResponse> responseChannel) {
-        CompletableFuture<?> future = new CompletableFuture<>();
-        queriesInProgress.add(future);
-        future.whenComplete((r, e) -> queriesInProgress.remove(future));
-        ReplyChannel<QueryResponse> responseHandler = new CloseAwareReplyChannelAdapter(responseChannel, () -> future.complete(null));
+        CompletableFuture<?> completionHandle = new CompletableFuture<>();
+        queriesInProgress.add(completionHandle);
+        completionHandle.whenComplete((r, e) -> queriesInProgress.remove(completionHandle));
+        ReplyChannel<QueryResponse> responseHandler = new CloseAwareReplyChannelAdapter(responseChannel, () -> completionHandle.complete(null));
         Set<QueryHandler> handlers = queryHandlers.getOrDefault(query.getQuery(), Collections.emptySet());
         if (handlers.isEmpty()) {
             responseHandler.sendNack();
@@ -587,52 +593,6 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         );
     }
 
-    private class IncomingQueryInstructionStream
-            extends AbstractIncomingInstructionStream<QueryProviderInbound, QueryProviderOutbound> {
-
-        public IncomingQueryInstructionStream(String clientId,
-                                              int permits,
-                                              int permitsBatch,
-                                              Consumer<Throwable> disconnectHandler,
-                                              Consumer<CallStreamObserver<QueryProviderOutbound>> beforeStartHandler) {
-            super(clientId, permits, permitsBatch, disconnectHandler, beforeStartHandler);
-        }
-
-        @Override
-        protected QueryProviderOutbound buildFlowControlMessage(FlowControl flowControl) {
-            return QueryProviderOutbound.newBuilder().setFlowControl(flowControl).build();
-        }
-
-        @Override
-        protected QueryProviderOutbound buildAckMessage(InstructionAck ack) {
-            return QueryProviderOutbound.newBuilder().setAck(ack).build();
-        }
-
-        @Override
-        protected String getInstructionId(QueryProviderInbound instruction) {
-            return instruction.getInstructionId();
-        }
-
-        @Override
-        protected InstructionHandler<QueryProviderInbound, QueryProviderOutbound> getHandler(
-                QueryProviderInbound request
-        ) {
-            if (request.getRequestCase() == QueryProviderInbound.RequestCase.SUBSCRIPTION_QUERY_REQUEST) {
-                return instructionHandlers.get(request.getSubscriptionQueryRequest().getRequestCase());
-            }
-            return instructionHandlers.get(request.getRequestCase());
-        }
-
-        @Override
-        protected boolean unregisterOutboundStream(CallStreamObserver<QueryProviderOutbound> expected) {
-            if (outboundQueryStream.compareAndSet(expected, null)) {
-                cancelAllSubscriptionQueries();
-                return true;
-            }
-            return false;
-        }
-    }
-
     private static class CloseAwareReplyChannelAdapter implements ReplyChannel<QueryResponse> {
         private final ReplyChannel<QueryResponse> delegate;
         private final Runnable onClose;
@@ -684,6 +644,52 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         public void completeWithError(ErrorCategory errorCategory, String message) {
             delegate.completeWithError(errorCategory, message);
             onClose.run();
+        }
+    }
+
+    private class IncomingQueryInstructionStream
+            extends AbstractIncomingInstructionStream<QueryProviderInbound, QueryProviderOutbound> {
+
+        public IncomingQueryInstructionStream(String clientId,
+                                              int permits,
+                                              int permitsBatch,
+                                              Consumer<Throwable> disconnectHandler,
+                                              Consumer<CallStreamObserver<QueryProviderOutbound>> beforeStartHandler) {
+            super(clientId, permits, permitsBatch, disconnectHandler, beforeStartHandler);
+        }
+
+        @Override
+        protected QueryProviderOutbound buildFlowControlMessage(FlowControl flowControl) {
+            return QueryProviderOutbound.newBuilder().setFlowControl(flowControl).build();
+        }
+
+        @Override
+        protected QueryProviderOutbound buildAckMessage(InstructionAck ack) {
+            return QueryProviderOutbound.newBuilder().setAck(ack).build();
+        }
+
+        @Override
+        protected String getInstructionId(QueryProviderInbound instruction) {
+            return instruction.getInstructionId();
+        }
+
+        @Override
+        protected InstructionHandler<QueryProviderInbound, QueryProviderOutbound> getHandler(
+                QueryProviderInbound request
+        ) {
+            if (request.getRequestCase() == QueryProviderInbound.RequestCase.SUBSCRIPTION_QUERY_REQUEST) {
+                return instructionHandlers.get(request.getSubscriptionQueryRequest().getRequestCase());
+            }
+            return instructionHandlers.get(request.getRequestCase());
+        }
+
+        @Override
+        protected boolean unregisterOutboundStream(CallStreamObserver<QueryProviderOutbound> expected) {
+            if (outboundQueryStream.compareAndSet(expected, null)) {
+                cancelAllSubscriptionQueries();
+                return true;
+            }
+            return false;
         }
     }
 }

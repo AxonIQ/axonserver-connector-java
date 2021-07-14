@@ -177,7 +177,7 @@ class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
-    void testReconnectFinishesCommandsInTransit() throws InterruptedException {
+    void testReconnectWaitsForCommandsInTransitToFinish() throws InterruptedException {
 
         Queue<CompletableFuture<CommandResponse>> commandsInProgress = new ConcurrentLinkedQueue<>();
         CommandChannel commandChannel = connection1.commandChannel();
@@ -260,6 +260,7 @@ class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
             assertFalse(r.join().hasErrorMessage(), messagesInError + " Commands finished with  in error. In one instance: " + r.join().getErrorMessage().getMessage());
         });
 
+        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(((ContextConnection) connection1).getManagedChannel().isTerminated()));
     }
 
     @Test

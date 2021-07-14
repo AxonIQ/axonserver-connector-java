@@ -435,8 +435,8 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
             assertFalse(r.hasErrorMessage());
         });
 
+        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(((ContextConnection) connection1).getManagedChannel().isTerminated()));
     }
-
 
     @Test
     void testUnsupportedSubscriptionQueryReturnsNoHandler() throws InterruptedException, TimeoutException {
