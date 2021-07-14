@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021. AxonIQ
+ * Copyright (c) 2020-2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -109,7 +109,7 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         List<CompletableFuture<?>> results = new ArrayList<>();
 
-        // 5000 will produce well more messages than available permits.
+        // Ensure more messages are produced than available permits.
         for (int i = 0; i < 1000; i++) {
             SubscriptionQueryResult result = queryChannel2.subscriptionQuery(QueryRequest.newBuilder().setMessageIdentifier(UUID.randomUUID().toString()).setQuery("testQuery").build(), SerializedObject.newBuilder().build(), 100, 10);
             // the initial result may be requested when the subscription query was already closed. Therefore we accept exceptionally completed results.
