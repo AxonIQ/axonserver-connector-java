@@ -57,6 +57,7 @@ import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertFalseWithin;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertTrueWithin;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -68,12 +69,11 @@ import static org.junit.jupiter.api.Assertions.fail;
 class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
     private static final CompletableFuture<Void> COMPLETED_FUTURE = CompletableFuture.completedFuture(null);
-
+    private static final Logger logger = LoggerFactory.getLogger(QueryChannelIntegrationTest.class);
     private AxonServerConnectionFactory connectionFactory1;
     private AxonServerConnection connection1;
     private AxonServerConnectionFactory connectionFactory2;
     private AxonServerConnection connection2;
-    private static final Logger logger = LoggerFactory.getLogger(QueryChannelIntegrationTest.class);
 
     @BeforeEach
     void setUp() {
@@ -81,6 +81,7 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                                                         .connectTimeout(1500, TimeUnit.MILLISECONDS)
                                                         .reconnectInterval(500, TimeUnit.MILLISECONDS)
                                                         .routingServers(axonServerAddress)
+                                                        .queryPermits(100)
                                                         .build();
 
         connection1 = connectionFactory1.connect("default");
@@ -89,6 +90,7 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                                                         .connectTimeout(1500, TimeUnit.MILLISECONDS)
                                                         .reconnectInterval(500, TimeUnit.MILLISECONDS)
                                                         .routingServers(axonServerAddress)
+                                                        .queryPermits(100)
                                                         .build();
         connection2 = connectionFactory2.connect("default");
     }
@@ -155,18 +157,16 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
-    void testSubscriptionQueryDoesNotAllowEmptyMessageId() {
+    void testSubscriptionQueryAllowsEmptyMessageId() {
         QueryChannel queryChannel = connection1.queryChannel();
         QueryRequest queryRequest = QueryRequest.newBuilder().build();
         SerializedObject serializedObject = SerializedObject.newBuilder().build();
-        IllegalArgumentException exception =
-                assertThrows(IllegalArgumentException.class,
-                             () -> queryChannel.subscriptionQuery(queryRequest, serializedObject, 5, 1));
-        assertEquals("QueryRequest must contain message identifier.", exception.getMessage());
+        assertDoesNotThrow(
+                () -> queryChannel.subscriptionQuery(queryRequest, serializedObject, 5, 1));
     }
 
     @RepeatedTest(10)
-    void testQueryChannelConsideredConnectedWhenNoHandlersSubscribed() throws IOException, TimeoutException, InterruptedException {
+    void testQueryChannelConsideredConnectedWhenNoHandlersSubscribed() throws IOException {
         QueryChannelImpl queryChannel = (QueryChannelImpl) connection1.queryChannel();
         // just to make sure that no attempt was made to connect, since there are no handlers
         assertTrue(queryChannel.isReady());
@@ -325,7 +325,7 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                 };
             }
         }, new QueryDefinition("testQuery", "testResult"))
-            .awaitAck(1, TimeUnit.SECONDS);
+                    .awaitAck(1, TimeUnit.SECONDS);
 
         SubscriptionQueryResult subscriptionQuery = connection2.queryChannel().subscriptionQuery(QueryRequest.newBuilder()
                                                                                                              .setMessageIdentifier(subscriptionId)
@@ -333,9 +333,7 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                                                                                                  SerializedObject.newBuilder().setType("update").build(),
                                                                                                  100, 10);
 
-        assertWithin(1, TimeUnit.SECONDS, () -> {
-            assertNotNull(updateHandlerRef.get());
-        });
+        assertWithin(1, TimeUnit.SECONDS, () -> assertNotNull(updateHandlerRef.get()));
 
         updateHandlerRef.get().sendUpdate(QueryUpdate.newBuilder().build());
         updateHandlerRef.get().complete();
