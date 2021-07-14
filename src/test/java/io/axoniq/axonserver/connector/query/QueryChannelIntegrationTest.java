@@ -158,7 +158,7 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     }
 
     @RepeatedTest(10)
-    void testQueryChannelConsideredConnectedWhenNoHandlersSubscribed() throws IOException, TimeoutException, InterruptedException {
+    void testQueryChannelConsideredConnectedWhenNoHandlersSubscribed() throws IOException {
         QueryChannelImpl queryChannel = (QueryChannelImpl) connection1.queryChannel();
         // just to make sure that no attempt was made to connect, since there are no handlers
         assertTrue(queryChannel.isReady());
@@ -325,9 +325,7 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                                                                                                  SerializedObject.newBuilder().setType("update").build(),
                                                                                                  100, 10);
 
-        assertWithin(1, TimeUnit.SECONDS, () -> {
-            assertNotNull(updateHandlerRef.get());
-        });
+        assertWithin(1, TimeUnit.SECONDS, () -> assertNotNull(updateHandlerRef.get()));
 
         updateHandlerRef.get().sendUpdate(QueryUpdate.newBuilder().build());
         updateHandlerRef.get().complete();
