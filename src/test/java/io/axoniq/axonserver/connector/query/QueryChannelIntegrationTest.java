@@ -40,6 +40,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -50,6 +52,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertFalseWithin;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertTrueWithin;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -61,7 +64,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
     private static final CompletableFuture<Void> COMPLETED_FUTURE = CompletableFuture.completedFuture(null);
-
+    private static final Logger logger = LoggerFactory.getLogger(QueryChannelIntegrationTest.class);
     private AxonServerConnectionFactory connectionFactory1;
     private AxonServerConnection connection1;
     private AxonServerConnectionFactory connectionFactory2;
@@ -90,6 +93,35 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     void tearDown() {
         connectionFactory1.shutdown();
         connectionFactory2.shutdown();
+    }
+
+    @Test
+    void testPermitsAreRenewedForSubscriptionQuery() throws Exception {
+        QueryChannel queryChannel = connection1.queryChannel();
+        queryChannel.registerQueryHandler(new SubscriptionQueryHandler(), new QueryDefinition("testQuery", "testResult"))
+                    .awaitAck(1, TimeUnit.SECONDS);
+        queryChannel.registerQueryHandler(new SubscriptionQueryHandler(), new QueryDefinition("testQuery", "testResult"))
+                    .awaitAck(1, TimeUnit.SECONDS);
+
+        QueryChannel queryChannel2 = connection2.queryChannel();
+        queryChannel2.registerQueryHandler(new SubscriptionQueryHandler(), new QueryDefinition("testQuery", "testResult"))
+                     .awaitAck(1, TimeUnit.SECONDS);
+
+        List<CompletableFuture<?>> results = new ArrayList<>();
+
+        // 5000 will produce well more messages than available permits.
+        for (int i = 0; i < 1000; i++) {
+            SubscriptionQueryResult result = queryChannel2.subscriptionQuery(QueryRequest.newBuilder().setMessageIdentifier(UUID.randomUUID().toString()).setQuery("testQuery").build(), SerializedObject.newBuilder().build(), 100, 10);
+            // the initial result may be requested when the subscription query was already closed. Therefore we accept exceptionally completed results.
+            results.add(result.initialResult().exceptionally(e -> null).whenComplete((r, e) -> result.updates().close()));
+        }
+
+        for (CompletableFuture<?> result : results) {
+            assertDoesNotThrow(() -> result.get(10, TimeUnit.SECONDS));
+        }
+
+        SubscriptionQueryResult result = queryChannel2.subscriptionQuery(QueryRequest.newBuilder().setMessageIdentifier(UUID.randomUUID().toString()).setQuery("testQuery").build(), SerializedObject.newBuilder().build(), 100, 10);
+        assertDoesNotThrow(() -> result.initialResult().get(5, TimeUnit.SECONDS));
     }
 
     @Test
@@ -317,7 +349,7 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                 };
             }
         }, new QueryDefinition("testQuery", "testResult"))
-            .awaitAck(1, TimeUnit.SECONDS);
+                    .awaitAck(1, TimeUnit.SECONDS);
 
         SubscriptionQueryResult subscriptionQuery = connection2.queryChannel().subscriptionQuery(QueryRequest.newBuilder()
                                                                                                              .setMessageIdentifier(subscriptionId)
@@ -384,5 +416,19 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
     private void mockHandler(QueryRequest query, ReplyChannel<QueryResponse> responseHandler) {
         responseHandler.sendLast(QueryResponse.newBuilder().setRequestIdentifier(query.getMessageIdentifier()).setPayload(query.getPayload()).build());
+    }
+
+    private class SubscriptionQueryHandler implements QueryHandler {
+
+        @Override
+        public void handle(QueryRequest query, ReplyChannel<QueryResponse> responseHandler) {
+            mockHandler(query, responseHandler);
+        }
+
+        @Override
+        public Registration registerSubscriptionQuery(SubscriptionQuery query, UpdateHandler updateHandler) {
+            updateHandler.sendUpdate(QueryUpdate.newBuilder().build());
+            return () -> CompletableFuture.completedFuture(null);
+        }
     }
 }
