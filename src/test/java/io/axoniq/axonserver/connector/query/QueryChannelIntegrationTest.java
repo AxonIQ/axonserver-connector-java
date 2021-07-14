@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021. AxonIQ
+ * Copyright (c) 2020-2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,6 +50,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertFalseWithin;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertTrueWithin;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -61,12 +62,11 @@ import static org.junit.jupiter.api.Assertions.fail;
 class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
     private static final CompletableFuture<Void> COMPLETED_FUTURE = CompletableFuture.completedFuture(null);
-
+    private static final Logger logger = LoggerFactory.getLogger(QueryChannelIntegrationTest.class);
     private AxonServerConnectionFactory connectionFactory1;
     private AxonServerConnection connection1;
     private AxonServerConnectionFactory connectionFactory2;
     private AxonServerConnection connection2;
-    private static final Logger logger = LoggerFactory.getLogger(QueryChannelIntegrationTest.class);
 
     @BeforeEach
     void setUp() {
@@ -74,6 +74,7 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                                                         .connectTimeout(1500, TimeUnit.MILLISECONDS)
                                                         .reconnectInterval(500, TimeUnit.MILLISECONDS)
                                                         .routingServers(axonServerAddress)
+                                                        .queryPermits(100)
                                                         .build();
 
         connection1 = connectionFactory1.connect("default");
@@ -82,6 +83,7 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                                                         .connectTimeout(1500, TimeUnit.MILLISECONDS)
                                                         .reconnectInterval(500, TimeUnit.MILLISECONDS)
                                                         .routingServers(axonServerAddress)
+                                                        .queryPermits(100)
                                                         .build();
         connection2 = connectionFactory2.connect("default");
     }
@@ -147,14 +149,12 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
-    void testSubscriptionQueryDoesNotAllowEmptyMessageId() {
+    void testSubscriptionQueryAllowsEmptyMessageId() {
         QueryChannel queryChannel = connection1.queryChannel();
         QueryRequest queryRequest = QueryRequest.newBuilder().build();
         SerializedObject serializedObject = SerializedObject.newBuilder().build();
-        IllegalArgumentException exception =
-                assertThrows(IllegalArgumentException.class,
-                             () -> queryChannel.subscriptionQuery(queryRequest, serializedObject, 5, 1));
-        assertEquals("QueryRequest must contain message identifier.", exception.getMessage());
+        assertDoesNotThrow(
+                () -> queryChannel.subscriptionQuery(queryRequest, serializedObject, 5, 1));
     }
 
     @RepeatedTest(10)
@@ -317,7 +317,7 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                 };
             }
         }, new QueryDefinition("testQuery", "testResult"))
-            .awaitAck(1, TimeUnit.SECONDS);
+                    .awaitAck(1, TimeUnit.SECONDS);
 
         SubscriptionQueryResult subscriptionQuery = connection2.queryChannel().subscriptionQuery(QueryRequest.newBuilder()
                                                                                                              .setMessageIdentifier(subscriptionId)

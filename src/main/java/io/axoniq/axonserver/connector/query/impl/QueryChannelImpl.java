@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021. AxonIQ
+ * Copyright (c) 2020-2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -306,6 +306,9 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
 
     @Override
     public ResultStream<QueryResponse> query(QueryRequest query) {
+        if (query.getMessageIdentifier().isEmpty()) {
+            query = query.toBuilder().setMessageIdentifier(UUID.randomUUID().toString()).build();
+        }
         AbstractBufferedStream<QueryResponse, QueryRequest> results = new AbstractBufferedStream<QueryResponse, QueryRequest>(
                 clientIdentification.getClientId(), 32, 8
         ) {
@@ -334,10 +337,13 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                                                      SerializedObject updateResponseType,
                                                      int bufferSize,
                                                      int fetchSize) {
-        if (!ObjectUtils.hasLength(query.getMessageIdentifier())) {
-            throw new IllegalArgumentException("QueryRequest must contain message identifier.");
+        QueryRequest finalQuery;
+        if (query.getMessageIdentifier().isEmpty()) {
+            finalQuery = query.toBuilder().setMessageIdentifier(UUID.randomUUID().toString()).build();
+        } else {
+            finalQuery = query;
         }
-        String subscriptionId = query.getMessageIdentifier();
+        String subscriptionId = finalQuery.getMessageIdentifier();
         CompletableFuture<QueryResponse> initialResultFuture = new CompletableFuture<>();
         SubscriptionQueryStream subscriptionStream = new SubscriptionQueryStream(
                 subscriptionId, initialResultFuture, QueryChannelImpl.this.clientIdentification.getClientId(),
@@ -346,7 +352,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         StreamObserver<SubscriptionQueryRequest> upstream = queryServiceStub.subscription(subscriptionStream);
         subscriptionStream.enableFlowControl();
         SubscriptionQuery subscriptionQuery = SubscriptionQuery.newBuilder()
-                                                               .setQueryRequest(query)
+                                                               .setQueryRequest(finalQuery)
                                                                .setSubscriptionIdentifier(subscriptionId)
                                                                .setUpdateResponseType(updateResponseType)
                                                                .build();
@@ -360,7 +366,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                 if (!initialResultFuture.isDone() && !initialResultRequested.getAndSet(true)) {
                     SubscriptionQuery.Builder initialResultRequest =
                             SubscriptionQuery.newBuilder()
-                                             .setQueryRequest(query)
+                                             .setQueryRequest(finalQuery)
                                              .setSubscriptionIdentifier(subscriptionId);
                     upstream.onNext(SubscriptionQueryRequest.newBuilder()
                                                             .setGetInitialResult(initialResultRequest)

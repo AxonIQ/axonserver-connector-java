@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2020-2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,6 +50,8 @@ public class ContextConnection implements AxonServerConnection {
     private final AtomicReference<QueryChannelImpl> queryChannel = new AtomicReference<>();
     private final ScheduledExecutorService executorService;
     private final AxonServerManagedChannel connection;
+    private final int commandPermits;
+    private final int queryPermits;
     private final String context;
 
     /**
@@ -68,10 +70,14 @@ public class ContextConnection implements AxonServerConnection {
                              ScheduledExecutorService executorService,
                              AxonServerManagedChannel connection,
                              long processorInfoUpdateFrequency,
+                             int commandPermits,
+                             int queryPermits,
                              String context) {
         this.clientIdentification = clientIdentification;
         this.executorService = executorService;
         this.connection = connection;
+        this.commandPermits = commandPermits;
+        this.queryPermits = queryPermits;
         this.context = context;
         this.controlChannel = new ControlChannelImpl(clientIdentification,
                                                      context,
@@ -140,7 +146,7 @@ public class ContextConnection implements AxonServerConnection {
     @Override
     public CommandChannel commandChannel() {
         CommandChannelImpl channel = this.commandChannel.updateAndGet(
-                createIfNull(() -> new CommandChannelImpl(clientIdentification, context, 5000, 2000, executorService, connection))
+                createIfNull(() -> new CommandChannelImpl(clientIdentification, context, commandPermits, commandPermits / 4, executorService, connection))
         );
         return ensureConnected(channel);
     }
@@ -156,7 +162,7 @@ public class ContextConnection implements AxonServerConnection {
     @Override
     public QueryChannel queryChannel() {
         QueryChannelImpl channel = this.queryChannel.updateAndGet(
-                createIfNull(() -> new QueryChannelImpl(clientIdentification, context, 5000, 2000, executorService, connection))
+                createIfNull(() -> new QueryChannelImpl(clientIdentification, context, queryPermits, queryPermits / 4, executorService, connection))
         );
         return ensureConnected(channel);
     }
