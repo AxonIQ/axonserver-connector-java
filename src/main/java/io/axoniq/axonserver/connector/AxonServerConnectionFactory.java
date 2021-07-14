@@ -85,9 +85,9 @@ public class AxonServerConnectionFactory {
     private final boolean suppressDownloadMessage;
     private final ReconnectConfiguration reconnectConfiguration;
     private final long processorInfoUpdateFrequency;
-    private volatile boolean shutdown;
     private final int commandPermits;
     private final int queryPermits;
+    private volatile boolean shutdown;
 
     /**
      * Instantiates an {@link AxonServerConnectionFactory} with the given {@code builder}.
@@ -505,29 +505,34 @@ public class AxonServerConnectionFactory {
         }
 
         /**
-         * Sets the number of messages that a Query Handler may receive before any of them have been processed.
+         * Sets the number of messages that a Query Handler may receive before any of them have been processed. Defaults
+         * to 5000.
+         * <p>
+         * Values lower than 16 will be replaced with 16.
          *
          * @param permits The number of initial permits
          *
          * @return this builder for further configuration
          */
         public Builder queryPermits(int permits) {
-            this.queryPermits = permits;
+            this.queryPermits = Math.max(16, permits);
             return this;
         }
 
         /**
          * Sets the number of messages that a Command Handler may receive before any of them have been processed.
+         * Defaults to 5000.
+         * <p>
+         * Values lower than 16 will be replaced with 16.
          *
          * @param permits The number of initial permits
          *
          * @return this builder for further configuration
          */
         public Builder commandPermits(int permits) {
-            this.commandPermits = permits;
+            this.commandPermits = Math.max(16, permits);
             return this;
         }
-
 
         /**
          * Validates the state of the builder, setting defaults where necessary.
