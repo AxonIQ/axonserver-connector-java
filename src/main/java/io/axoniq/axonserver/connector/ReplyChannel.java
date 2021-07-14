@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2020-2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ public interface ReplyChannel<T> {
 
     /**
      * Sends an receipt acknowledgement if one hasn't been sent yet for this instruction. If not explicitly sent, it
-     * will be send once the {@link #complete()} method is invoked.
+     * will be sent once the {@link #complete()} method is invoked.
      * <p>
      * If the incoming instruction has no instruction ID, this method does nothing.
      */

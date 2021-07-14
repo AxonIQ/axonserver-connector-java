@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2020-2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,10 +83,11 @@ public class AxonServerConnectionFactory {
     private final ScheduledExecutorService executorService;
     private final Function<NettyChannelBuilder, ManagedChannelBuilder<?>> connectionConfig;
     private final boolean suppressDownloadMessage;
-
-    private volatile boolean shutdown;
     private final ReconnectConfiguration reconnectConfiguration;
     private final long processorInfoUpdateFrequency;
+    private final int commandPermits;
+    private final int queryPermits;
+    private volatile boolean shutdown;
 
     /**
      * Instantiates an {@link AxonServerConnectionFactory} with the given {@code builder}.
@@ -109,6 +110,8 @@ public class AxonServerConnectionFactory {
                 TimeUnit.MILLISECONDS
         );
         this.processorInfoUpdateFrequency = builder.processorInfoUpdateFrequency;
+        this.commandPermits = builder.commandPermits;
+        this.queryPermits = builder.queryPermits;
     }
 
     /**
@@ -118,6 +121,7 @@ public class AxonServerConnectionFactory {
      * information and should be the same only for instances of the same application or component.
      *
      * @param componentName The name of the component connecting to AxonServer
+     *
      * @return a builder instance for further configuration of the connector
      * @see #forClient(String, String)
      */
@@ -138,6 +142,7 @@ public class AxonServerConnectionFactory {
      *
      * @param componentName    The name of the component connecting to AxonServer
      * @param clientInstanceId The unique instance identifier for this instance of the component
+     *
      * @return a builder instance for further configuration of the connector
      * @see #forClient(String)
      */
@@ -149,6 +154,7 @@ public class AxonServerConnectionFactory {
      * Connects to the given {@code context} using the settings defined in this ConnectionFactory.
      *
      * @param context The name of the context to connect to
+     *
      * @return a Connection allowing interaction with the mentioned context
      */
     public AxonServerConnection connect(String context) {
@@ -181,6 +187,8 @@ public class AxonServerConnectionFactory {
                         this::createChannel
                 ),
                 processorInfoUpdateFrequency,
+                commandPermits,
+                queryPermits,
                 context
         );
     }
@@ -237,6 +245,8 @@ public class AxonServerConnectionFactory {
         private final String componentName;
         private final String clientInstanceId;
         private final Map<String, String> tags = new HashMap<>();
+        private int queryPermits = 5000;
+        private int commandPermits = 5000;
         private long processorInfoUpdateFrequency = 2000;
         private List<ServerAddress> routingServers;
         private long connectTimeout = 10000;
@@ -270,6 +280,7 @@ public class AxonServerConnectionFactory {
          * Defaults to "localhost:8024".
          *
          * @param serverAddresses The addresses to try to set up the initial connection with.
+         *
          * @return this builder for further configuration
          */
         public Builder routingServers(ServerAddress... serverAddresses) {
@@ -286,6 +297,7 @@ public class AxonServerConnectionFactory {
          *
          * @param interval The amount of time to wait in between connection attempts
          * @param timeUnit The unit in which the interval is expressed
+         *
          * @return this builder for further configuration
          */
         public Builder reconnectInterval(long interval, TimeUnit timeUnit) {
@@ -300,6 +312,7 @@ public class AxonServerConnectionFactory {
          *
          * @param timeout  The amount of time to wait for a connection to be established
          * @param timeUnit The unit in which the timout is expressed
+         *
          * @return this builder for further configuration
          */
         public Builder connectTimeout(long timeout, TimeUnit timeUnit) {
@@ -317,6 +330,7 @@ public class AxonServerConnectionFactory {
          * By default, no tags are defined.
          *
          * @param additionalClientTags additional tags that define this client component
+         *
          * @return this builder for further configuration
          */
         public Builder clientTags(Map<String, String> additionalClientTags) {
@@ -335,6 +349,7 @@ public class AxonServerConnectionFactory {
          *
          * @param key   the key of the Tag to configure
          * @param value the value of the Tag to configure
+         *
          * @return this builder for further configuration
          */
         public Builder clientTag(String key, String value) {
@@ -349,6 +364,7 @@ public class AxonServerConnectionFactory {
          * AxonServer.
          *
          * @param token The token to which the required authorizations have been assigned.
+         *
          * @return this builder for further configuration
          */
         public Builder token(String token) {
@@ -375,6 +391,7 @@ public class AxonServerConnectionFactory {
          * Defaults to not using TLS.
          *
          * @param sslContext The context defining TLS parameters
+         *
          * @return this builder for further configuration
          * @see SslContextBuilder#forClient()
          */
@@ -393,6 +410,7 @@ public class AxonServerConnectionFactory {
          * AxonServer instance.
          *
          * @param forceReconnectViaRoutingServers whether to force a reconnect to the Cluster via the RoutingServers.
+         *
          * @return this builder for further configuration
          */
         public Builder forceReconnectViaRoutingServers(boolean forceReconnectViaRoutingServers) {
@@ -408,6 +426,7 @@ public class AxonServerConnectionFactory {
          * Defaults to 2.
          *
          * @param poolSize The number of threads to assign to Connection related activities.
+         *
          * @return this builder for further configuration
          */
         public Builder threadPoolSize(int poolSize) {
@@ -430,6 +449,7 @@ public class AxonServerConnectionFactory {
          * @param interval time without read activity before sending a keepalive ping
          * @param timeout  the time waiting for read activity after sending a keepalive ping
          * @param timeUnit the unit in which the interval and timeout are expressed
+         *
          * @return this builder for further configuration
          */
         public Builder usingKeepAlive(long interval, long timeout, TimeUnit timeUnit, boolean keepAliveWithoutCalls) {
@@ -446,6 +466,7 @@ public class AxonServerConnectionFactory {
          * Default to 4 MiB.
          *
          * @param bytes The number of bytes to limit inbound message to
+         *
          * @return this builder for further configuration
          */
         public Builder maxInboundMessageSize(int bytes) {
@@ -461,6 +482,7 @@ public class AxonServerConnectionFactory {
          * feature.
          *
          * @param customization A function defining the customization to make on the ManagedChannelBuilder
+         *
          * @return this builder for further configuration
          */
         public Builder customize(UnaryOperator<ManagedChannelBuilder<?>> customization) {
@@ -474,10 +496,41 @@ public class AxonServerConnectionFactory {
          *
          * @param interval The interval in which to send status updates
          * @param unit     The unit of time in which the interval is expressed
+         *
          * @return this builder for further configuration
          */
         public Builder processorInfoUpdateFrequency(long interval, TimeUnit unit) {
             this.processorInfoUpdateFrequency = unit.toMillis(interval);
+            return this;
+        }
+
+        /**
+         * Sets the number of messages that a Query Handler may receive before any of them have been processed. Defaults
+         * to 5000.
+         * <p>
+         * Values lower than 16 will be replaced with 16.
+         *
+         * @param permits The number of initial permits
+         *
+         * @return this builder for further configuration
+         */
+        public Builder queryPermits(int permits) {
+            this.queryPermits = Math.max(16, permits);
+            return this;
+        }
+
+        /**
+         * Sets the number of messages that a Command Handler may receive before any of them have been processed.
+         * Defaults to 5000.
+         * <p>
+         * Values lower than 16 will be replaced with 16.
+         *
+         * @param permits The number of initial permits
+         *
+         * @return this builder for further configuration
+         */
+        public Builder commandPermits(int permits) {
+            this.commandPermits = Math.max(16, permits);
             return this;
         }
 

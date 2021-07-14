@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2020-2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -134,6 +134,9 @@ public class SubscriptionQueryStream extends FlowControlledStream<SubscriptionQu
     @Override
     public void onCompleted() {
         updateBuffer.onCompleted();
+        if (!initialResultFuture.isDone()) {
+            initialResultFuture.completeExceptionally(new AxonServerException(ErrorCategory.QUERY_DISPATCH_ERROR, "Subscription query has already been completed", clientId()));
+        }
     }
 
     @Override
