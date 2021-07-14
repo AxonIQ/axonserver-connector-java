@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021. AxonIQ
+ * Copyright (c) 2020-2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,6 +92,8 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
     private final Object queryHandlerMonitor = new Object();
     private final Map<String, Set<Registration>> subscriptionQueries = new ConcurrentHashMap<>();
     private final QueryServiceGrpc.QueryServiceStub queryServiceStub;
+    private final Set<CompletableFuture<?>> queriesInProgress = ConcurrentHashMap.newKeySet();
+    private final AtomicBoolean subscriptionsCompleted = new AtomicBoolean(false);
 
     /**
      * Constructs a {@link QueryChannelImpl}.
@@ -199,6 +201,9 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
             logger.debug("QueryChannel for context '{}' is already connected", context);
             return;
         }
+
+        this.subscriptionsCompleted.set(queryHandlers.isEmpty());
+
         IncomingQueryInstructionStream responseObserver = new IncomingQueryInstructionStream(
                 clientIdentification.getClientId(),
                 permits,
@@ -211,13 +216,20 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         queryServiceStub.openStream(responseObserver);
         CallStreamObserver<QueryProviderOutbound> newValue = responseObserver.getInstructionsForPlatform();
 
-        supportedQueries.keySet().forEach(k -> newValue.onNext(
-                buildSubscribeMessage(k.getQueryName(), k.getResultType(), UUID.randomUUID().toString())
-        ));
+        supportedQueries.keySet().stream()
+                        .map(queryDef -> sendInstruction(buildSubscribeMessage(queryDef.getQueryName(), queryDef.getResultType(), UUID.randomUUID().toString()),
+                                                         QueryProviderOutbound::getInstructionId,
+                                                         newValue))
+                        .reduce(CompletableFuture::allOf)
+                        .map(cf -> cf.exceptionally(e -> {
+                            logger.warn("An error occurred while registering query handlers", e);
+                            return null;
+                        }))
+                        .orElse(CompletableFuture.completedFuture(null))
+                        .thenRun(() -> subscriptionsCompleted.set(true));
+
+        logger.info("QueryChannel for context '{}' connected, {} registrations resubscribed", context, queryHandlers.size());
         responseObserver.enableFlowControl();
-        if (outboundQueryStream.get() == newValue) {
-            logger.info("QueryChannel for context '{}' connected, {} registrations resubscribed", context, queryHandlers.size());
-        }
     }
 
     private void onConnectionError(Throwable error) {
@@ -325,6 +337,10 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                 // this is a one-way stream. No need to close it.
             }
         };
+        if ("".equals(query.getMessageIdentifier())) {
+            logger.debug("No message identifier has been set on the query. Adding a random identifier now.");
+            query = query.toBuilder().setMessageIdentifier(UUID.randomUUID().toString()).build();
+        }
         queryServiceStub.query(query, results);
         return results;
     }
@@ -378,8 +394,18 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
 
     @Override
     public synchronized void disconnect() {
-        doIfNotNull(outboundQueryStream.getAndSet(null), StreamObserver::onCompleted);
-        cancelAllSubscriptionQueries();
+        CompletableFuture<Void> unsubscribed = prepareDisconnect();
+
+        CallStreamObserver<QueryProviderOutbound> previousOutbound = outboundQueryStream.getAndSet(null);
+
+        unsubscribed.thenCompose(stream -> {
+            if (!queriesInProgress.isEmpty()) {
+                logger.info("Disconnect requested. Waiting for {} queries to be completed", queriesInProgress.size());
+            }
+            return CompletableFuture.allOf(queriesInProgress.stream()
+                                                            .reduce(CompletableFuture::allOf)
+                                                            .orElseGet(() -> CompletableFuture.completedFuture(null)));
+        }).thenAccept(previousStream -> doIfNotNull(previousOutbound, StreamObserver::onCompleted));
     }
 
     @Override
@@ -394,6 +420,10 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                                                          .stream()
                                                          .map(this::sendUnsubscribe)
                                                          .reduce(CompletableFuture::allOf)
+                                                         .map(cf -> cf.exceptionally(e -> {
+                                                             logger.warn("An error occurred while unregistering query handlers", e);
+                                                             return null;
+                                                         }))
                                                          .orElseGet(() -> CompletableFuture.completedFuture(null));
         cancelAllSubscriptionQueries();
         return future;
@@ -405,14 +435,18 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
 
     @Override
     public boolean isReady() {
-        return outboundQueryStream.get() != null || queryHandlers.isEmpty();
+        return queryHandlers.isEmpty() || (outboundQueryStream.get() != null && subscriptionsCompleted.get());
     }
 
     private void doHandleQuery(QueryProviderInbound query, ReplyChannel<QueryResponse> responseHandler) {
         doHandleQuery(query.getQuery(), responseHandler);
     }
 
-    private void doHandleQuery(QueryRequest query, ReplyChannel<QueryResponse> responseHandler) {
+    private void doHandleQuery(QueryRequest query, ReplyChannel<QueryResponse> responseChannel) {
+        CompletableFuture<?> completionHandle = new CompletableFuture<>();
+        queriesInProgress.add(completionHandle);
+        completionHandle.whenComplete((r, e) -> queriesInProgress.remove(completionHandle));
+        ReplyChannel<QueryResponse> responseHandler = new CloseAwareReplyChannelAdapter(responseChannel, () -> completionHandle.complete(null));
         Set<QueryHandler> handlers = queryHandlers.getOrDefault(query.getQuery(), Collections.emptySet());
         if (handlers.isEmpty()) {
             responseHandler.sendNack();
@@ -557,6 +591,60 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                     }
                 }
         );
+    }
+
+    private static class CloseAwareReplyChannelAdapter implements ReplyChannel<QueryResponse> {
+        private final ReplyChannel<QueryResponse> delegate;
+        private final Runnable onClose;
+
+        public CloseAwareReplyChannelAdapter(ReplyChannel<QueryResponse> delegate, Runnable onClose) {
+            this.delegate = delegate;
+            this.onClose = onClose;
+        }
+
+        @Override
+        public void send(QueryResponse outboundMessage) {
+            delegate.send(outboundMessage);
+        }
+
+        @Override
+        public void sendLast(QueryResponse outboundMessage) {
+            delegate.sendLast(outboundMessage);
+            onClose.run();
+        }
+
+        @Override
+        public void sendAck() {
+            delegate.sendAck();
+        }
+
+        @Override
+        public void sendNack() {
+            delegate.sendNack();
+        }
+
+        @Override
+        public void sendNack(ErrorMessage errorMessage) {
+            delegate.sendNack(errorMessage);
+        }
+
+        @Override
+        public void complete() {
+            delegate.complete();
+            onClose.run();
+        }
+
+        @Override
+        public void completeWithError(ErrorMessage errorMessage) {
+            delegate.completeWithError(errorMessage);
+            onClose.run();
+        }
+
+        @Override
+        public void completeWithError(ErrorCategory errorCategory, String message) {
+            delegate.completeWithError(errorCategory, message);
+            onClose.run();
+        }
     }
 
     private class IncomingQueryInstructionStream
