@@ -62,7 +62,7 @@ jobs:
       - name: Deploy to Sonatype
         if: success()
         run: |
-          ./mvnw -B -U deploy -DskipTests=true
+          mvn -B -U deploy -DskipTests=true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MAVEN_USERNAME: ${{ secrets.SONATYPE_TOKEN_ID }}
