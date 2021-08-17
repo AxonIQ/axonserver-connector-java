@@ -39,7 +39,6 @@ jobs:
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
             ${{ runner.os }}-maven
-
       - name: Maven operation with Sonar
         if: matrix.sonar-enabled
         run: |
