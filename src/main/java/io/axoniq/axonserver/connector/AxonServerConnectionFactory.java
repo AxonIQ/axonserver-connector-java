@@ -189,7 +189,8 @@ public class AxonServerConnectionFactory {
                 processorInfoUpdateFrequency,
                 commandPermits,
                 queryPermits,
-                context
+                context,
+                cnx -> connections.remove(context, cnx)
         );
     }
 

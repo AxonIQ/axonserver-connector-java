@@ -67,6 +67,7 @@ import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -160,7 +161,26 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
-    public void instructionsWithoutInstructionIdAreCompletedImmediately() {
+    void disconnectFromContextAndReconnectWillReestablishConnection() {
+        client = AxonServerConnectionFactory.forClient(getClass().getSimpleName())
+                                            .routingServers(axonServerAddress)
+                                            .build();
+        AxonServerConnection contextConnection = client.connect("default");
+
+        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(contextConnection.isReady()));
+
+        contextConnection.disconnect();
+
+        assertWithin(1, TimeUnit.SECONDS, () -> assertFalse(contextConnection.isConnected()));
+
+        AxonServerConnection newContextConnection = client.connect("default");
+
+        assertNotSame(contextConnection, newContextConnection);
+        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(newContextConnection.isReady()));
+    }
+
+    @Test
+    void instructionsWithoutInstructionIdAreCompletedImmediately() {
         client = AxonServerConnectionFactory.forClient(getClass().getSimpleName())
                                             .routingServers(axonServerAddress)
                                             .build();
