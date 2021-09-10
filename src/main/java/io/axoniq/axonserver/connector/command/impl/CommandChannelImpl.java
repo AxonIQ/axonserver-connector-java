@@ -202,17 +202,19 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
 
     @Override
     public void disconnect() {
-        CompletableFuture<Void> unsubscribed = commandHandlers.keySet()
-                                                              .stream()
-                                                              .map(this::sendUnsubscribe)
-                                                              .reduce(CompletableFuture::allOf)
-                                                              .map(cf -> cf.exceptionally(e -> {
-                                                                  logger.warn("An error occurred while unregistering command handlers", e);
-                                                                  return null;
-                                                              }))
-                                                              .orElseGet(() -> CompletableFuture.completedFuture(null));
-
         StreamObserver<CommandProviderOutbound> previousOutbound = outboundCommandStream.getAndSet(null);
+
+        CompletableFuture<Void> unsubscribed = previousOutbound == null
+                                               ? CompletableFuture.completedFuture(null)
+                                               : commandHandlers.keySet()
+                                                                .stream()
+                                                                .map(commandName -> sendUnsubscribe(commandName, previousOutbound))
+                                                                .reduce(CompletableFuture::allOf)
+                                                                .map(cf -> cf.exceptionally(e -> {
+                                                                    logger.warn("An error occurred while unregistering command handlers", e);
+                                                                    return null;
+                                                                }))
+                                                                .orElseGet(() -> CompletableFuture.completedFuture(null));
 
         unsubscribed
                 .thenCompose(r -> {
@@ -272,7 +274,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
         for (String commandName : commandNames) {
             if (commandHandlers.get(commandName) == handler) {
                 logger.info("Unregistered handler for command '{}' in context '{}'", commandName, context);
-                CompletableFuture<Void> result = sendUnsubscribe(commandName)
+                CompletableFuture<Void> result = sendUnsubscribe(commandName, outboundCommandStream.get())
                         .thenRun(() -> commandHandlers.remove(commandName, handler));
                 future = CompletableFuture.allOf(future, result);
             }
@@ -280,7 +282,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
         return future;
     }
 
-    private CompletableFuture<Void> sendUnsubscribe(String commandName) {
+    private CompletableFuture<Void> sendUnsubscribe(String commandName, StreamObserver<CommandProviderOutbound> outbound) {
         String instructionId = UUID.randomUUID().toString();
         CommandSubscription unsubscribeMessage =
                 CommandSubscription.newBuilder()
@@ -294,7 +296,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
                                                       .setUnsubscribe(unsubscribeMessage)
                                                       .build(),
                                CommandProviderOutbound::getInstructionId,
-                               outboundCommandStream.get());
+                               outbound);
     }
 
     @Override
@@ -349,7 +351,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
     public CompletableFuture<Void> prepareDisconnect() {
         return this.commandHandlers.keySet()
                                    .stream()
-                                   .map(this::sendUnsubscribe)
+                                   .map(commandName -> sendUnsubscribe(commandName, outboundCommandStream.get()))
                                    .reduce(CompletableFuture::allOf)
                                    .orElseGet(() -> CompletableFuture.completedFuture(null));
     }
