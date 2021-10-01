@@ -69,6 +69,8 @@ public class ContextConnection implements AxonServerConnection {
      * @param commandPermits               the number of permits for command streams
      * @param queryPermits                 the number of permits for query streams
      * @param context                      the context this connection belongs to
+     * @param onShutdown                   a shutdown hook to invoke whenever this {@link ContextConnection}
+     *                                     disconnects
      */
     public ContextConnection(ClientIdentification clientIdentification,
                              ScheduledExecutorService executorService,
@@ -152,9 +154,14 @@ public class ContextConnection implements AxonServerConnection {
 
     @Override
     public CommandChannel commandChannel() {
-        CommandChannelImpl channel = this.commandChannel.updateAndGet(
-                createIfNull(() -> new CommandChannelImpl(clientIdentification, context, commandPermits, commandPermits / 4, executorService, connection))
-        );
+        CommandChannelImpl channel = this.commandChannel.updateAndGet(createIfNull(
+                () -> new CommandChannelImpl(clientIdentification,
+                                             context,
+                                             commandPermits,
+                                             commandPermits / 4,
+                                             executorService,
+                                             connection)
+        ));
         return ensureConnected(channel);
     }
 
@@ -168,9 +175,14 @@ public class ContextConnection implements AxonServerConnection {
 
     @Override
     public QueryChannel queryChannel() {
-        QueryChannelImpl channel = this.queryChannel.updateAndGet(
-                createIfNull(() -> new QueryChannelImpl(clientIdentification, context, queryPermits, queryPermits / 4, executorService, connection))
-        );
+        QueryChannelImpl channel = this.queryChannel.updateAndGet(createIfNull(
+                () -> new QueryChannelImpl(clientIdentification,
+                                           context,
+                                           queryPermits,
+                                           queryPermits / 4,
+                                           executorService,
+                                           connection)
+        ));
         return ensureConnected(channel);
     }
 
