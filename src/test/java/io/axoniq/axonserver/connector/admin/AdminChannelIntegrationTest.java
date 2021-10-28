@@ -62,7 +62,7 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     @Test
     void testMergeEventProcessor() throws Exception {
         AdminChannel adminChannel = connection.adminChannel();
-        CompletableFuture<Void> accepted = adminChannel.splitEventProcessor("processor", "tokenStore");
+        CompletableFuture<Void> accepted = adminChannel.mergeEventProcessor("processor", "tokenStore");
         accepted.get(1, SECONDS);
         Assertions.assertTrue(accepted.isDone());
     }
