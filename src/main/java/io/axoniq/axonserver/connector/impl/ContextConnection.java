@@ -17,6 +17,8 @@
 package io.axoniq.axonserver.connector.impl;
 
 import io.axoniq.axonserver.connector.AxonServerConnection;
+import io.axoniq.axonserver.connector.admin.AdminChannel;
+import io.axoniq.axonserver.connector.admin.impl.AdminChannelImpl;
 import io.axoniq.axonserver.connector.command.CommandChannel;
 import io.axoniq.axonserver.connector.command.impl.CommandChannelImpl;
 import io.axoniq.axonserver.connector.control.ControlChannel;
@@ -48,6 +50,7 @@ public class ContextConnection implements AxonServerConnection {
     private final AtomicReference<CommandChannelImpl> commandChannel = new AtomicReference<>();
     private final AtomicReference<EventChannelImpl> eventChannel = new AtomicReference<>();
     private final AtomicReference<QueryChannelImpl> queryChannel = new AtomicReference<>();
+    private final AtomicReference<AdminChannelImpl> adminChannel = new AtomicReference<>();
     private final ScheduledExecutorService executorService;
     private final AxonServerManagedChannel connection;
     private final int commandPermits;
@@ -95,6 +98,7 @@ public class ContextConnection implements AxonServerConnection {
         doIfNotNull(queryChannel.get(), QueryChannelImpl::reconnect);
         doIfNotNull(controlChannel, ControlChannelImpl::reconnect);
         doIfNotNull(eventChannel.get(), EventChannelImpl::reconnect);
+        doIfNotNull(adminChannel.get(), AdminChannelImpl::reconnect);
     }
 
     @Override
@@ -108,6 +112,7 @@ public class ContextConnection implements AxonServerConnection {
                 && Optional.ofNullable(commandChannel.get()).map(CommandChannelImpl::isReady).orElse(true)
                 && Optional.ofNullable(queryChannel.get()).map(QueryChannelImpl::isReady).orElse(true)
                 && Optional.ofNullable(eventChannel.get()).map(EventChannelImpl::isReady).orElse(true)
+                && Optional.ofNullable(adminChannel.get()).map(AdminChannelImpl::isReady).orElse(true)
                 && controlChannel.isReady();
     }
 
@@ -122,6 +127,7 @@ public class ContextConnection implements AxonServerConnection {
         doIfNotNull(commandChannel.get(), CommandChannelImpl::disconnect);
         doIfNotNull(queryChannel.get(), QueryChannelImpl::disconnect);
         doIfNotNull(eventChannel.get(), EventChannelImpl::disconnect);
+        doIfNotNull(adminChannel.get(), AdminChannelImpl::disconnect);
         connection.shutdown();
         try {
             if (!connection.awaitTermination(5, TimeUnit.SECONDS)) {
@@ -164,7 +170,20 @@ public class ContextConnection implements AxonServerConnection {
     @Override
     public QueryChannel queryChannel() {
         QueryChannelImpl channel = this.queryChannel.updateAndGet(
-                createIfNull(() -> new QueryChannelImpl(clientIdentification, context, queryPermits, queryPermits / 4, executorService, connection))
+                createIfNull(() -> new QueryChannelImpl(clientIdentification,
+                                                        context,
+                                                        queryPermits,
+                                                        queryPermits / 4,
+                                                        executorService,
+                                                        connection))
+        );
+        return ensureConnected(channel);
+    }
+
+    @Override
+    public AdminChannel adminChannel() {
+        AdminChannelImpl channel = this.adminChannel.updateAndGet(
+                createIfNull(() -> new AdminChannelImpl(clientIdentification, executorService, connection))
         );
         return ensureConnected(channel);
     }
