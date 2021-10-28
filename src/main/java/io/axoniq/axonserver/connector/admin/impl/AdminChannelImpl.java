@@ -58,6 +58,24 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
+    public CompletableFuture<Void> splitEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
+        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
+        CompletableFuture<Void> response = new CompletableFuture<>();
+        CompletableFutureStreamObserver<Empty, Void> responseObserver = new CompletableFutureStreamObserver<>(response);
+        eventProcessorServiceStub.splitEventProcessor(eventProcessorIdentifier, responseObserver);
+        return response;
+    }
+
+    @Override
+    public CompletableFuture<Void> mergeEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
+        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
+        CompletableFuture<Void> response = new CompletableFuture<>();
+        CompletableFutureStreamObserver<Empty, Void> responseObserver = new CompletableFutureStreamObserver<>(response);
+        eventProcessorServiceStub.mergeEventProcessor(eventProcessorIdentifier, responseObserver);
+        return response;
+    }
+
+    @Override
     public void connect() {
         // there is no stream for the admin channel (yet)
     }
