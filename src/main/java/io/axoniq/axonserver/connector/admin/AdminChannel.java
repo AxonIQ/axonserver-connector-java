@@ -21,4 +21,16 @@ public interface AdminChannel {
      * @return a {@link CompletableFuture} that completes when the request has been delivered to AxonServer
      */
     CompletableFuture<Void> pauseEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
+
+    /**
+     * Request to start a specific event processor.
+     * Returns a {@link CompletableFuture} that completes when the request has been received by AxonServer.
+     * This doesn't imply that the event processor has been already started, but only that the request has been properly
+     * delivered.
+     *
+     * @param eventProcessorName   the name of the event processor to start
+     * @param tokenStoreIdentifier the token store identifier of the processor to start
+     * @return a {@link CompletableFuture} that completes when the request has been delivered to AxonServer
+     */
+    CompletableFuture<Void> startEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
 }

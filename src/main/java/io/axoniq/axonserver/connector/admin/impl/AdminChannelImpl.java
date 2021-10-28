@@ -12,6 +12,7 @@ import io.axoniq.axonserver.grpc.control.ClientIdentification;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
+import javax.annotation.Nonnull;
 
 /**
  * {@link AdminChannel} GRPC implementation to allow a client application sending
@@ -32,15 +33,28 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
 
     @Override
     public CompletableFuture<Void> pauseEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
-        EventProcessorIdentifier eventProcessorIdentifier =
-                EventProcessorIdentifier.newBuilder()
-                                        .setProcessorName(eventProcessorName)
-                                        .setTokenStoreIdentifier(tokenStoreIdentifier)
-                                        .build();
+        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
         CompletableFuture<Void> response = new CompletableFuture<>();
         CompletableFutureStreamObserver<Empty, Void> responseObserver = new CompletableFutureStreamObserver<>(response);
         eventProcessorServiceStub.pauseEventProcessor(eventProcessorIdentifier, responseObserver);
         return response;
+    }
+
+    @Override
+    public CompletableFuture<Void> startEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
+        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
+        CompletableFuture<Void> response = new CompletableFuture<>();
+        CompletableFutureStreamObserver<Empty, Void> responseObserver = new CompletableFutureStreamObserver<>(response);
+        eventProcessorServiceStub.startEventProcessor(eventProcessorIdentifier, responseObserver);
+        return response;
+    }
+
+    @Nonnull
+    private EventProcessorIdentifier eventProcessorId(String eventProcessorName, String tokenStoreIdentifier) {
+        return EventProcessorIdentifier.newBuilder()
+                                       .setProcessorName(eventProcessorName)
+                                       .setTokenStoreIdentifier(tokenStoreIdentifier)
+                                       .build();
     }
 
     @Override
