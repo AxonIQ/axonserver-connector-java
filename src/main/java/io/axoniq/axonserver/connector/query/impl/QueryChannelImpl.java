@@ -122,6 +122,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         instructionHandlers.put(SubscriptionQueryRequest.RequestCase.GET_INITIAL_RESULT, this::getInitialResult);
         instructionHandlers.put(SubscriptionQueryRequest.RequestCase.SUBSCRIBE, this::subscribeToQueryUpdates);
         instructionHandlers.put(SubscriptionQueryRequest.RequestCase.UNSUBSCRIBE, this::unsubscribeToQueryUpdates);
+        instructionHandlers.put(QueryProviderInbound.RequestCase.QUERY_COMPLETE, this::completeStreamingQuery);
         queryServiceStub = QueryServiceGrpc.newStub(channel);
     }
 
@@ -188,6 +189,15 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                 ).add(registration);
             }
         });
+        result.complete();
+    }
+
+    private void completeStreamingQuery(QueryProviderInbound complete, ReplyChannel<QueryProviderOutbound> result) {
+        // TODO: 10/28/21 think of edge cases like: 1) receiving client stops 2) network issues 3) AS restarts etc.
+        Runnable listener = queryCompleteListeners.remove(complete.getQueryComplete().getRequestId());
+        if (listener != null) {
+            listener.run();
+        }
         result.complete();
     }
 
@@ -339,7 +349,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
 
             @Override
             public void close() {
-                // this is a one-way stream. No need to close it.
+                outboundStream().cancel("Client cancelled the stream.", null);
             }
         };
         if ("".equals(query.getMessageIdentifier())) {
@@ -435,6 +445,13 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                                                          .orElseGet(() -> CompletableFuture.completedFuture(null));
         cancelAllSubscriptionQueries();
         return future;
+    }
+
+    private final Map<String, Runnable> queryCompleteListeners = new ConcurrentHashMap<>();
+
+    @Override
+    public void registerQueryCompleteListener(String queryId, Runnable listener) {
+        queryCompleteListeners.put(queryId, listener);
     }
 
     private void cancelAllSubscriptionQueries() {
