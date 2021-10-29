@@ -11,7 +11,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
- * Integration tests for {@link io.axoniq.axonserver.connector.admin.impl.AdminChannelImpl}
+ * Integration tests for {@link io.axoniq.axonserver.connector.admin.impl.AdminChannelImpl}.
  *
  * @author Sara Pellegrini
  * @since 4.6.0
