@@ -123,6 +123,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         instructionHandlers.put(SubscriptionQueryRequest.RequestCase.SUBSCRIBE, this::subscribeToQueryUpdates);
         instructionHandlers.put(SubscriptionQueryRequest.RequestCase.UNSUBSCRIBE, this::unsubscribeToQueryUpdates);
         instructionHandlers.put(QueryProviderInbound.RequestCase.QUERY_COMPLETE, this::completeStreamingQuery);
+        instructionHandlers.put(QueryProviderInbound.RequestCase.QUERY_FLOW_CONTROLL, this::flowControlQuery);
         queryServiceStub = QueryServiceGrpc.newStub(channel);
     }
 
@@ -199,6 +200,12 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
             listener.run();
         }
         result.complete();
+    }
+
+    private void flowControlQuery(QueryProviderInbound flowControl, ReplyChannel<QueryProviderOutbound> queryProviderOutboundReplyChannel) {
+        queryQueryFlowControlListener.getOrDefault(flowControl.getQueryFlowControll().getRequestId(), l-> {})
+                .accept(flowControl.getQueryFlowControll().getPermits());
+        queryProviderOutboundReplyChannel.complete();
     }
 
     @Override
@@ -448,10 +455,17 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
     }
 
     private final Map<String, Runnable> queryCompleteListeners = new ConcurrentHashMap<>();
+    private final Map<String, Consumer<Long>> queryQueryFlowControlListener = new ConcurrentHashMap<>();
+
 
     @Override
     public void registerQueryCompleteListener(String queryId, Runnable listener) {
         queryCompleteListeners.put(queryId, listener);
+    }
+
+    @Override
+    public void registerQueryFlowControlListener(String queryId, Consumer<Long> consumer) {
+        queryQueryFlowControlListener.put(queryId, consumer);
     }
 
     private void cancelAllSubscriptionQueries() {

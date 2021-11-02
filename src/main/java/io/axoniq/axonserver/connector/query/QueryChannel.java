@@ -23,6 +23,7 @@ import io.axoniq.axonserver.grpc.query.QueryRequest;
 import io.axoniq.axonserver.grpc.query.QueryResponse;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 /**
  * Communication channel with AxonServer for Query related interactions.
@@ -80,4 +81,12 @@ public interface QueryChannel {
      * @param listener to be invoked when the query is completed
      */
     void registerQueryCompleteListener(String queryId, Runnable listener);
+
+    /**
+     *Todo
+     *
+     * @param queryId  identifier of the query we are interested when is completed
+     * @param listener to be invoked when the query is completed
+     */
+    void registerQueryFlowControlListener(String queryId, Consumer<Long> listener);
 }
