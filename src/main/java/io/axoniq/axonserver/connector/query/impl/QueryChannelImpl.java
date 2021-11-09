@@ -194,7 +194,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
     }
 
     private void completeStreamingQuery(QueryProviderInbound complete, ReplyChannel<QueryProviderOutbound> result) {
-        // TODO: 10/28/21 think of edge cases like: 1) receiving client stops 2) network issues 3) AS restarts etc.
+        queryQueryFlowControlListener.remove(complete.getQueryComplete().getRequestId());
         Runnable listener = queryCompleteListeners.remove(complete.getQueryComplete().getRequestId());
         if (listener != null) {
             listener.run();
