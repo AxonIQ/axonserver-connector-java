@@ -203,7 +203,8 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
     }
 
     private void flowControlQuery(QueryProviderInbound flowControl, ReplyChannel<QueryProviderOutbound> queryProviderOutboundReplyChannel) {
-        queryQueryFlowControlListener.getOrDefault(flowControl.getQueryFlowControll().getRequestId(), l-> {})
+        queryQueryFlowControlListener.getOrDefault(flowControl.getQueryFlowControll().getRequestId(),
+                        l -> logger.debug("Received flow control message for unknown request id {}", flowControl.getQueryFlowControll().getRequestId()))
                 .accept(flowControl.getQueryFlowControll().getPermits());
         queryProviderOutboundReplyChannel.complete();
     }
