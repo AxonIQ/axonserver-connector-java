@@ -80,7 +80,7 @@ public interface QueryChannel {
      * @param queryId  identifier of the query we are interested when is completed
      * @param listener to be invoked when the query is completed
      */
-    void registerQueryCompleteListener(String queryId, Runnable listener);
+    Registration registerQueryCompleteListener(String queryId, Runnable listener);
 
     /**
      * Registers consumer to accepts number of permits to be invoked when the query {@code queryId} consumer requests more updates.
@@ -89,5 +89,5 @@ public interface QueryChannel {
      * @param queryId  identifier of the query we are interested when is completed
      * @param consumer that accepts number of permits to be invoked when the query consumer requests more updates
      */
-    void registerQueryFlowControlListener(String queryId, Consumer<Long> consumer);
+    Registration registerQueryFlowControlListener(String queryId, Consumer<Long> consumer);
 }

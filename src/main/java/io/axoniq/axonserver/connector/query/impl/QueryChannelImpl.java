@@ -460,13 +460,23 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
 
 
     @Override
-    public void registerQueryCompleteListener(String queryId, Runnable listener) {
+    public Registration registerQueryCompleteListener(String queryId, Runnable listener) {
         queryCompleteListeners.put(queryId, listener);
+
+        return () -> {
+            queryCompleteListeners.remove(queryId);
+            return CompletableFuture.completedFuture(null);
+        };
     }
 
     @Override
-    public void registerQueryFlowControlListener(String queryId, Consumer<Long> consumer) {
+    public Registration registerQueryFlowControlListener(String queryId, Consumer<Long> consumer) {
         queryQueryFlowControlListener.put(queryId, consumer);
+
+        return () -> {
+            queryQueryFlowControlListener.remove(queryId);
+            return CompletableFuture.completedFuture(null);
+        };
     }
 
     private void cancelAllSubscriptionQueries() {
