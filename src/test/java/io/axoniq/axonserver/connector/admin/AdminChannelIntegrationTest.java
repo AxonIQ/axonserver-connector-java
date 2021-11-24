@@ -52,6 +52,7 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
+    @Disabled("To reactivate after the release of AS 4.6.0")
     void testPauseEventProcessor() throws Exception {
         AdminChannel adminChannel = connection.adminChannel();
         CompletableFuture<Void> accepted = adminChannel.pauseEventProcessor("processor", "tokenStore");
@@ -60,6 +61,7 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
+    @Disabled("To reactivate after the release of AS 4.6.0")
     void testStartEventProcessor() throws Exception {
         AdminChannel adminChannel = connection.adminChannel();
         CompletableFuture<Void> accepted = adminChannel.startEventProcessor("processor", "tokenStore");
@@ -68,6 +70,7 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
+    @Disabled("To reactivate after the release of AS 4.6.0")
     void testSplitEventProcessor() throws Exception {
         AdminChannel adminChannel = connection.adminChannel();
         CompletableFuture<Void> accepted = adminChannel.splitEventProcessor("processor", "tokenStore");
@@ -76,6 +79,7 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
+    @Disabled("To reactivate after the release of AS 4.6.0")
     void testMergeEventProcessor() throws Exception {
         AdminChannel adminChannel = connection.adminChannel();
         CompletableFuture<Void> accepted = adminChannel.mergeEventProcessor("processor", "tokenStore");
