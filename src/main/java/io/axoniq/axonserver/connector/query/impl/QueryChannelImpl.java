@@ -123,7 +123,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         instructionHandlers.put(SubscriptionQueryRequest.RequestCase.SUBSCRIBE, this::subscribeToQueryUpdates);
         instructionHandlers.put(SubscriptionQueryRequest.RequestCase.UNSUBSCRIBE, this::unsubscribeToQueryUpdates);
         instructionHandlers.put(QueryProviderInbound.RequestCase.QUERY_COMPLETE, this::completeStreamingQuery);
-        instructionHandlers.put(QueryProviderInbound.RequestCase.QUERY_FLOW_CONTROLL, this::flowControlQuery);
+        instructionHandlers.put(QueryProviderInbound.RequestCase.QUERY_FLOW_CONTROL, this::flowControlQuery);
         queryServiceStub = QueryServiceGrpc.newStub(channel);
     }
 
@@ -203,9 +203,9 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
     }
 
     private void flowControlQuery(QueryProviderInbound flowControl, ReplyChannel<QueryProviderOutbound> queryProviderOutboundReplyChannel) {
-        queryQueryFlowControlListener.getOrDefault(flowControl.getQueryFlowControll().getRequestId(),
-                        l -> logger.debug("Received flow control message for unknown request id {}", flowControl.getQueryFlowControll().getRequestId()))
-                .accept(flowControl.getQueryFlowControll().getPermits());
+        queryQueryFlowControlListener.getOrDefault(flowControl.getQueryFlowControl().getRequestId(),
+                        l -> logger.debug("Received flow control message for unknown request id {}", flowControl.getQueryFlowControl().getRequestId()))
+                .accept(flowControl.getQueryFlowControl().getPermits());
         queryProviderOutboundReplyChannel.complete();
     }
 
