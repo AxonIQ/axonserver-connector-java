@@ -74,19 +74,13 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     private final UserAdminServiceGrpc.UserAdminServiceStub userServiceStub;
 
     public AdminChannelImpl(ClientIdentification clientIdentification,
-                            ScheduledExecutorService executor, AxonServerManagedChannel channel,
-                            ContextAdminServiceGrpc.ContextAdminServiceStub contextServiceStub,
-                            ReplicationGroupAdminServiceGrpc.ReplicationGroupAdminServiceStub replicationGroupServiceStub,
-                            ApplicationAdminServiceGrpc.ApplicationAdminServiceStub applicationServiceStub,
-                            UserAdminServiceGrpc.UserAdminServiceStub userServiceStub) {
+                            ScheduledExecutorService executor, AxonServerManagedChannel channel) {
         super(clientIdentification, executor, channel);
         eventProcessorServiceStub = EventProcessorAdminServiceGrpc.newStub(channel);
-        this.contextServiceStub = contextServiceStub;
-        this.replicationGroupServiceStub = replicationGroupServiceStub;
-        this.applicationServiceStub = applicationServiceStub;
-
-
-        this.userServiceStub = userServiceStub;
+        this.contextServiceStub = ContextAdminServiceGrpc.newStub(channel);
+        this.replicationGroupServiceStub = ReplicationGroupAdminServiceGrpc.newStub(channel);
+        this.applicationServiceStub = ApplicationAdminServiceGrpc.newStub(channel);
+        this.userServiceStub = UserAdminServiceGrpc.newStub(channel);
     }
 
     @Override

@@ -183,11 +183,7 @@ public class ContextConnection implements AxonServerConnection {
     @Override
     public AdminChannel adminChannel() {
         AdminChannelImpl channel = this.adminChannel.updateAndGet(
-                createIfNull(() -> new AdminChannelImpl(clientIdentification, executorService, connection,
-                                                        null,
-                                                        null,
-                                                        null,
-                                                        null))//todo
+                createIfNull(() -> new AdminChannelImpl(clientIdentification, executorService, connection))
         );
         return ensureConnected(channel);
     }
