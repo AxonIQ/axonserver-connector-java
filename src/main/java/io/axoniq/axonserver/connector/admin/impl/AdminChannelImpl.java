@@ -17,15 +17,42 @@
 package io.axoniq.axonserver.connector.admin.impl;
 
 import com.google.protobuf.Empty;
+import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.admin.AdminChannel;
 import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
+import io.axoniq.axonserver.connector.impl.AbstractBufferedStream;
 import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
+import io.axoniq.axonserver.connector.impl.FutureListStreamObserver;
 import io.axoniq.axonserver.connector.impl.FutureStreamObserver;
+import io.axoniq.axonserver.grpc.FlowControl;
+import io.axoniq.axonserver.grpc.admin.ApplicationAdminServiceGrpc;
+import io.axoniq.axonserver.grpc.admin.ApplicationId;
+import io.axoniq.axonserver.grpc.admin.ApplicationOverview;
+import io.axoniq.axonserver.grpc.admin.ApplicationRequest;
+import io.axoniq.axonserver.grpc.admin.ContextAdminServiceGrpc;
+import io.axoniq.axonserver.grpc.admin.ContextOverview;
+import io.axoniq.axonserver.grpc.admin.ContextUpdate;
+import io.axoniq.axonserver.grpc.admin.CreateContextRequest;
+import io.axoniq.axonserver.grpc.admin.CreateOrUpdateUserRequest;
+import io.axoniq.axonserver.grpc.admin.CreateReplicationGroupRequest;
+import io.axoniq.axonserver.grpc.admin.DeleteContextRequest;
+import io.axoniq.axonserver.grpc.admin.DeleteReplicationGroupRequest;
+import io.axoniq.axonserver.grpc.admin.DeleteUserRequest;
 import io.axoniq.axonserver.grpc.admin.EventProcessorAdminServiceGrpc;
 import io.axoniq.axonserver.grpc.admin.EventProcessorAdminServiceGrpc.EventProcessorAdminServiceStub;
 import io.axoniq.axonserver.grpc.admin.EventProcessorIdentifier;
+import io.axoniq.axonserver.grpc.admin.GetContextRequest;
+import io.axoniq.axonserver.grpc.admin.GetReplicationGroupRequest;
+import io.axoniq.axonserver.grpc.admin.JoinReplicationGroup;
+import io.axoniq.axonserver.grpc.admin.LeaveReplicationGroup;
+import io.axoniq.axonserver.grpc.admin.ReplicationGroupAdminServiceGrpc;
+import io.axoniq.axonserver.grpc.admin.ReplicationGroupOverview;
+import io.axoniq.axonserver.grpc.admin.Token;
+import io.axoniq.axonserver.grpc.admin.UserAdminServiceGrpc;
+import io.axoniq.axonserver.grpc.admin.UserOverview;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import javax.annotation.Nonnull;
@@ -35,16 +62,31 @@ import javax.annotation.Nonnull;
  * and receiving administration related messages to and from Axon Server.
  *
  * @author Sara Pellegrini
+ * @author Stefan Dragisic
  * @since 4.6.0
  */
 public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements AdminChannel {
 
     private final EventProcessorAdminServiceStub eventProcessorServiceStub;
+    private final ContextAdminServiceGrpc.ContextAdminServiceStub contextServiceStub;
+    private final ReplicationGroupAdminServiceGrpc.ReplicationGroupAdminServiceStub replicationGroupServiceStub;
+    private final ApplicationAdminServiceGrpc.ApplicationAdminServiceStub applicationServiceStub;
+    private final UserAdminServiceGrpc.UserAdminServiceStub userServiceStub;
 
     public AdminChannelImpl(ClientIdentification clientIdentification,
-                            ScheduledExecutorService executor, AxonServerManagedChannel channel) {
+                            ScheduledExecutorService executor, AxonServerManagedChannel channel,
+                            ContextAdminServiceGrpc.ContextAdminServiceStub contextServiceStub,
+                            ReplicationGroupAdminServiceGrpc.ReplicationGroupAdminServiceStub replicationGroupServiceStub,
+                            ApplicationAdminServiceGrpc.ApplicationAdminServiceStub applicationServiceStub,
+                            UserAdminServiceGrpc.UserAdminServiceStub userServiceStub) {
         super(clientIdentification, executor, channel);
         eventProcessorServiceStub = EventProcessorAdminServiceGrpc.newStub(channel);
+        this.contextServiceStub = contextServiceStub;
+        this.replicationGroupServiceStub = replicationGroupServiceStub;
+        this.applicationServiceStub = applicationServiceStub;
+
+
+        this.userServiceStub = userServiceStub;
     }
 
     @Override
@@ -90,6 +132,171 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
                                        .setTokenStoreIdentifier(tokenStoreIdentifier)
                                        .build();
     }
+
+    @Override
+    public CompletableFuture<Void> createOrUpdateUser(CreateOrUpdateUserRequest request)  {
+        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
+        userServiceStub.createOrUpdateUser(request, responseObserver);
+        return responseObserver.thenAccept(empty -> {
+        });
+    }
+
+    @Override
+    public CompletableFuture<List<UserOverview>> getAllUsers() {
+        FutureListStreamObserver<UserOverview> responseObserver = new FutureListStreamObserver<>();
+        userServiceStub.getUsers(Empty.newBuilder().build(),responseObserver);
+        return responseObserver;
+    }
+
+    @Override
+    public CompletableFuture<Void> deleteUser(String username) {
+        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
+        userServiceStub.deleteUser(DeleteUserRequest.newBuilder().setUserName(username).build(), responseObserver);
+        return responseObserver.thenAccept(empty -> {
+        });
+    }
+
+    @Override
+    public CompletableFuture<Void> createOrUpdateApplication(ApplicationRequest request)  {
+        FutureStreamObserver<Token> responseObserver = new FutureStreamObserver<>(null);
+        applicationServiceStub.createOrUpdateApplication(request, responseObserver);
+        return responseObserver.thenAccept(empty -> {
+        });
+    }
+
+    @Override
+    public CompletableFuture<ApplicationOverview> getApplication(String applicationName)  {
+        FutureStreamObserver<ApplicationOverview> responseObserver = new FutureStreamObserver<>(null);
+        applicationServiceStub.getApplication(ApplicationId.newBuilder().setApplicationName(applicationName).build(), responseObserver);
+        return responseObserver;
+    }
+
+    @Override
+    public CompletableFuture<Token> refreshToken(String applicationName)  {
+        FutureStreamObserver<Token> responseObserver = new FutureStreamObserver<>(null);
+        applicationServiceStub.refreshToken(ApplicationId.newBuilder().setApplicationName(applicationName).build(), responseObserver);
+        return responseObserver;
+    }
+
+    @Override
+    public CompletableFuture<Void> deleteApplication(String applicationName)  {
+        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
+        applicationServiceStub.deleteApplication(ApplicationId.newBuilder().setApplicationName(applicationName).build(), responseObserver);
+        return responseObserver.thenAccept(empty -> {
+        });
+    }
+
+    @Override
+    public CompletableFuture<Void> createContext(CreateContextRequest request)  {
+        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
+        contextServiceStub.createContext(request, responseObserver);
+        return responseObserver.thenAccept(empty -> {
+        });
+    }
+
+    @Override
+    public CompletableFuture<Void> deleteContext(DeleteContextRequest request)  {
+        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
+        contextServiceStub.deleteContext(request, responseObserver);
+        return responseObserver.thenAccept(empty -> {
+        });
+    }
+
+    @Override
+    public CompletableFuture<ContextOverview> getContextOverview(String context)  {
+        FutureStreamObserver<ContextOverview> responseObserver = new FutureStreamObserver<>(null);
+        contextServiceStub.getContext(GetContextRequest.newBuilder().setName(context).build(), responseObserver);
+        return responseObserver;
+    }
+
+    @Override
+    public CompletableFuture<List<ContextOverview>> getAllContexts() {
+        FutureListStreamObserver<ContextOverview> responseObserver = new FutureListStreamObserver<>();
+        contextServiceStub.getContexts(Empty.newBuilder().build(),responseObserver);
+        return responseObserver;
+    }
+
+
+    @Override
+    public ResultStream<ContextUpdate> subscribeContextUpdates() {
+        AbstractBufferedStream<ContextUpdate, Empty> results = new AbstractBufferedStream<ContextUpdate, Empty>(
+                "clientIdentification.getClientId()", 32, 8
+        ) {
+
+            @Override
+            protected Empty buildFlowControlMessage(FlowControl flowControl) {
+                // no app-level flow control available on this request
+                return null;
+            }
+
+            @Override
+            protected ContextUpdate terminalMessage() {
+                return null;
+            }
+
+            @Override
+            public void close() {
+                // this is a one-way stream. No need to close it.
+            }
+        };
+        contextServiceStub.subscribeContextUpdates(Empty.newBuilder().build(), results);
+        return results;
+    }
+
+    public void test() {
+        contextServiceStub.getContexts(Empty.newBuilder().build(),null);
+        contextServiceStub.subscribeContextUpdates(Empty.newBuilder().build(), null);
+    }
+
+    @Override
+    public CompletableFuture<Void> addNodeToReplicationGroup(JoinReplicationGroup request)  {
+        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
+        replicationGroupServiceStub.addNodeToReplicationGroup(request, responseObserver);
+        return responseObserver.thenAccept(empty -> {
+        });
+    }
+
+    @Override
+    public CompletableFuture<Void> createReplicationGroup(CreateReplicationGroupRequest request)  {
+        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
+        replicationGroupServiceStub.createReplicationGroup(request, responseObserver);
+        return responseObserver.thenAccept(empty -> {
+        });
+    }
+
+    @Override
+    public CompletableFuture<Void> deleteReplicationGroup(DeleteReplicationGroupRequest request)  {
+        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
+        replicationGroupServiceStub.deleteReplicationGroup(request, responseObserver);
+        return responseObserver.thenAccept(empty -> {
+        });
+    }
+
+    @Override
+    public CompletableFuture<ReplicationGroupOverview> getReplicationGroup(String replicationGroup)  {
+        FutureStreamObserver<ReplicationGroupOverview> responseObserver = new FutureStreamObserver<>(null);
+        replicationGroupServiceStub.getReplicationGroup(GetReplicationGroupRequest
+                                                                .newBuilder()
+                                                                .setName(replicationGroup)
+                                                                .build(), responseObserver);
+        return responseObserver;
+    }
+
+    @Override
+    public CompletableFuture<Void> removeNodeFromReplicationGroup(LeaveReplicationGroup request)  {
+        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
+        replicationGroupServiceStub.removeNodeFromReplicationGroup(request, responseObserver);
+        return responseObserver.thenAccept(empty -> {
+        });
+    }
+
+    @Override
+    public CompletableFuture<List<ReplicationGroupOverview>> getAllReplicationGroups() {
+        FutureListStreamObserver<ReplicationGroupOverview> responseObserver = new FutureListStreamObserver<>();
+        replicationGroupServiceStub.getReplicationGroups(Empty.newBuilder().build(),responseObserver);
+        return responseObserver;
+    }
+
 
     @Override
     public void connect() {
