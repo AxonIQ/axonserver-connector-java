@@ -151,11 +151,10 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public CompletableFuture<Void> createOrUpdateApplication(ApplicationRequest request)  {
+    public CompletableFuture<Token> createOrUpdateApplication(ApplicationRequest request)  {
         FutureStreamObserver<Token> responseObserver = new FutureStreamObserver<>(null);
         applicationServiceStub.createOrUpdateApplication(request, responseObserver);
-        return responseObserver.thenAccept(empty -> {
-        });
+        return responseObserver;
     }
 
     @Override
@@ -214,7 +213,7 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     @Override
     public ResultStream<ContextUpdate> subscribeContextUpdates() {
         AbstractBufferedStream<ContextUpdate, Empty> results = new AbstractBufferedStream<ContextUpdate, Empty>(
-                "clientIdentification.getClientId()", 32, 8
+                "", 32, 8
         ) {
 
             @Override
@@ -225,7 +224,7 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
 
             @Override
             protected ContextUpdate terminalMessage() {
-                return null;
+                return ContextUpdate.newBuilder().build();
             }
 
             @Override
