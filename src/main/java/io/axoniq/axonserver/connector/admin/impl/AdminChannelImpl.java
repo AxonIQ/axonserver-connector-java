@@ -58,8 +58,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import javax.annotation.Nonnull;
 
 /**
- * {@link AdminChannel} GRPC implementation to allow a client application sending
- * and receiving administration related messages to and from Axon Server.
+ * {@link AdminChannel} GRPC implementation to allow a client application sending and receiving administration related
+ * messages to and from Axon Server.
  *
  * @author Sara Pellegrini
  * @author Stefan Dragisic
@@ -116,7 +116,8 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
         EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
         FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
         eventProcessorServiceStub.mergeEventProcessor(eventProcessorIdentifier, responseObserver);
-        return responseObserver.thenRun(() -> {});
+        return responseObserver.thenRun(() -> {
+        });
     }
 
     @Nonnull
@@ -128,7 +129,7 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public CompletableFuture<Void> createOrUpdateUser(CreateOrUpdateUserRequest request)  {
+    public CompletableFuture<Void> createOrUpdateUser(CreateOrUpdateUserRequest request) {
         FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
         userServiceStub.createOrUpdateUser(request, responseObserver);
         return responseObserver.thenAccept(empty -> {
@@ -138,7 +139,7 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     @Override
     public CompletableFuture<List<UserOverview>> getAllUsers() {
         FutureListStreamObserver<UserOverview> responseObserver = new FutureListStreamObserver<>();
-        userServiceStub.getUsers(Empty.newBuilder().build(),responseObserver);
+        userServiceStub.getUsers(Empty.newBuilder().build(), responseObserver);
         return responseObserver;
     }
 
@@ -151,7 +152,7 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public CompletableFuture<Token> createOrUpdateApplication(ApplicationRequest request)  {
+    public CompletableFuture<Token> createOrUpdateApplication(ApplicationRequest request) {
         FutureStreamObserver<Token> responseObserver = new FutureStreamObserver<>(null);
         applicationServiceStub.createOrUpdateApplication(request, responseObserver);
         return responseObserver;
@@ -160,34 +161,37 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     @Override
     public CompletableFuture<List<ApplicationOverview>> getAllApplications() {
         FutureListStreamObserver<ApplicationOverview> responseObserver = new FutureListStreamObserver<>();
-        applicationServiceStub.getApplications(Empty.newBuilder().build(),responseObserver);
+        applicationServiceStub.getApplications(Empty.newBuilder().build(), responseObserver);
         return responseObserver;
     }
 
     @Override
-    public CompletableFuture<ApplicationOverview> getApplication(String applicationName)  {
+    public CompletableFuture<ApplicationOverview> getApplication(String applicationName) {
         FutureStreamObserver<ApplicationOverview> responseObserver = new FutureStreamObserver<>(null);
-        applicationServiceStub.getApplication(ApplicationId.newBuilder().setApplicationName(applicationName).build(), responseObserver);
+        applicationServiceStub.getApplication(ApplicationId.newBuilder().setApplicationName(applicationName).build(),
+                                              responseObserver);
         return responseObserver;
     }
 
     @Override
-    public CompletableFuture<Token> refreshToken(String applicationName)  {
+    public CompletableFuture<Token> refreshToken(String applicationName) {
         FutureStreamObserver<Token> responseObserver = new FutureStreamObserver<>(null);
-        applicationServiceStub.refreshToken(ApplicationId.newBuilder().setApplicationName(applicationName).build(), responseObserver);
+        applicationServiceStub.refreshToken(ApplicationId.newBuilder().setApplicationName(applicationName).build(),
+                                            responseObserver);
         return responseObserver;
     }
 
     @Override
-    public CompletableFuture<Void> deleteApplication(String applicationName)  {
+    public CompletableFuture<Void> deleteApplication(String applicationName) {
         FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
-        applicationServiceStub.deleteApplication(ApplicationId.newBuilder().setApplicationName(applicationName).build(), responseObserver);
+        applicationServiceStub.deleteApplication(ApplicationId.newBuilder().setApplicationName(applicationName).build(),
+                                                 responseObserver);
         return responseObserver.thenAccept(empty -> {
         });
     }
 
     @Override
-    public CompletableFuture<Void> createContext(CreateContextRequest request)  {
+    public CompletableFuture<Void> createContext(CreateContextRequest request) {
         FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
         contextServiceStub.createContext(request, responseObserver);
         return responseObserver.thenAccept(empty -> {
@@ -195,7 +199,7 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public CompletableFuture<Void> deleteContext(DeleteContextRequest request)  {
+    public CompletableFuture<Void> deleteContext(DeleteContextRequest request) {
         FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
         contextServiceStub.deleteContext(request, responseObserver);
         return responseObserver.thenAccept(empty -> {
@@ -203,7 +207,7 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public CompletableFuture<ContextOverview> getContextOverview(String context)  {
+    public CompletableFuture<ContextOverview> getContextOverview(String context) {
         FutureStreamObserver<ContextOverview> responseObserver = new FutureStreamObserver<>(null);
         contextServiceStub.getContext(GetContextRequest.newBuilder().setName(context).build(), responseObserver);
         return responseObserver;
@@ -212,7 +216,7 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     @Override
     public CompletableFuture<List<ContextOverview>> getAllContexts() {
         FutureListStreamObserver<ContextOverview> responseObserver = new FutureListStreamObserver<>();
-        contextServiceStub.getContexts(Empty.newBuilder().build(),responseObserver);
+        contextServiceStub.getContexts(Empty.newBuilder().build(), responseObserver);
         return responseObserver;
     }
 
@@ -243,13 +247,8 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
         return results;
     }
 
-    public void test() {
-        contextServiceStub.getContexts(Empty.newBuilder().build(),null);
-        contextServiceStub.subscribeContextUpdates(Empty.newBuilder().build(), null);
-    }
-
     @Override
-    public CompletableFuture<Void> addNodeToReplicationGroup(JoinReplicationGroup request)  {
+    public CompletableFuture<Void> addNodeToReplicationGroup(JoinReplicationGroup request) {
         FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
         replicationGroupServiceStub.addNodeToReplicationGroup(request, responseObserver);
         return responseObserver.thenAccept(empty -> {
@@ -257,7 +256,7 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public CompletableFuture<Void> createReplicationGroup(CreateReplicationGroupRequest request)  {
+    public CompletableFuture<Void> createReplicationGroup(CreateReplicationGroupRequest request) {
         FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
         replicationGroupServiceStub.createReplicationGroup(request, responseObserver);
         return responseObserver.thenAccept(empty -> {
@@ -265,7 +264,7 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public CompletableFuture<Void> deleteReplicationGroup(DeleteReplicationGroupRequest request)  {
+    public CompletableFuture<Void> deleteReplicationGroup(DeleteReplicationGroupRequest request) {
         FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
         replicationGroupServiceStub.deleteReplicationGroup(request, responseObserver);
         return responseObserver.thenAccept(empty -> {
@@ -273,7 +272,7 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public CompletableFuture<ReplicationGroupOverview> getReplicationGroup(String replicationGroup)  {
+    public CompletableFuture<ReplicationGroupOverview> getReplicationGroup(String replicationGroup) {
         FutureStreamObserver<ReplicationGroupOverview> responseObserver = new FutureStreamObserver<>(null);
         replicationGroupServiceStub.getReplicationGroup(GetReplicationGroupRequest
                                                                 .newBuilder()
@@ -283,7 +282,7 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public CompletableFuture<Void> removeNodeFromReplicationGroup(LeaveReplicationGroup request)  {
+    public CompletableFuture<Void> removeNodeFromReplicationGroup(LeaveReplicationGroup request) {
         FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
         replicationGroupServiceStub.removeNodeFromReplicationGroup(request, responseObserver);
         return responseObserver.thenAccept(empty -> {
@@ -293,7 +292,7 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     @Override
     public CompletableFuture<List<ReplicationGroupOverview>> getAllReplicationGroups() {
         FutureListStreamObserver<ReplicationGroupOverview> responseObserver = new FutureListStreamObserver<>();
-        replicationGroupServiceStub.getReplicationGroups(Empty.newBuilder().build(),responseObserver);
+        replicationGroupServiceStub.getReplicationGroups(Empty.newBuilder().build(), responseObserver);
         return responseObserver;
     }
 
