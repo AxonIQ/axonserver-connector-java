@@ -158,6 +158,13 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
+    public CompletableFuture<List<ApplicationOverview>> getAllApplications() {
+        FutureListStreamObserver<ApplicationOverview> responseObserver = new FutureListStreamObserver<>();
+        applicationServiceStub.getApplications(Empty.newBuilder().build(),responseObserver);
+        return responseObserver;
+    }
+
+    @Override
     public CompletableFuture<ApplicationOverview> getApplication(String applicationName)  {
         FutureStreamObserver<ApplicationOverview> responseObserver = new FutureStreamObserver<>(null);
         applicationServiceStub.getApplication(ApplicationId.newBuilder().setApplicationName(applicationName).build(), responseObserver);
@@ -211,7 +218,7 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
 
 
     @Override
-    public ResultStream<ContextUpdate> subscribeContextUpdates() {
+    public ResultStream<ContextUpdate> subscribeToContextUpdates() {
         AbstractBufferedStream<ContextUpdate, Empty> results = new AbstractBufferedStream<ContextUpdate, Empty>(
                 "", 32, 8
         ) {
