@@ -197,7 +197,7 @@ public interface AdminChannel {
 
     /**
      * Request to create a replication group.
-     * Returns a {@link CompletableFuture} that completes when the request has been processed by AxonServer.
+     * Returns a {@link CompletableFuture} that completes when the request has been processed by Axon Server.
      *
      * @param request {@link CreateReplicationGroupRequest} to create replication group,
      * containing the replication group name, the node name, role...
