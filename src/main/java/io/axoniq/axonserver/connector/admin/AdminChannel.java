@@ -241,10 +241,10 @@ public interface AdminChannel {
 
     /**
      * Request to remove a node from a replication group.
-     * Returns a {@link CompletableFuture} that completes when the request has been processed by AxonServer.
+     * Returns a {@link CompletableFuture} that completes when the request has been processed by Axon Server.
      *
      * @param request {@link LeaveReplicationGroup} to a node to be removed from replication group
-     * @return a {@link CompletableFuture} that completes when the request has been processed to AxonServer
+     * @return a {@link CompletableFuture} that completes when the request has been processed by Axon Server
      */
     CompletableFuture<Void> removeNodeFromReplicationGroup(LeaveReplicationGroup request);
 
