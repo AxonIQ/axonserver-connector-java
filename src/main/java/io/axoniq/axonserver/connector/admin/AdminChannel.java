@@ -96,7 +96,7 @@ public interface AdminChannel {
      * Returns a {@link CompletableFuture} that completes when the request has been processed by AxonServer.
      *
      * @param request {@link CreateOrUpdateUserRequest} to create the user, containing the username, password and user roles
-     * @return a {@link CompletableFuture} that completes when the request has been processed to AxonServer
+     * @return a {@link CompletableFuture} that completes when the request has been processed by Axon Server
      */
     CompletableFuture<Void> createOrUpdateUser(CreateOrUpdateUserRequest request);
 
