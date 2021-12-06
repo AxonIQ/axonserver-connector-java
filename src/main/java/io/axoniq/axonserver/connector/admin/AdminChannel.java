@@ -184,7 +184,7 @@ public interface AdminChannel {
     /**
      * Request to list all contexts in Axon Server.
      *
-     * @return a {@link CompletableFuture} that contains list of all {@link ContextOverview} in Axon Server.
+     * @return a {@link CompletableFuture} that contains a list of all {@link ContextOverview} in Axon Server.
      */
     CompletableFuture<List<ContextOverview>> getAllContexts();
 
