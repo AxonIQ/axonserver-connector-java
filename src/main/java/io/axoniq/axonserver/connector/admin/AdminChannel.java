@@ -121,7 +121,7 @@ public interface AdminChannel {
      *
      * @param request {@link ApplicationRequest} to create the application
      * @return a {@link CompletableFuture} that contains application {@link Token} and completes
-     * when the request has been processed to AxonServer
+     * when the request has been processed by Axon Server
      */
     CompletableFuture<Token> createOrUpdateApplication(ApplicationRequest request);
 
