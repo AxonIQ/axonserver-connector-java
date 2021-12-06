@@ -67,6 +67,8 @@ import javax.annotation.Nonnull;
  */
 public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements AdminChannel {
 
+    private static final int BUFFER_SIZE = 32;
+    private static final int REFILL_BATCH = 8;
     private final EventProcessorAdminServiceStub eventProcessorServiceStub;
     private final ContextAdminServiceGrpc.ContextAdminServiceStub contextServiceStub;
     private final ReplicationGroupAdminServiceGrpc.ReplicationGroupAdminServiceStub replicationGroupServiceStub;
@@ -224,7 +226,7 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     @Override
     public ResultStream<ContextUpdate> subscribeToContextUpdates() {
         AbstractBufferedStream<ContextUpdate, Empty> results = new AbstractBufferedStream<ContextUpdate, Empty>(
-                "", 32, 8
+                "", BUFFER_SIZE, REFILL_BATCH
         ) {
 
             @Override
@@ -238,10 +240,6 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
                 return ContextUpdate.newBuilder().build();
             }
 
-            @Override
-            public void close() {
-                // this is a one-way stream. No need to close it.
-            }
         };
         contextServiceStub.subscribeContextUpdates(Empty.newBuilder().build(), results);
         return results;
