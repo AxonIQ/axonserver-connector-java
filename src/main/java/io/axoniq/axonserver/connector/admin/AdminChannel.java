@@ -161,7 +161,7 @@ public interface AdminChannel {
      * Returns a {@link CompletableFuture} that completes when the request has been processed by Axon Server.
      *
      * @param request {@link CreateContextRequest} to create the context
-     * @return a {@link CompletableFuture} that completes when the request has been processed to AxonServer
+     * @return a {@link CompletableFuture} that completes when the request has been processed by Axon Server
      */
     CompletableFuture<Void> createContext(CreateContextRequest request);
 
