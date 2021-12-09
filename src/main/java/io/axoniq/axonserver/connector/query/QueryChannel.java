@@ -23,7 +23,6 @@ import io.axoniq.axonserver.grpc.query.QueryRequest;
 import io.axoniq.axonserver.grpc.query.QueryResponse;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 
 /**
  * Communication channel with AxonServer for Query related interactions.
@@ -72,22 +71,4 @@ public interface QueryChannel {
      * @return a {@link CompletableFuture} of {@link Void} to react when all query handlers have been unsubscribed
      */
     CompletableFuture<Void> prepareDisconnect();
-
-    /**
-     * Registers listener that is going to be invoked when query with given {@code queryId} is completed. Once the query
-     * is completed, listener will be removed.
-     *
-     * @param queryId  identifier of the query we are interested when is completed
-     * @param listener to be invoked when the query is completed
-     */
-    Registration registerQueryCompleteListener(String queryId, Runnable listener);
-
-    /**
-     * Registers consumer to accepts number of permits to be invoked when the query {@code queryId} consumer requests more updates.
-     * Once the query is completed, listener will be removed.
-     *
-     * @param queryId  identifier of the query we are interested when is completed
-     * @param consumer that accepts number of permits to be invoked when the query consumer requests more updates
-     */
-    Registration registerQueryFlowControlListener(String queryId, Consumer<Long> consumer);
 }

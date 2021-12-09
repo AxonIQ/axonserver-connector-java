@@ -18,6 +18,7 @@ package io.axoniq.axonserver.connector.query;
 
 import io.axoniq.axonserver.connector.Registration;
 import io.axoniq.axonserver.connector.ReplyChannel;
+import io.axoniq.axonserver.connector.query.impl.NoopFlowControl;
 import io.axoniq.axonserver.grpc.query.QueryRequest;
 import io.axoniq.axonserver.grpc.query.QueryResponse;
 import io.axoniq.axonserver.grpc.query.QueryUpdate;
@@ -41,6 +42,22 @@ public interface QueryHandler {
     void handle(QueryRequest query, ReplyChannel<QueryResponse> responseHandler);
 
     /**
+     * Handle the given {@code query}, using given {@code responseHandler} to send the response(s). It is flow control
+     * aware - messages should be sent via {@code responseHandler} when requested.
+     * <p>
+     * Note that the query <em>must</em> be completed using {@link ReplyChannel#complete()} or {@link
+     * ReplyChannel#sendLast(Object)}.
+     *
+     * @param query the message representing the query request
+     * @param responseHandler the handler to send responses with
+     * @return a {@link FlowControl} to request more responses and also to cancel sending responses
+     */
+    default FlowControl stream(QueryRequest query, ReplyChannel<QueryResponse> responseHandler) {
+        handle(query, responseHandler);
+        return NoopFlowControl.INSTANCE;
+    }
+
+    /**
      * Registers an incoming subscription query request, represented by given {@code query}, using given {@code
      * updateHandler} to send updates when the projection for this query changes.
      * <p>
@@ -54,6 +71,24 @@ public interface QueryHandler {
      */
     default Registration registerSubscriptionQuery(SubscriptionQuery query, UpdateHandler updateHandler) {
         return null;
+    }
+
+    /**
+     * Flow control for queries.
+     */
+    interface FlowControl {
+
+        /**
+         * Requests {@code requested} amount of responses to be sent.
+         *
+         * @param requested number of responses to be sent
+         */
+        void request(long requested);
+
+        /**
+         * Completes response sending.
+         */
+        void complete();
     }
 
     /**
