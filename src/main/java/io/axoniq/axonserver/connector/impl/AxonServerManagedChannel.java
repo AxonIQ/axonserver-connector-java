@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2020-2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -362,7 +362,7 @@ public class AxonServerManagedChannel extends ManagedChannel {
 
     private void verifyConnectionStateChange(ManagedChannel channel) {
         ConnectivityState currentState = channel.getState(false);
-        logger.debug("Connection state changed to {} scheduling connection check.}", currentState);
+        logger.debug("Connection state changed to {} scheduling connection check.", currentState);
         if (currentState != ConnectivityState.SHUTDOWN) {
             logger.debug("Registering new state change handler");
             channel.notifyWhenStateChanged(currentState, () -> verifyConnectionStateChange(channel));
