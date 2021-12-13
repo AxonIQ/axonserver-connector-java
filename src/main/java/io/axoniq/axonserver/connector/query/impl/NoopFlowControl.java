@@ -18,7 +18,7 @@ public enum NoopFlowControl implements QueryHandler.FlowControl {
     }
 
     @Override
-    public void complete() {
+    public void cancel() {
         // noop
     }
 }

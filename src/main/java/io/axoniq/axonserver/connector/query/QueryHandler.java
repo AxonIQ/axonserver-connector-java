@@ -86,9 +86,9 @@ public interface QueryHandler {
         void request(long requested);
 
         /**
-         * Completes response sending.
+         * Cancels response sending.
          */
-        void complete();
+        void cancel();
     }
 
     /**

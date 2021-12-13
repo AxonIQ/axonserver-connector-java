@@ -66,6 +66,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
 
@@ -122,8 +123,8 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         instructionHandlers.put(SubscriptionQueryRequest.RequestCase.GET_INITIAL_RESULT, this::getInitialResult);
         instructionHandlers.put(SubscriptionQueryRequest.RequestCase.SUBSCRIBE, this::subscribeToQueryUpdates);
         instructionHandlers.put(SubscriptionQueryRequest.RequestCase.UNSUBSCRIBE, this::unsubscribeToQueryUpdates);
-        instructionHandlers.put(QueryProviderInbound.RequestCase.QUERY_COMPLETE, this::completeStreamingQuery);
-        instructionHandlers.put(QueryProviderInbound.RequestCase.QUERY_FLOW_CONTROL, this::flowControlQuery);
+        instructionHandlers.put(QueryProviderInbound.RequestCase.QUERY_COMPLETE, this::handleCancelRequest);
+        instructionHandlers.put(QueryProviderInbound.RequestCase.QUERY_FLOW_CONTROL, this::handleFlowControlRequest);
         queryServiceStub = QueryServiceGrpc.newStub(channel);
     }
 
@@ -193,13 +194,13 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         result.complete();
     }
 
-    private void completeStreamingQuery(QueryProviderInbound complete, ReplyChannel<QueryProviderOutbound> result) {
+    private void handleCancelRequest(QueryProviderInbound complete, ReplyChannel<QueryProviderOutbound> result) {
         queriesInProgress.getOrDefault(complete.getQueryComplete().getRequestId(), QueryInProgress.noop())
-                         .complete();
+                         .cancel();
         result.complete();
     }
 
-    private void flowControlQuery(QueryProviderInbound flowControl, ReplyChannel<QueryProviderOutbound> result) {
+    private void handleFlowControlRequest(QueryProviderInbound flowControl, ReplyChannel<QueryProviderOutbound> result) {
         queriesInProgress.getOrDefault(flowControl.getQueryFlowControl().getRequestId(), QueryInProgress.noop())
                          .request(flowControl.getQueryFlowControl().getPermits());
         result.complete();
@@ -424,11 +425,11 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
             if (!queriesInProgress.isEmpty()) {
                 logger.info("Disconnect requested. Waiting for {} queries to be completed", queriesInProgress.size());
             }
-            return CompletableFuture.allOf(queriesInProgress.values()
-                                                            .stream()
-                                                            .map(QueryInProgress::completeAsync)
-                                                            .reduce(CompletableFuture::allOf)
-                                                            .orElseGet(() -> CompletableFuture.completedFuture(null)));
+            return queriesInProgress.values()
+                                    .stream()
+                                    .map(QueryInProgress::whenComplete)
+                                    .reduce(CompletableFuture::allOf)
+                                    .orElseGet(() -> CompletableFuture.completedFuture(null));
         }).thenAccept(previousStream -> doIfNotNull(previousOutbound, StreamObserver::onCompleted));
     }
 
@@ -467,12 +468,14 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
     }
 
     private void doHandleQuery(QueryRequest query, ReplyChannel<QueryResponse> responseChannel) {
-        MultiFlowControl multiFlowControl = new MultiFlowControl();
+        AtomicReference<MultiFlowControl> multiFlowControlRef = new AtomicReference<>(new MultiFlowControl());
         Runnable removeQuery = () -> queriesInProgress.remove(query.getMessageIdentifier());
-        QueryInProgress queryInProgress = new QueryInProgress(removeQuery, multiFlowControl);
-        queriesInProgress.putIfAbsent(query.getMessageIdentifier(), queryInProgress);
+        QueryInProgress queryInProgress = new QueryInProgress(removeQuery, multiFlowControlRef::get);
+        if (queriesInProgress.putIfAbsent(query.getMessageIdentifier(), queryInProgress) != null) {
+            return;
+        }
         ReplyChannel<QueryResponse> responseHandler = new CloseAwareReplyChannelAdapter(responseChannel,
-                                                                                        queryInProgress::complete);
+                                                                                        queryInProgress::cancel);
         Set<QueryHandler> handlers = queryHandlers.getOrDefault(query.getQuery(), Collections.emptySet());
         if (handlers.isEmpty()) {
             responseHandler.sendNack();
@@ -530,7 +533,8 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                     responseHandler.sendAck();
                 }
             };
-            multiFlowControl.add(queryHandler.stream(query, replyChannel));
+            MultiFlowControl flowControl = new MultiFlowControl(queryHandler.stream(query, replyChannel));
+            multiFlowControlRef.accumulateAndGet(flowControl, MultiFlowControl::with);
         });
     }
 
@@ -624,32 +628,38 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
 
     private static class QueryInProgress {
 
-        private final CompletableFuture<?> closeHandler;
-        private final QueryHandler.FlowControl flowControl;
+        private final CompletableFuture<?> cancelHandler;
+        private final Supplier<QueryHandler.FlowControl> flowControlSupplier;
 
         public static QueryInProgress noop() {
-            return new QueryInProgress(() -> { }, NoopFlowControl.INSTANCE);
+            return new QueryInProgress(() -> { }, () -> NoopFlowControl.INSTANCE);
         }
 
-        public QueryInProgress(Runnable closeHandler, QueryHandler.FlowControl flowControl) {
-            this.closeHandler = new CompletableFuture<>();
-            this.flowControl = flowControl;
-            this.closeHandler.whenComplete((r, e) -> {
-                flowControl.complete();
-                closeHandler.run();
+        public QueryInProgress(Runnable cancelHandler, Supplier<QueryHandler.FlowControl> flowControlSupplier) {
+            this.cancelHandler = new CompletableFuture<>();
+            this.flowControlSupplier = flowControlSupplier;
+            this.cancelHandler.whenComplete((r, e) -> {
+                QueryHandler.FlowControl flowControl = flowControlSupplier.get();
+                if (flowControl != null) {
+                    flowControl.cancel();
+                }
+                cancelHandler.run();
             });
         }
 
-        public CompletableFuture<?> completeAsync() {
-            return closeHandler;
+        public CompletableFuture<?> whenComplete() {
+            return cancelHandler;
         }
 
-        public void complete() {
-            completeAsync().complete(null);
+        public void cancel() {
+            whenComplete().complete(null);
         }
 
         public void request(long requested) {
-            flowControl.request(requested);
+            QueryHandler.FlowControl flowControl = flowControlSupplier.get();
+            if (flowControl != null) {
+                flowControl.request(requested);
+            }
         }
     }
 
