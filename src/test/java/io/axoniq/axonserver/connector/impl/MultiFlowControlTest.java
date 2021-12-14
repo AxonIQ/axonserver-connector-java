@@ -28,6 +28,18 @@ class MultiFlowControlTest {
     }
 
     @Test
+    void testRequestOnSingleMultiFlowControl() {
+        QueryHandler.FlowControl flowControl1 = mock(QueryHandler.FlowControl.class);
+        MultiFlowControl multiFlowControl = new MultiFlowControl(flowControl1);
+
+        multiFlowControl.request(16);
+        verify(flowControl1).request(16);
+
+        multiFlowControl.request(5);
+        verify(flowControl1).request(5);
+    }
+
+    @Test
     void testRequestOnNonEmptyMultiFlowControl() {
         QueryHandler.FlowControl flowControl1 = mock(QueryHandler.FlowControl.class);
         QueryHandler.FlowControl flowControl2 = mock(QueryHandler.FlowControl.class);
