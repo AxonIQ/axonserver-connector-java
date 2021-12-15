@@ -18,6 +18,7 @@ package io.axoniq.axonserver.connector;
 
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
  * Interface describing a stream of results to a request. This stream allows for blocking retrieval of elements, as well
@@ -85,6 +86,16 @@ public interface ResultStream<T> extends AutoCloseable {
      *                 {@code null} to disable callbacks
      */
     void onAvailable(Runnable callback);
+
+    /**
+     * Accepts a callback to be invoked when the very first element of the stream is consumed/peeked.
+     *
+     * @param doOnFirstCallback the callback to be invoked when the very first element of the stream is consumed/peeked
+     * @return a {@link ResultStream} with given {@code doOnFirstCallback} attached
+     */
+    default ResultStream<T> doOnFirst(Consumer<T> doOnFirstCallback) {
+        return new DoOnFirstResultStream<>(this, doOnFirstCallback);
+    }
 
     /**
      * Requests the current stream to be closed. It is up to the publishing end of the stream to honor the request.
