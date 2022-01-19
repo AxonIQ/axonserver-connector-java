@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021. AxonIQ
+ * Copyright (c) 2022. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import io.axoniq.axonserver.connector.impl.AbstractBufferedStream;
 import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
 import io.axoniq.axonserver.connector.impl.FutureListStreamObserver;
 import io.axoniq.axonserver.connector.impl.FutureStreamObserver;
+import io.axoniq.axonserver.grpc.Application;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.admin.ApplicationAdminServiceGrpc;
 import io.axoniq.axonserver.grpc.admin.ApplicationId;
@@ -38,6 +39,7 @@ import io.axoniq.axonserver.grpc.admin.CreateReplicationGroupRequest;
 import io.axoniq.axonserver.grpc.admin.DeleteContextRequest;
 import io.axoniq.axonserver.grpc.admin.DeleteReplicationGroupRequest;
 import io.axoniq.axonserver.grpc.admin.DeleteUserRequest;
+import io.axoniq.axonserver.grpc.admin.EventProcessor;
 import io.axoniq.axonserver.grpc.admin.EventProcessorAdminServiceGrpc;
 import io.axoniq.axonserver.grpc.admin.EventProcessorAdminServiceGrpc.EventProcessorAdminServiceStub;
 import io.axoniq.axonserver.grpc.admin.EventProcessorIdentifier;
@@ -69,6 +71,8 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
 
     private static final int BUFFER_SIZE = 32;
     private static final int REFILL_BATCH = 8;
+    private static final Empty EMPTY = Empty.newBuilder().build();
+
     private final EventProcessorAdminServiceStub eventProcessorServiceStub;
     private final ContextAdminServiceGrpc.ContextAdminServiceStub contextServiceStub;
     private final ReplicationGroupAdminServiceGrpc.ReplicationGroupAdminServiceStub replicationGroupServiceStub;
@@ -83,6 +87,48 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
         this.replicationGroupServiceStub = ReplicationGroupAdminServiceGrpc.newStub(channel);
         this.applicationServiceStub = ApplicationAdminServiceGrpc.newStub(channel);
         this.userServiceStub = UserAdminServiceGrpc.newStub(channel);
+    }
+
+    public ResultStream<EventProcessor> eventProcessors() {
+        AbstractBufferedStream<EventProcessor, Empty> results = new AbstractBufferedStream<EventProcessor, Empty>(
+                "", BUFFER_SIZE, REFILL_BATCH
+        ) {
+
+            @Override
+            protected Empty buildFlowControlMessage(FlowControl flowControl) {
+                // no app-level flow control available on this request
+                return null;
+            }
+
+            @Override
+            protected EventProcessor terminalMessage() {
+                return EventProcessor.newBuilder().build();
+            }
+        };
+        eventProcessorServiceStub.getAllEventProcessors(EMPTY, results);
+        return results;
+    }
+
+    public ResultStream<EventProcessor> eventProcessorsByApplication(String application) {
+        Application request = Application.newBuilder().setApplication(application).build();
+
+        AbstractBufferedStream<EventProcessor, Empty> results = new AbstractBufferedStream<EventProcessor, Empty>(
+                "", BUFFER_SIZE, REFILL_BATCH
+        ) {
+
+            @Override
+            protected Empty buildFlowControlMessage(FlowControl flowControl) {
+                // no app-level flow control available on this request
+                return null;
+            }
+
+            @Override
+            protected EventProcessor terminalMessage() {
+                return EventProcessor.newBuilder().build();
+            }
+        };
+        eventProcessorServiceStub.getEventProcessorsByApplication(request, results);
+        return results;
     }
 
     @Override
@@ -239,7 +285,6 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
             protected ContextUpdate terminalMessage() {
                 return ContextUpdate.newBuilder().build();
             }
-
         };
         contextServiceStub.subscribeContextUpdates(Empty.newBuilder().build(), results);
         return results;
