@@ -20,6 +20,7 @@ import io.axoniq.axonserver.connector.AbstractAxonServerIntegrationTest;
 import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
 import io.axoniq.axonserver.connector.ResultStream;
+import io.axoniq.axonserver.connector.ResultStreamPublisher;
 import io.axoniq.axonserver.connector.control.ProcessorInstructionHandler;
 import io.axoniq.axonserver.grpc.admin.EventProcessor;
 import io.axoniq.axonserver.grpc.admin.EventProcessorInstance;
@@ -27,6 +28,8 @@ import io.axoniq.axonserver.grpc.admin.EventProcessorSegment;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo.SegmentStatus;
 import org.junit.jupiter.api.*;
+import org.reactivestreams.Publisher;
+import reactor.test.StepVerifier;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
@@ -91,6 +94,22 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         assertTrue(emptyResult.isClosed());
     }
 
+    @Test
+    @Disabled("To reactivate after the release of AS 4.6.0")
+    void testStreamEventProcessorStateAsPublisher() {
+        Supplier<EventProcessorInfo> eventProcessorInfoSupplier = this::eventProcessorInfo;
+        ProcessorInstructionHandler handler = mock(ProcessorInstructionHandler.class);
+        connection.controlChannel().registerEventProcessor(processorName, eventProcessorInfoSupplier, handler);
+
+        Publisher<EventProcessor> publisher = new ResultStreamPublisher<>(
+                () -> connection.adminChannel().eventProcessors()
+        );
+
+        StepVerifier.create(publisher)
+                    .expectNextMatches(this::assertEventProcessorInfo)
+                    .verifyComplete();
+    }
+
     private EventProcessorInfo eventProcessorInfo() {
         return EventProcessorInfo.newBuilder()
                                  .setProcessorName(processorName)
@@ -112,7 +131,7 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                                  .build();
     }
 
-    private void assertEventProcessorInfo(EventProcessor eventProcessor) {
+    private boolean assertEventProcessorInfo(EventProcessor eventProcessor) {
         assertEquals(processorName, eventProcessor.getIdentifier().getProcessorName());
         assertEquals(tokenStoreIdentifier, eventProcessor.getIdentifier().getTokenStoreIdentifier());
         assertEquals(mode, eventProcessor.getMode());
@@ -130,6 +149,7 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         assertTrue(segment.getIsReplaying());
         assertTrue(segment.getIsInError());
         assertEquals("admin-client-1", segment.getClaimedBy());
+        return true;
     }
 
 
