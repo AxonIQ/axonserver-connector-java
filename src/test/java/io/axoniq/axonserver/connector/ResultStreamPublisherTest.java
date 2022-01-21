@@ -49,6 +49,12 @@ public class ResultStreamPublisherTest extends PublisherVerification<Long> {
         return new ResultStreamPublisher<>(FailedResultStream::new);
     }
 
+    /**
+     * Tests the rule 17 of Reactive Stream Specification for Subscription.
+     *
+     * @see <a href="https://github.com/reactive-streams/reactive-streams-jvm/tree/v1.0.3#3-subscription-code">
+     * Reactive Stream Specification - Subscription - rule 17</a>
+     */
     @Test
     public void required_spec317_mustSupportACumulativePendingElementCountGreaterThenLongMaxValue() throws Throwable {
         final int totalElements = 5;
