@@ -32,21 +32,21 @@ import java.util.function.Supplier;
  * When subscribed, it generates a new {@link ResultStream} through the provided supplier.
  * The generated {@link ResultStream} provides the elements to be published.
  *
+ * @param <M> the type of element consumed from the underlying stream
  * @author Sara Pellegrini
  * @since 4.6
  */
-public class ResultStreamPublisher<Message> implements Publisher<Message> {
+public class ResultStreamPublisher<M> implements Publisher<M> {
 
     private static final Logger logger = LoggerFactory.getLogger(ResultStreamPublisher.class);
-    private final Supplier<ResultStream<Message>> resultStreamSupplier;
+    private final Supplier<ResultStream<M>> resultStreamSupplier;
 
-
-    public ResultStreamPublisher(Supplier<ResultStream<Message>> resultStreamSupplier) {
+    public ResultStreamPublisher(Supplier<ResultStream<M>> resultStreamSupplier) {
         this.resultStreamSupplier = resultStreamSupplier;
     }
 
     @Override
-    public void subscribe(Subscriber<? super Message> s) {
+    public void subscribe(Subscriber<? super M> s) {
         ResultStreamSubscription subscription = new ResultStreamSubscription(s, resultStreamSupplier.get());
         s.onSubscribe(subscription);
         subscription.afterSubscribe();
@@ -54,16 +54,16 @@ public class ResultStreamPublisher<Message> implements Publisher<Message> {
 
     private class ResultStreamSubscription implements Subscription {
 
-        private final Subscriber<? super Message> subscriber;
-        private final ResultStream<Message> resultStream;
+        private final Subscriber<? super M> subscriber;
+        private final ResultStream<M> resultStream;
         private final AtomicLong requested = new AtomicLong(0);
         private final AtomicBoolean signalGate = new AtomicBoolean(false);
         private final AtomicBoolean cancelled = new AtomicBoolean(false);
         private final AtomicBoolean subscribed = new AtomicBoolean(false);
         private final AtomicBoolean completed = new AtomicBoolean(false);
 
-        private ResultStreamSubscription(Subscriber<? super Message> subscriber,
-                                         ResultStream<Message> resultStream) {
+        private ResultStreamSubscription(Subscriber<? super M> subscriber,
+                                         ResultStream<M> resultStream) {
             this.subscriber = subscriber;
             this.resultStream = resultStream;
             this.resultStream.onAvailable(this::signal);
