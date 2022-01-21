@@ -87,7 +87,7 @@ public class ResultStreamPublisher<Message> implements Publisher<Message> {
         }
 
         private void signal() {
-            while (canSignal() && signalGate.compareAndSet(false, true)) {
+            while (canConsume() && signalGate.compareAndSet(false, true)) {
                 try {
 
                     long requests = requested.get();
@@ -125,7 +125,7 @@ public class ResultStreamPublisher<Message> implements Publisher<Message> {
         }
 
 
-        private boolean canSignal() {
+        private boolean canConsume() {
             try {
                 return subscribed.get() &&
                         !cancelled.get() &&
