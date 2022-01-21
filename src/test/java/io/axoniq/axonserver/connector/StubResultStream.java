@@ -26,11 +26,11 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * @author Sara Pellegrini
  */
-public class FakeResultStream implements ResultStream<Long> {
+public class StubResultStream implements ResultStream<Long> {
 
     private final AtomicLong e;
 
-    public FakeResultStream(long elements) {
+    public StubResultStream(long elements) {
         this.e = new AtomicLong(elements);
     }
 

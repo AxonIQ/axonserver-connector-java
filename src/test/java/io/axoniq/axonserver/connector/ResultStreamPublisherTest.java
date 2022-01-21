@@ -41,7 +41,7 @@ public class ResultStreamPublisherTest extends PublisherVerification<Long> {
 
     @Override
     public Publisher<Long> createPublisher(long elements) {
-        return new ResultStreamPublisher<>(() -> new FakeResultStream(elements));
+        return new ResultStreamPublisher<>(() -> new StubResultStream(elements));
     }
 
     @Override
