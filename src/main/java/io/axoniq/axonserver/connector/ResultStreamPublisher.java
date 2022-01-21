@@ -65,14 +65,12 @@ public class ResultStreamPublisher<M> implements Publisher<M> {
         private final AtomicLong requested = new AtomicLong(0);
         private final AtomicBoolean signalGate = new AtomicBoolean(false);
         private final AtomicBoolean cancelled = new AtomicBoolean(false);
-        private final AtomicBoolean subscribed = new AtomicBoolean(false);
         private final AtomicBoolean completed = new AtomicBoolean(false);
 
         private ResultStreamSubscription(Subscriber<? super M> subscriber,
                                          ResultStream<M> resultStream) {
             this.subscriber = subscriber;
             this.resultStream = resultStream;
-            this.resultStream.onAvailable(this::signal);
         }
 
         @Override
@@ -133,8 +131,7 @@ public class ResultStreamPublisher<M> implements Publisher<M> {
 
         private boolean canConsume() {
             try {
-                return subscribed.get()
-                        && !cancelled.get()
+                return !cancelled.get()
                         && !completed.get()
                         && (resultStream.isClosed() || (resultStream.peek() != null && requested.get() > 0));
             } catch (Exception e) {
@@ -144,7 +141,7 @@ public class ResultStreamPublisher<M> implements Publisher<M> {
         }
 
         private void afterSubscribe() {
-            subscribed.set(true);
+            this.resultStream.onAvailable(this::signal);
             signal();
         }
     }
