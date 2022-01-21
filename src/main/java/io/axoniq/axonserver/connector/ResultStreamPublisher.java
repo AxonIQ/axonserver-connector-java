@@ -34,13 +34,19 @@ import java.util.function.Supplier;
  *
  * @param <M> the type of element consumed from the underlying stream
  * @author Sara Pellegrini
- * @since 4.6
+ * @since 4.6.0
  */
 public class ResultStreamPublisher<M> implements Publisher<M> {
 
     private static final Logger logger = LoggerFactory.getLogger(ResultStreamPublisher.class);
     private final Supplier<ResultStream<M>> resultStreamSupplier;
 
+    /**
+     * Constructs an instance based on the specifier supplier of underlying {@link ResultStream}.
+     *
+     * @param resultStreamSupplier supplier of {@link ResultStream} used to generate the underlying stream when the
+     *                             publisher is subscribed
+     */
     public ResultStreamPublisher(Supplier<ResultStream<M>> resultStreamSupplier) {
         this.resultStreamSupplier = resultStreamSupplier;
     }
@@ -127,10 +133,10 @@ public class ResultStreamPublisher<M> implements Publisher<M> {
 
         private boolean canConsume() {
             try {
-                return subscribed.get() &&
-                        !cancelled.get() &&
-                        !completed.get() &&
-                        (resultStream.isClosed() || (resultStream.peek() != null && requested.get() > 0));
+                return subscribed.get()
+                        && !cancelled.get()
+                        && !completed.get()
+                        && (resultStream.isClosed() || (resultStream.peek() != null && requested.get() > 0));
             } catch (Exception e) {
                 this.onError(e);
                 return false;
