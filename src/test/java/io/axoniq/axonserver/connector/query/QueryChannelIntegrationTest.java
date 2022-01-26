@@ -456,9 +456,7 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                 return fail(e);
             }
         }).collect(Collectors.toList());
-        actualMessages.forEach(r -> {
-            assertFalse(r.hasErrorMessage());
-        });
+        actualMessages.forEach(r -> assertFalse(r.hasErrorMessage()));
 
         assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(((ContextConnection) connection1).getManagedChannel().isTerminated()));
     }

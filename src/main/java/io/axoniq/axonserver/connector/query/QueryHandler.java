@@ -16,9 +16,10 @@
 
 package io.axoniq.axonserver.connector.query;
 
+import io.axoniq.axonserver.connector.FlowControl;
 import io.axoniq.axonserver.connector.Registration;
 import io.axoniq.axonserver.connector.ReplyChannel;
-import io.axoniq.axonserver.connector.query.impl.NoopFlowControl;
+import io.axoniq.axonserver.connector.impl.NoopFlowControl;
 import io.axoniq.axonserver.grpc.query.QueryRequest;
 import io.axoniq.axonserver.grpc.query.QueryResponse;
 import io.axoniq.axonserver.grpc.query.QueryUpdate;
@@ -71,24 +72,6 @@ public interface QueryHandler {
      */
     default Registration registerSubscriptionQuery(SubscriptionQuery query, UpdateHandler updateHandler) {
         return null;
-    }
-
-    /**
-     * Flow control for queries.
-     */
-    interface FlowControl {
-
-        /**
-         * Requests {@code requested} amount of responses to be sent.
-         *
-         * @param requested number of responses to be sent
-         */
-        void request(long requested);
-
-        /**
-         * Cancels response sending.
-         */
-        void cancel();
     }
 
     /**

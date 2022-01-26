@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021. AxonIQ
+ * Copyright (c) 2020-2022. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,27 +14,25 @@
  * limitations under the License.
  */
 
-package io.axoniq.axonserver.connector.query.impl;
-
-import io.axoniq.axonserver.connector.query.QueryHandler;
+package io.axoniq.axonserver.connector;
 
 /**
- * NOOP implementation of {@link QueryHandler.FlowControl}.
+ * Flow control.
+ * @author Milan Savic
+ * @author Stefan Dragisic
+ * @author Allard Buijze
  */
-public enum NoopFlowControl implements QueryHandler.FlowControl {
+public interface FlowControl {
 
     /**
-     * Singleton instance of {@link NoopFlowControl}.
+     * Requests {@code requested} amount of responses to be sent.
+     *
+     * @param requested number of responses to be sent
      */
-    INSTANCE;
+    void request(long requested);
 
-    @Override
-    public void request(long requested) {
-        // noop
-    }
-
-    @Override
-    public void cancel() {
-        // noop
-    }
+    /**
+     * Cancels response sending.
+     */
+    void cancel();
 }
