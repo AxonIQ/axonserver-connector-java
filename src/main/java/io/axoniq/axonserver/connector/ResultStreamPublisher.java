@@ -107,10 +107,13 @@ public class ResultStreamPublisher<M> implements Publisher<M> {
                     requested.getAndAccumulate(counter, Long::sum);
 
                     if (resultStream.isClosed()) {
-                        subscriber.onComplete();
-                        completed.set(true);
+                        if (resultStream.getError().isPresent()) {
+                            onError(resultStream.getError().get());
+                        } else {
+                            subscriber.onComplete();
+                            completed.set(true);
+                        }
                     }
-                    resultStream.getError().ifPresent(this::onError);
                 } catch (InterruptedException e) {
                     signalGate.set(false);
                     Thread.currentThread().interrupt();
