@@ -316,7 +316,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                     Set<QueryHandler> refs = queryHandlers.get(def.getQueryName());
                     if (refs != null && refs.remove(handler) && refs.isEmpty()) {
                         queryHandlers.remove(def.getQueryName());
-                        result = CompletableFuture.allOf(result, sendUnsubscribe(def));
+                        result = CompletableFuture.allOf(result, sendUnsubscribe(def, outboundQueryStream.get()));
                         logger.debug("Unregistered handlers for query '{}' in context '{}'", def, context);
                     }
                     supportedQueries.computeIfPresent(def, (qd, counter) -> counter.decrementAndGet() == 0 ? null : counter);
@@ -326,7 +326,10 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         });
     }
 
-    private CompletableFuture<Void> sendUnsubscribe(QueryDefinition queryDefinition) {
+    private CompletableFuture<Void> sendUnsubscribe(QueryDefinition queryDefinition, StreamObserver<QueryProviderOutbound> outboundStream) {
+        if (outboundStream == null) {
+            return CompletableFuture.completedFuture(null);
+        }
         String instructionId = UUID.randomUUID().toString();
         QuerySubscription unsubscribeMessage =
                 QuerySubscription.newBuilder()
@@ -341,7 +344,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                                                     .setUnsubscribe(unsubscribeMessage)
                                                     .build(),
                                QueryProviderOutbound::getInstructionId,
-                               outboundQueryStream.get());
+                               outboundStream);
     }
 
     @Override
@@ -428,9 +431,20 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
 
     @Override
     public synchronized void disconnect() {
-        CompletableFuture<Void> unsubscribed = prepareDisconnect();
-
         CallStreamObserver<QueryProviderOutbound> previousOutbound = outboundQueryStream.getAndSet(null);
+
+        CompletableFuture<Void> unsubscribed = previousOutbound == null
+                                               ? CompletableFuture.completedFuture(null)
+                                               : supportedQueries.keySet()
+                                                                 .stream()
+                                                                 .map(queryDefinition -> sendUnsubscribe(queryDefinition, previousOutbound))
+                                                                 .reduce(CompletableFuture::allOf)
+                                                                 .map(cf -> cf.exceptionally(e -> {
+                                                                     logger.warn("An error occurred while unregistering query handlers", e);
+                                                                     return null;
+                                                                 }))
+                                                                 .orElseGet(() -> CompletableFuture.completedFuture(null));
+        cancelAllSubscriptionQueries();
 
         unsubscribed.thenCompose(stream -> {
             if (!queriesInProgress.isEmpty()) {
@@ -452,14 +466,11 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
 
     @Override
     public CompletableFuture<Void> prepareDisconnect() {
+        CallStreamObserver<QueryProviderOutbound> outboundStream = outboundQueryStream.get();
         CompletableFuture<Void> future = supportedQueries.keySet()
                                                          .stream()
-                                                         .map(this::sendUnsubscribe)
+                                                         .map(queryDefinition -> sendUnsubscribe(queryDefinition, outboundStream))
                                                          .reduce(CompletableFuture::allOf)
-                                                         .map(cf -> cf.exceptionally(e -> {
-                                                             logger.warn("An error occurred while unregistering query handlers", e);
-                                                             return null;
-                                                         }))
                                                          .orElseGet(() -> CompletableFuture.completedFuture(null));
         cancelAllSubscriptionQueries();
         return future;

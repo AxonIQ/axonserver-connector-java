@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021. AxonIQ
+ * Copyright (c) 2020-2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -260,7 +260,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     public CompletableFuture<Long> getTokenAt(long instant) {
         FutureStreamObserver<TrackingToken> result = new FutureStreamObserver<>(NO_TOKEN_AVAILABLE);
         eventStore.getTokenAt(GetTokenAtRequest.newBuilder().setInstant(instant).build(), result);
-        return result.thenApply(TrackingToken::getToken);
+        return result.thenApply(trackingToken -> Math.max(trackingToken.getToken(), 0) - 1);
     }
 
     @Override

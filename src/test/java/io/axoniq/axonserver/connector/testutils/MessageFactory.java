@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2020-2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,11 +30,15 @@ import java.util.UUID;
 public class MessageFactory {
 
     public static Event createEvent(String payload) {
+        return createEvent(payload, System.currentTimeMillis());
+    }
+
+    public static Event createEvent(String payload, long timestamp) {
         return Event.newBuilder().setPayload(SerializedObject.newBuilder()
                                                              .setData(ByteString.copyFromUtf8(payload))
                                                              .setType("string"))
                     .setMessageIdentifier(UUID.randomUUID().toString())
-                    .setTimestamp(System.currentTimeMillis())
+                    .setTimestamp(timestamp)
                     .build();
     }
 
