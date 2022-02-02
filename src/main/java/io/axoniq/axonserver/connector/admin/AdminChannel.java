@@ -54,10 +54,10 @@ public interface AdminChannel {
     /**
      * Returns all the event processor registered by the specified application.
      *
-     * @param application the application name
+     * @param component the component name
      * @return the stream of all event processor registered to AxonServer by the specified application.
      */
-    ResultStream<EventProcessor> eventProcessorsByApplication(String application);
+    ResultStream<EventProcessor> eventProcessorsByComponent(String component);
 
     /**
      * Request to pause a specific event processor.

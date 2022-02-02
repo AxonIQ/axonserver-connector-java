@@ -84,12 +84,12 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         Supplier<EventProcessorInfo> eventProcessorInfoSupplier = this::eventProcessorInfo;
         ProcessorInstructionHandler handler = mock(ProcessorInstructionHandler.class);
         connection.controlChannel().registerEventProcessor(processorName, eventProcessorInfoSupplier, handler);
-        ResultStream<EventProcessor> resultStream = connection.adminChannel().eventProcessorsByApplication(
+        ResultStream<EventProcessor> resultStream = connection.adminChannel().eventProcessorsByComponent(
                 "admin-client");
         assertEventProcessorInfo(resultStream.next());
         assertTrue(resultStream.isClosed());
         ResultStream<EventProcessor> emptyResult = connection.adminChannel()
-                                                             .eventProcessorsByApplication("another-app");
+                                                             .eventProcessorsByComponent("another-app");
         assertNull(emptyResult.nextIfAvailable(100, MILLISECONDS));
         assertTrue(emptyResult.isClosed());
     }

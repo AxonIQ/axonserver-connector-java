@@ -24,7 +24,7 @@ import io.axoniq.axonserver.connector.impl.AbstractBufferedStream;
 import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
 import io.axoniq.axonserver.connector.impl.FutureListStreamObserver;
 import io.axoniq.axonserver.connector.impl.FutureStreamObserver;
-import io.axoniq.axonserver.grpc.Application;
+import io.axoniq.axonserver.grpc.Component;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.admin.ApplicationAdminServiceGrpc;
 import io.axoniq.axonserver.grpc.admin.ApplicationId;
@@ -71,7 +71,7 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
 
     private static final int BUFFER_SIZE = 32;
     private static final int REFILL_BATCH = 8;
-    private static final Empty EMPTY = Empty.newBuilder().build();
+    private static final Empty EMPTY = Empty.getDefaultInstance();
 
     private final EventProcessorAdminServiceStub eventProcessorServiceStub;
     private final ContextAdminServiceGrpc.ContextAdminServiceStub contextServiceStub;
@@ -109,8 +109,8 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
         return results;
     }
 
-    public ResultStream<EventProcessor> eventProcessorsByApplication(String application) {
-        Application request = Application.newBuilder().setApplication(application).build();
+    public ResultStream<EventProcessor> eventProcessorsByComponent(String component) {
+        Component request = Component.newBuilder().setComponent(component).build();
 
         AbstractBufferedStream<EventProcessor, Empty> results = new AbstractBufferedStream<EventProcessor, Empty>(
                 "", BUFFER_SIZE, REFILL_BATCH
@@ -127,7 +127,7 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
                 return EventProcessor.newBuilder().build();
             }
         };
-        eventProcessorServiceStub.getEventProcessorsByApplication(request, results);
+        eventProcessorServiceStub.getEventProcessorsByComponent(request, results);
         return results;
     }
 
