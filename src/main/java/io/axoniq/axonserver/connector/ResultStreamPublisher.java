@@ -22,6 +22,7 @@ import org.reactivestreams.Subscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
@@ -107,8 +108,9 @@ public class ResultStreamPublisher<M> implements Publisher<M> {
                     requested.getAndAccumulate(counter, Long::sum);
 
                     if (resultStream.isClosed()) {
-                        if (resultStream.getError().isPresent()) {
-                            onError(resultStream.getError().get());
+                        Optional<Throwable> error = resultStream.getError();
+                        if (error.isPresent()) {
+                            onError(error.get());
                         } else {
                             subscriber.onComplete();
                             completed.set(true);
