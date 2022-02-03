@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021. AxonIQ
+ * Copyright (c) 2022. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import io.axoniq.axonserver.grpc.admin.CreateOrUpdateUserRequest;
 import io.axoniq.axonserver.grpc.admin.CreateReplicationGroupRequest;
 import io.axoniq.axonserver.grpc.admin.DeleteContextRequest;
 import io.axoniq.axonserver.grpc.admin.DeleteReplicationGroupRequest;
+import io.axoniq.axonserver.grpc.admin.EventProcessor;
 import io.axoniq.axonserver.grpc.admin.JoinReplicationGroup;
 import io.axoniq.axonserver.grpc.admin.LeaveReplicationGroup;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupOverview;
@@ -42,6 +43,21 @@ import java.util.concurrent.CompletableFuture;
  * @since 4.6.0
  */
 public interface AdminChannel {
+
+    /**
+     * Returns all the event processor registered to AxonServer.
+     *
+     * @return the stream of all event processor registered to AxonServer.
+     */
+    ResultStream<EventProcessor> eventProcessors();
+
+    /**
+     * Returns all the event processor registered by the specified application.
+     *
+     * @param component the component name
+     * @return the stream of all event processor registered to AxonServer by the specified application.
+     */
+    ResultStream<EventProcessor> eventProcessorsByComponent(String component);
 
     /**
      * Request to pause a specific event processor.
