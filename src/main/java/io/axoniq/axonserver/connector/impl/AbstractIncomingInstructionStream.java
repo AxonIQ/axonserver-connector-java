@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2022. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.InstructionHandler;
 import io.axoniq.axonserver.grpc.ErrorMessage;
 import io.axoniq.axonserver.grpc.InstructionAck;
+import io.axoniq.axonserver.grpc.InstructionResult;
 import io.grpc.stub.CallStreamObserver;
 import io.grpc.stub.ClientCallStreamObserver;
 import io.grpc.stub.StreamObserver;
@@ -49,6 +50,9 @@ public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowCon
                                                 .build())
                           .build();
 
+    private static final InstructionAck SUCCESS_ACK =
+            InstructionAck.newBuilder().setSuccess(true).build();
+
     private final Consumer<Throwable> disconnectHandler;
 
     private final Consumer<CallStreamObserver<OUT>> beforeStartHandler;
@@ -77,18 +81,21 @@ public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowCon
     @Override
     public void onNext(IN value) {
         InstructionHandler<IN, OUT> handler = getHandler(value);
+        String instructionId = getInstructionId(value);
         if (handler == null) {
             logger.debug("Unsupported instruction received: {}", value);
             markConsumed();
-            String instructionId = getInstructionId(value);
             if (instructionId != null && !instructionId.isEmpty()) {
                 instructionsForPlatform.onNext(buildAckMessage(NO_HANDLER_FOR_INSTRUCTION));
             }
         } else {
+            if (instructionId != null && !instructionId.isEmpty()) {
+                instructionsForPlatform.onNext(buildAckMessage(SUCCESS_ACK));
+            }
             ForwardingReplyChannel<OUT> replyChannel = new ForwardingReplyChannel<>(getInstructionId(value),
                                                                                     clientId(),
                                                                                     instructionsForPlatform,
-                                                                                    this::buildAckMessage,
+                                                                                    this::buildResultMessage,
                                                                                     this::markConsumed);
             handler.handle(value, replyChannel);
         }
@@ -101,6 +108,14 @@ public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowCon
      * @return a stream specific acknowledgment message of type {@code OUT} based on the given {@code ack}
      */
     protected abstract OUT buildAckMessage(InstructionAck ack);
+
+    /**
+     * Builds a stream specific result message of type {@code OUT} based on the given {@code result}.
+     *
+     * @param result the {@link InstructionResult} to base the stream specific acknowledgement on
+     * @return a stream specific acknowledgment message of type {@code OUT} based on the given {@code result}
+     */
+    protected abstract OUT buildResultMessage(InstructionResult result);
 
     /**
      * Returns the instruction identifier of the given {@code instruction}.

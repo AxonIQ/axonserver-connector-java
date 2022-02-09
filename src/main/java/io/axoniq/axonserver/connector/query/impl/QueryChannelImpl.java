@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021. AxonIQ
+ * Copyright (c) 2022. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ import io.axoniq.axonserver.connector.query.SubscriptionQueryResult;
 import io.axoniq.axonserver.grpc.ErrorMessage;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.InstructionAck;
+import io.axoniq.axonserver.grpc.InstructionResult;
 import io.axoniq.axonserver.grpc.SerializedObject;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
 import io.axoniq.axonserver.grpc.query.QueryComplete;
@@ -468,7 +469,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         ReplyChannel<QueryResponse> responseHandler = new CloseAwareReplyChannelAdapter(responseChannel, () -> completionHandle.complete(null));
         Set<QueryHandler> handlers = queryHandlers.getOrDefault(query.getQuery(), Collections.emptySet());
         if (handlers.isEmpty()) {
-            responseHandler.sendNack();
+            responseHandler.sendFailureResult();
             responseHandler.sendLast(QueryResponse.newBuilder()
                                                   .setRequestIdentifier(query.getMessageIdentifier())
                                                   .setErrorCode(ErrorCategory.NO_HANDLER_FOR_QUERY.errorCode())
@@ -478,7 +479,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                                                   .build());
         }
 
-        responseHandler.sendAck();
+        responseHandler.sendSuccessResult();
 
         AtomicInteger completeCounter = new AtomicInteger(handlers.size());
         handlers.forEach(queryHandler -> queryHandler.handle(query, new ReplyChannel<QueryResponse>() {
@@ -513,13 +514,13 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
             }
 
             @Override
-            public void sendNack(ErrorMessage errorMessage) {
-                responseHandler.sendNack(errorMessage);
+            public void sendFailureResult(ErrorMessage errorMessage) {
+                responseHandler.sendFailureResult(errorMessage);
             }
 
             @Override
-            public void sendAck() {
-                responseHandler.sendAck();
+            public void sendSuccessResult() {
+                responseHandler.sendSuccessResult();
             }
         }));
     }
@@ -554,13 +555,13 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
             }
 
             @Override
-            public void sendNack(ErrorMessage errorMessage) {
-                result.sendNack(errorMessage);
+            public void sendFailureResult(ErrorMessage errorMessage) {
+                result.sendFailureResult(errorMessage);
             }
 
             @Override
-            public void sendAck() {
-                result.sendAck();
+            public void sendSuccessResult() {
+                result.sendSuccessResult();
             }
         });
     }
@@ -600,13 +601,13 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                     }
 
                     @Override
-                    public void sendNack(ErrorMessage errorMessage) {
-                        result.sendNack(errorMessage);
+                    public void sendFailureResult(ErrorMessage errorMessage) {
+                        result.sendFailureResult(errorMessage);
                     }
 
                     @Override
-                    public void sendAck() {
-                        result.sendAck();
+                    public void sendSuccessResult() {
+                        result.sendSuccessResult();
                     }
                 }
         );
@@ -633,18 +634,18 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         }
 
         @Override
-        public void sendAck() {
-            delegate.sendAck();
+        public void sendSuccessResult() {
+            delegate.sendSuccessResult();
         }
 
         @Override
-        public void sendNack() {
-            delegate.sendNack();
+        public void sendFailureResult() {
+            delegate.sendFailureResult();
         }
 
         @Override
-        public void sendNack(ErrorMessage errorMessage) {
-            delegate.sendNack(errorMessage);
+        public void sendFailureResult(ErrorMessage errorMessage) {
+            delegate.sendFailureResult(errorMessage);
         }
 
         @Override
@@ -685,6 +686,11 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         @Override
         protected QueryProviderOutbound buildAckMessage(InstructionAck ack) {
             return QueryProviderOutbound.newBuilder().setAck(ack).build();
+        }
+
+        @Override
+        protected QueryProviderOutbound buildResultMessage(InstructionResult result) {
+            throw new UnsupportedOperationException("Query stream does not support InstructionResult");
         }
 
         @Override

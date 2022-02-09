@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021. AxonIQ
+ * Copyright (c) 2022. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,20 +58,21 @@ public interface ReplyChannel<T> {
      * <p>
      * If the incoming instruction has no instruction ID, this method does nothing.
      */
-    void sendAck();
+    void sendSuccessResult();
 
     /**
      * Sends a negative acknowledgement, indicating that the incoming message could not be handled as expected. Unlike
-     * {@link #sendNack(ErrorMessage)}, no specific error details are provided. If not explicitly sent, it will be send
+     * {@link #sendFailureResult(ErrorMessage)}, no specific error details are provided. If not explicitly sent, it will
+     * be send
      * once the {@link #completeWithError(ErrorMessage)} or {@link #completeWithError(ErrorCategory, String)} methods
      * are invoked.
      * <p>
      * If the incoming instruction has no instruction ID, this method does nothing.
      *
-     * @see #sendNack(ErrorMessage)
+     * @see #sendFailureResult(ErrorMessage)
      */
-    default void sendNack() {
-        sendNack(ErrorMessage.getDefaultInstance());
+    default void sendFailureResult() {
+        sendFailureResult(ErrorMessage.getDefaultInstance());
     }
 
     /**
@@ -82,7 +83,7 @@ public interface ReplyChannel<T> {
      * <p>
      * If the incoming instruction has no instruction ID, this method does nothing.
      */
-    void sendNack(ErrorMessage errorMessage);
+    void sendFailureResult(ErrorMessage errorMessage);
 
     /**
      * Marks the inbound instruction as completed.

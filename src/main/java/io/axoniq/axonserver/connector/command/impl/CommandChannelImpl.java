@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021. AxonIQ
+ * Copyright (c) 2022. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import io.axoniq.axonserver.connector.impl.ObjectUtils;
 import io.axoniq.axonserver.grpc.ErrorMessage;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.InstructionAck;
+import io.axoniq.axonserver.grpc.InstructionResult;
 import io.axoniq.axonserver.grpc.MetaDataValue;
 import io.axoniq.axonserver.grpc.ProcessingInstruction;
 import io.axoniq.axonserver.grpc.ProcessingKey;
@@ -112,9 +113,9 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
         Command command = message.getCommand();
         CommandHandler handler = commandHandlers.get(command.getName());
         if (handler != null) {
-            outbound.sendAck();
+            outbound.sendSuccessResult();
         } else {
-            outbound.sendNack();
+            outbound.sendFailureResult();
             handler = noCommandHandler;
         }
 
@@ -449,6 +450,11 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
         @Override
         protected CommandProviderOutbound buildAckMessage(InstructionAck ack) {
             return CommandProviderOutbound.newBuilder().setAck(ack).build();
+        }
+
+        @Override
+        protected CommandProviderOutbound buildResultMessage(InstructionResult result) {
+            throw new UnsupportedOperationException("Command stream does not support InstructionResult");
         }
 
         @Override

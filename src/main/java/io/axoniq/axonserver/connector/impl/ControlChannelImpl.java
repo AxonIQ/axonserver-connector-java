@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021. AxonIQ
+ * Copyright (c) 2022. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import io.axoniq.axonserver.connector.control.ControlChannel;
 import io.axoniq.axonserver.connector.control.ProcessorInstructionHandler;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.InstructionAck;
+import io.axoniq.axonserver.grpc.InstructionResult;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo;
 import io.axoniq.axonserver.grpc.control.Heartbeat;
@@ -143,7 +144,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
     void handleReconnectRequest(PlatformOutboundInstruction platformOutboundInstruction,
                                 ReplyChannel<PlatformInboundInstruction> replyChannel) {
         logger.info("AxonServer requested reconnect for context '{}'", context);
-        replyChannel.sendAck();
+        replyChannel.sendSuccessResult();
         reconnectHandler.run();
     }
 
@@ -288,6 +289,11 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
         @Override
         protected PlatformInboundInstruction buildAckMessage(InstructionAck ack) {
             return PlatformInboundInstruction.newBuilder().setAck(ack).build();
+        }
+
+        @Override
+        protected PlatformInboundInstruction buildResultMessage(InstructionResult result) {
+            return PlatformInboundInstruction.newBuilder().setResult(result).build();
         }
 
         @Override
