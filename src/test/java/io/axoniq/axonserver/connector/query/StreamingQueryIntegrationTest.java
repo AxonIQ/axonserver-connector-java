@@ -24,9 +24,13 @@ import io.axoniq.axonserver.connector.FlowControl;
 import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.grpc.ErrorMessage;
+import io.axoniq.axonserver.grpc.MetaDataValue;
+import io.axoniq.axonserver.grpc.ProcessingInstruction;
+import io.axoniq.axonserver.grpc.ProcessingKey;
 import io.axoniq.axonserver.grpc.SerializedObject;
 import io.axoniq.axonserver.grpc.query.QueryRequest;
 import io.axoniq.axonserver.grpc.query.QueryResponse;
+import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.*;
 
 import java.util.ArrayList;
@@ -86,7 +90,7 @@ class StreamingQueryIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         QueryRequest queryRequest = QueryRequest.newBuilder()
                                                 .setQuery("testQuery")
-                                                .setExpectedResponseType("testResult")
+                                                .addProcessingInstructions(clientSupportsStreaming())
                                                 .build();
         ResultStream<QueryResponse> resultStream = connection2.queryChannel()
                                                               .query(queryRequest);
@@ -117,7 +121,7 @@ class StreamingQueryIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         QueryRequest queryRequest = QueryRequest.newBuilder()
                                                 .setQuery("testQuery")
-                                                .setExpectedResponseType("testResult")
+                                                .addProcessingInstructions(clientSupportsStreaming())
                                                 .build();
         ResultStream<QueryResponse> resultStream = connection2.queryChannel()
                                                               .query(queryRequest);
@@ -151,7 +155,7 @@ class StreamingQueryIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         QueryRequest queryRequest = QueryRequest.newBuilder()
                                                 .setQuery("testQuery")
-                                                .setExpectedResponseType("testResult")
+                                                .addProcessingInstructions(clientSupportsStreaming())
                                                 .build();
         ResultStream<QueryResponse> resultStream = connection2.queryChannel()
                                                               .query(queryRequest);
@@ -192,7 +196,7 @@ class StreamingQueryIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         QueryRequest queryRequest = QueryRequest.newBuilder()
                                                 .setQuery("testQuery")
-                                                .setExpectedResponseType("testResult")
+                                                .addProcessingInstructions(clientSupportsStreaming())
                                                 .build();
         ResultStream<QueryResponse> resultStream = connection2.queryChannel()
                                                               .query(queryRequest);
@@ -227,7 +231,7 @@ class StreamingQueryIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         QueryRequest queryRequest = QueryRequest.newBuilder()
                                                 .setQuery("testQuery")
-                                                .setExpectedResponseType("testResult")
+                                                .addProcessingInstructions(clientSupportsStreaming())
                                                 .build();
         ResultStream<QueryResponse> resultStream = connection2.queryChannel()
                                                               .query(queryRequest);
@@ -245,7 +249,7 @@ class StreamingQueryIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         QueryRequest queryRequest = QueryRequest.newBuilder()
                                                 .setQuery("testQuery")
-                                                .setExpectedResponseType("testResult")
+                                                .addProcessingInstructions(clientSupportsStreaming())
                                                 .build();
         ResultStream<QueryResponse> resultStream = connection2.queryChannel()
                                                               .query(queryRequest);
@@ -253,6 +257,16 @@ class StreamingQueryIntegrationTest extends AbstractAxonServerIntegrationTest {
         QueryResponse response = resultStream.next();
 
         assertTrue(response.hasErrorMessage());
+    }
+
+    @NotNull
+    private ProcessingInstruction clientSupportsStreaming() {
+        return ProcessingInstruction.newBuilder()
+                                    .setKey(ProcessingKey.CLIENT_SUPPORTS_STREAMING)
+                                    .setValue(MetaDataValue.newBuilder()
+                                                           .setBooleanValue(true)
+                                                           .build())
+                                    .build();
     }
 
     private static class ErroringQueryHandler implements QueryHandler {
@@ -324,7 +338,6 @@ class StreamingQueryIntegrationTest extends AbstractAxonServerIntegrationTest {
                                                                    .setData(data)
                                                                    .build();
                         QueryResponse message = QueryResponse.newBuilder()
-                                                             .setStreamed(true)
                                                              .setPayload(payload)
                                                              .setRequestIdentifier(query.getMessageIdentifier())
                                                              .build();

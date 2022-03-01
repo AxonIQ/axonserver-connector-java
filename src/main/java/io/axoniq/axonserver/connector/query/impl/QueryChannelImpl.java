@@ -41,6 +41,7 @@ import io.axoniq.axonserver.connector.query.SubscriptionQueryResult;
 import io.axoniq.axonserver.grpc.ErrorMessage;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.InstructionAck;
+import io.axoniq.axonserver.grpc.ProcessingInstruction;
 import io.axoniq.axonserver.grpc.ProcessingKey;
 import io.axoniq.axonserver.grpc.SerializedObject;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
@@ -133,7 +134,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         instructionHandlers.put(SubscriptionQueryRequest.RequestCase.GET_INITIAL_RESULT, this::getInitialResult);
         instructionHandlers.put(SubscriptionQueryRequest.RequestCase.SUBSCRIBE, this::subscribeToQueryUpdates);
         instructionHandlers.put(SubscriptionQueryRequest.RequestCase.UNSUBSCRIBE, this::unsubscribeToQueryUpdates);
-        instructionHandlers.put(QueryProviderInbound.RequestCase.QUERY_COMPLETE, this::handleCancelRequest);
+        instructionHandlers.put(QueryProviderInbound.RequestCase.QUERY_CANCEL, this::handleCancelRequest);
         instructionHandlers.put(QueryProviderInbound.RequestCase.QUERY_FLOW_CONTROL, this::handleFlowControlRequest);
         queryServiceStub = QueryServiceGrpc.newStub(channel);
     }
@@ -205,14 +206,16 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
     }
 
     private void handleCancelRequest(QueryProviderInbound complete, ReplyChannel<QueryProviderOutbound> result) {
-        queriesInProgress.getOrDefault(complete.getQueryComplete().getRequestId(), QueryInProgress.noop())
+        queriesInProgress.getOrDefault(complete.getQueryCancel().getRequestId(), QueryInProgress.noop())
                          .cancel();
         result.complete();
     }
 
     private void handleFlowControlRequest(QueryProviderInbound flowControl,
                                           ReplyChannel<QueryProviderOutbound> result) {
-        queriesInProgress.getOrDefault(flowControl.getQueryFlowControl().getRequestId(), QueryInProgress.noop())
+        queriesInProgress.getOrDefault(flowControl.getQueryFlowControl()
+                                                  .getQueryReference()
+                                                  .getRequestId(), QueryInProgress.noop())
                          .request(flowControl.getQueryFlowControl().getPermits());
         result.complete();
     }
@@ -541,16 +544,21 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
     }
 
     private boolean axonServerSupportsQueryStreaming(QueryRequest queryRequest) {
-        return queryRequest.getProcessingInstructionsList()
-                           .stream()
-                           .filter(instruction -> ProcessingKey.SUPPORTS_STREAMING.equals(instruction.getKey()))
-                           .map(instruction -> instruction.getValue().getBooleanValue())
-                           .findFirst()
-                           .orElse(false);
+        return booleanProcessingValue(queryRequest.getProcessingInstructionsList(),
+                                      ProcessingKey.AS_SUPPORTS_STREAMING);
     }
 
     private boolean querySenderSupportsStreaming(QueryRequest queryRequest) {
-        return !"".equals(queryRequest.getExpectedResponseType());
+        return booleanProcessingValue(queryRequest.getProcessingInstructionsList(),
+                                      ProcessingKey.CLIENT_SUPPORTS_STREAMING);
+    }
+
+    private boolean booleanProcessingValue(List<ProcessingInstruction> instructions, ProcessingKey processingKey) {
+        return instructions.stream()
+                           .filter(instruction -> processingKey.equals(instruction.getKey()))
+                           .map(instruction -> instruction.getValue().getBooleanValue())
+                           .findFirst()
+                           .orElse(false);
     }
 
     private void handleQuery(QueryProviderInbound inbound, ReplyChannel<QueryProviderOutbound> result) {
