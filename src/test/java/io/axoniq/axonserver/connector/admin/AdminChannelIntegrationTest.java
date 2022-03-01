@@ -188,4 +188,17 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         accepted.get(1, SECONDS);
         Assertions.assertTrue(accepted.isDone());
     }
+
+
+    @Test
+    @Disabled("To reactivate after the release of AS 4.6.0")
+    void loadBalance() throws Exception {
+        Supplier<EventProcessorInfo> eventProcessorInfoSupplier = this::eventProcessorInfo;
+        ProcessorInstructionHandler handler = mock(ProcessorInstructionHandler.class);
+        connection.controlChannel().registerEventProcessor(processorName, eventProcessorInfoSupplier, handler);
+        AdminChannel adminChannel = connection.adminChannel();
+        CompletableFuture<Void> accepted = adminChannel.loadBalanceEventProcessor("processor", "tokenStore", LoadBalanceStrategy.THREAD_NUMBER);
+        accepted.get(1, SECONDS);
+        Assertions.assertTrue(accepted.isDone());
+    }
 }

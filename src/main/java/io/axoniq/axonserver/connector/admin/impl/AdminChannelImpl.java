@@ -19,6 +19,7 @@ package io.axoniq.axonserver.connector.admin.impl;
 import com.google.protobuf.Empty;
 import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.admin.AdminChannel;
+import io.axoniq.axonserver.connector.admin.LoadBalanceStrategy;
 import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
 import io.axoniq.axonserver.connector.impl.AbstractBufferedStream;
 import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
@@ -47,6 +48,7 @@ import io.axoniq.axonserver.grpc.admin.GetContextRequest;
 import io.axoniq.axonserver.grpc.admin.GetReplicationGroupRequest;
 import io.axoniq.axonserver.grpc.admin.JoinReplicationGroup;
 import io.axoniq.axonserver.grpc.admin.LeaveReplicationGroup;
+import io.axoniq.axonserver.grpc.admin.LoadBalanceRequest;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupAdminServiceGrpc;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupOverview;
 import io.axoniq.axonserver.grpc.admin.Token;
@@ -164,6 +166,18 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
         EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
         FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
         eventProcessorServiceStub.mergeEventProcessor(eventProcessorIdentifier, responseObserver);
+        return responseObserver.thenRun(() -> {
+        });
+    }
+
+    @Override
+    public CompletableFuture<Void> loadBalanceEventProcessor(String eventProcessorName, String tokenStoreIdentifier,
+                                                             LoadBalanceStrategy strategy) {
+        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
+        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
+        eventProcessorServiceStub.loadBalanceProcessor(LoadBalanceRequest.newBuilder().setProcessor(eventProcessorIdentifier)
+                                                               .setStrategy(strategy.toGrpc())
+              .build(), responseObserver);
         return responseObserver.thenRun(() -> {
         });
     }
