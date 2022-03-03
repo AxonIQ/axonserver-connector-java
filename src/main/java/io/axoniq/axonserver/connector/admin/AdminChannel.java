@@ -109,15 +109,15 @@ public interface AdminChannel {
     CompletableFuture<Void> mergeEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
 
     /**
-     * Request to balance the load for the specified event processor among the connected client.
-     * Returns a {@link CompletableFuture} that completes when the request has been received by AxonServer.
-     * This doesn't imply that the processor have been balanced, but only that the request has been properly
+     * Request to balance the load for the given {@code eventProcessorName} within the connected client.
+     * Returns a {@link CompletableFuture} that completes when the request has been received by Axon Server.
+     * Note that this doesn't imply that the processor is balanced, but only that the request has been properly
      * delivered.
      *
-     * @param eventProcessorName   the name of the event processor to merge
-     * @param tokenStoreIdentifier the token store identifier of the processor to merge
+     * @param eventProcessorName   the name of the event processor to balance the load for
+     * @param tokenStoreIdentifier the token store identifier of the processor to balance the load for
      * @param strategy             the balancing strategy to use
-     * @return a {@link CompletableFuture} that completes when the request has been delivered to AxonServer
+     * @return a {@link CompletableFuture} that completes when the request is delivered to Axon Server
      */
     CompletableFuture<Void> loadBalanceEventProcessor(String eventProcessorName, String tokenStoreIdentifier, String strategy);
 
