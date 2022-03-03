@@ -46,7 +46,7 @@ import static org.mockito.Mockito.*;
  * @author Sara Pellegrini
  * @since 4.6.0
  */
-class AdminChannelIntegrationTest  {//extends AbstractAxonServerIntegrationTest
+class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
 
     private final String processorName = "eventProcessor";
     private final String tokenStoreIdentifier = "myTokenStore";
@@ -54,11 +54,9 @@ class AdminChannelIntegrationTest  {//extends AbstractAxonServerIntegrationTest
     private AxonServerConnectionFactory client;
     private AxonServerConnection connection;
 
-    private ServerAddress axonServerAddress = new ServerAddress("localhost", 8124);
-
     @BeforeEach
     void setUp() {
-        client = AxonServerConnectionFactory.forClient("admin-client")
+        client = AxonServerConnectionFactory.forClient("admin-client", "admin-client-1")
                                             .routingServers(axonServerAddress)
                                             .reconnectInterval(500, MILLISECONDS)
                                             .build();
