@@ -29,6 +29,7 @@ import io.axoniq.axonserver.grpc.admin.DeleteReplicationGroupRequest;
 import io.axoniq.axonserver.grpc.admin.EventProcessor;
 import io.axoniq.axonserver.grpc.admin.JoinReplicationGroup;
 import io.axoniq.axonserver.grpc.admin.LeaveReplicationGroup;
+import io.axoniq.axonserver.grpc.admin.LoadBalancingStrategy;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupOverview;
 import io.axoniq.axonserver.grpc.admin.Token;
 import io.axoniq.axonserver.grpc.admin.UserOverview;
@@ -118,8 +119,14 @@ public interface AdminChannel {
      * @param strategy             the balancing strategy to use
      * @return a {@link CompletableFuture} that completes when the request has been delivered to AxonServer
      */
-    CompletableFuture<Void> loadBalanceEventProcessor(String eventProcessorName, String tokenStoreIdentifier, LoadBalanceStrategy strategy);
+    CompletableFuture<Void> loadBalanceEventProcessor(String eventProcessorName, String tokenStoreIdentifier, String strategy);
 
+    /**
+     * Returns all available load balance strategies registered to AxonServer.
+     *
+     * @return the list of all available load balance strategies registered to AxonServer.
+     */
+    CompletableFuture<List<LoadBalancingStrategy>> getBalancingStrategies();
 
     /**
      * Request to create an Axon Server user, or update it if it's already present.

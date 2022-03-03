@@ -22,6 +22,7 @@ import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
 import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.ResultStreamPublisher;
 import io.axoniq.axonserver.connector.control.ProcessorInstructionHandler;
+import io.axoniq.axonserver.connector.impl.ServerAddress;
 import io.axoniq.axonserver.grpc.admin.EventProcessor;
 import io.axoniq.axonserver.grpc.admin.EventProcessorInstance;
 import io.axoniq.axonserver.grpc.admin.EventProcessorSegment;
@@ -45,7 +46,7 @@ import static org.mockito.Mockito.*;
  * @author Sara Pellegrini
  * @since 4.6.0
  */
-class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
+class AdminChannelIntegrationTest  {//extends AbstractAxonServerIntegrationTest
 
     private final String processorName = "eventProcessor";
     private final String tokenStoreIdentifier = "myTokenStore";
@@ -53,9 +54,11 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     private AxonServerConnectionFactory client;
     private AxonServerConnection connection;
 
+    private ServerAddress axonServerAddress = new ServerAddress("localhost", 8124);
+
     @BeforeEach
     void setUp() {
-        client = AxonServerConnectionFactory.forClient("admin-client", "admin-client-1")
+        client = AxonServerConnectionFactory.forClient("admin-client")
                                             .routingServers(axonServerAddress)
                                             .reconnectInterval(500, MILLISECONDS)
                                             .build();
@@ -197,7 +200,9 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         ProcessorInstructionHandler handler = mock(ProcessorInstructionHandler.class);
         connection.controlChannel().registerEventProcessor(processorName, eventProcessorInfoSupplier, handler);
         AdminChannel adminChannel = connection.adminChannel();
-        CompletableFuture<Void> accepted = adminChannel.loadBalanceEventProcessor("processor", "tokenStore", LoadBalanceStrategy.THREAD_NUMBER);
+        CompletableFuture<Void> accepted = adminChannel.getBalancingStrategies()
+                .thenCompose(balancingStrategies -> adminChannel.loadBalanceEventProcessor("processor", "tokenStore", balancingStrategies.get(0).getStrategy()));
+
         accepted.get(1, SECONDS);
         Assertions.assertTrue(accepted.isDone());
     }
