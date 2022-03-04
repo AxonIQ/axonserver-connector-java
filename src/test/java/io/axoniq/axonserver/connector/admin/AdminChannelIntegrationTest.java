@@ -19,21 +19,28 @@ package io.axoniq.axonserver.connector.admin;
 import io.axoniq.axonserver.connector.AbstractAxonServerIntegrationTest;
 import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
-import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.ResultStreamPublisher;
+import io.axoniq.axonserver.connector.control.FakeProcessorInstructionHandler;
 import io.axoniq.axonserver.connector.control.ProcessorInstructionHandler;
 import io.axoniq.axonserver.grpc.admin.EventProcessor;
 import io.axoniq.axonserver.grpc.admin.EventProcessorInstance;
 import io.axoniq.axonserver.grpc.admin.EventProcessorSegment;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo.SegmentStatus;
+import io.grpc.Status;
+import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.*;
 import org.reactivestreams.Publisher;
+import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 
+import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.*;
@@ -45,17 +52,20 @@ import static org.mockito.Mockito.*;
  * @author Sara Pellegrini
  * @since 4.6.0
  */
+@Disabled("To reactivate after the release of AS 4.6.0")
 class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
     private final String processorName = "eventProcessor";
     private final String tokenStoreIdentifier = "myTokenStore";
-    private final String mode = "Tracking";
+    private final String mode = "tracking";
+    private final String adminClientId = "admin-client-1";
     private AxonServerConnectionFactory client;
     private AxonServerConnection connection;
+    private final String componentName = "admin-client";
 
     @BeforeEach
     void setUp() {
-        client = AxonServerConnectionFactory.forClient("admin-client", "admin-client-1")
+        client = AxonServerConnectionFactory.forClient(componentName, adminClientId)
                                             .routingServers(axonServerAddress)
                                             .reconnectInterval(500, MILLISECONDS)
                                             .build();
@@ -68,34 +78,38 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
-    @Disabled("To reactivate after the release of AS 4.6.0")
-    void testStreamEventProcessorState() throws Exception {
+    void testStreamEventProcessorState() {
         Supplier<EventProcessorInfo> eventProcessorInfoSupplier = this::eventProcessorInfo;
         ProcessorInstructionHandler handler = mock(ProcessorInstructionHandler.class);
         connection.controlChannel().registerEventProcessor(processorName, eventProcessorInfoSupplier, handler);
-        ResultStream<EventProcessor> resultStream = connection.adminChannel().eventProcessors();
-        assertEventProcessorInfo(resultStream.next());
-        assertTrue(resultStream.isClosed());
+
+        ResultStreamPublisher<EventProcessor> streamPublisher = new ResultStreamPublisher<>(() -> connection.adminChannel()
+                                                                                                            .eventProcessors());
+        StepVerifier.create(streamPublisher)
+                    .expectNextMatches(this::assertEventProcessorInfo).verifyComplete();
     }
 
     @Test
-    @Disabled("To reactivate after the release of AS 4.6.0")
-    void testStreamEventProcessorStateByApplication() throws Exception {
+    void testStreamEventProcessorStateByApplication() {
         Supplier<EventProcessorInfo> eventProcessorInfoSupplier = this::eventProcessorInfo;
         ProcessorInstructionHandler handler = mock(ProcessorInstructionHandler.class);
         connection.controlChannel().registerEventProcessor(processorName, eventProcessorInfoSupplier, handler);
-        ResultStream<EventProcessor> resultStream = connection.adminChannel().eventProcessorsByComponent(
-                "admin-client");
-        assertEventProcessorInfo(resultStream.next());
-        assertTrue(resultStream.isClosed());
-        ResultStream<EventProcessor> emptyResult = connection.adminChannel()
-                                                             .eventProcessorsByComponent("another-app");
-        assertNull(emptyResult.nextIfAvailable(100, MILLISECONDS));
-        assertTrue(emptyResult.isClosed());
+
+        ResultStreamPublisher<EventProcessor> streamPublisher = new ResultStreamPublisher<>(() -> connection.adminChannel()
+                                                                                                            .eventProcessorsByComponent(
+                                                                                                                    "admin-client"));
+        StepVerifier.create(streamPublisher)
+                    .expectNextMatches(this::assertEventProcessorInfo).verifyComplete();
+
+
+        ResultStreamPublisher<EventProcessor> anotherPublisher = new ResultStreamPublisher<>(() -> connection.adminChannel()
+                                                                                                             .eventProcessorsByComponent(
+                                                                                                                     "another-client"));
+        StepVerifier.create(anotherPublisher)
+                    .verifyComplete();
     }
 
     @Test
-    @Disabled("To reactivate after the release of AS 4.6.0")
     void testStreamEventProcessorStateAsPublisher() {
         Supplier<EventProcessorInfo> eventProcessorInfoSupplier = this::eventProcessorInfo;
         ProcessorInstructionHandler handler = mock(ProcessorInstructionHandler.class);
@@ -115,7 +129,7 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                                  .setProcessorName(processorName)
                                  .setTokenStoreIdentifier(tokenStoreIdentifier)
                                  .setRunning(true)
-                                 .setActiveThreads(1)
+                                 .setActiveThreads(2)
                                  .setAvailableThreads(10)
                                  .setMode(mode)
                                  .setError(true)
@@ -123,11 +137,31 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                                  .addSegmentStatus(SegmentStatus.newBuilder()
                                                                 .setSegmentId(0)
                                                                 .setTokenPosition(100)
-                                                                .setOnePartOf(1)
+                                                                .setOnePartOf(2)
                                                                 .setCaughtUp(true)
                                                                 .setReplaying(true)
                                                                 .setErrorState("error")
                                                                 .build())
+                                 .addSegmentStatus(SegmentStatus.newBuilder()
+                                                                .setSegmentId(1)
+                                                                .setTokenPosition(100)
+                                                                .setOnePartOf(2)
+                                                                .setCaughtUp(true)
+                                                                .setReplaying(true)
+                                                                .setErrorState("error")
+                                                                .build())
+                                 .build();
+    }
+
+    private EventProcessorInfo anotherEventProcessorInfo() {
+        return EventProcessorInfo.newBuilder()
+                                 .setProcessorName(processorName)
+                                 .setTokenStoreIdentifier(tokenStoreIdentifier)
+                                 .setRunning(true)
+                                 .setAvailableThreads(10)
+                                 .setMode(mode)
+                                 .setError(true)
+                                 .setIsStreamingProcessor(true)
                                  .build();
     }
 
@@ -140,10 +174,17 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         EventProcessorInstance instance = eventProcessor.getClientInstanceList().get(0);
         assertEquals("admin-client-1", instance.getClientId());
         assertTrue(instance.getIsRunning());
-        assertEquals(11, instance.getMaxSegments());
-        assertEquals(1, instance.getClaimedSegmentCount());
+        assertEquals(12, instance.getMaxSegments());
+        assertEquals(2, instance.getClaimedSegmentCount());
         EventProcessorSegment segment = instance.getClaimedSegmentList().get(0);
-        assertEquals(1, segment.getOnePartOf());
+        assertEquals(2, segment.getOnePartOf());
+        assertEquals("error", segment.getError());
+        assertTrue(segment.getIsCaughtUp());
+        assertTrue(segment.getIsReplaying());
+        assertTrue(segment.getIsInError());
+        assertEquals("admin-client-1", segment.getClaimedBy());
+        segment = instance.getClaimedSegmentList().get(1);
+        assertEquals(2, segment.getOnePartOf());
         assertEquals("error", segment.getError());
         assertTrue(segment.getIsCaughtUp());
         assertTrue(segment.getIsReplaying());
@@ -154,38 +195,268 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
 
     @Test
-    @Disabled("To reactivate after the release of AS 4.6.0")
     void testPauseEventProcessor() throws Exception {
         AdminChannel adminChannel = connection.adminChannel();
-        CompletableFuture<Void> accepted = adminChannel.pauseEventProcessor("processor", "tokenStore");
-        accepted.get(1, SECONDS);
-        Assertions.assertTrue(accepted.isDone());
+        FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
+        CompletableFuture<Void> accepted = adminChannel.pauseEventProcessor(processorName, tokenStoreIdentifier);
+        checkHandleSuccess(accepted, processorInstructionHandler);
     }
 
     @Test
-    @Disabled("To reactivate after the release of AS 4.6.0")
+    void testPauseEventProcessorFailing() throws Exception {
+        AdminChannel adminChannel = connection.adminChannel();
+        FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
+        CompletableFuture<Void> accepted = adminChannel.pauseEventProcessor(processorName, tokenStoreIdentifier);
+        Thread.sleep(500);
+        assertFalse(accepted.isDone());
+        processorInstructionHandler.performFailing();
+        expectException(accepted, Status.Code.CANCELLED);
+    }
+
+
+    @Test
+    void testPauseEventProcessorTimeout() throws Exception {
+        AdminChannel adminChannel = connection.adminChannel();
+        registerEventProcessor();
+        CompletableFuture<Void> accepted = adminChannel.pauseEventProcessor(processorName, tokenStoreIdentifier);
+        expectException(accepted, 10, Status.Code.DEADLINE_EXCEEDED);
+    }
+
+    @Test
     void testStartEventProcessor() throws Exception {
         AdminChannel adminChannel = connection.adminChannel();
-        CompletableFuture<Void> accepted = adminChannel.startEventProcessor("processor", "tokenStore");
-        accepted.get(1, SECONDS);
-        Assertions.assertTrue(accepted.isDone());
+        FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
+        CompletableFuture<Void> accepted = adminChannel.startEventProcessor(processorName, tokenStoreIdentifier);
+        checkHandleSuccess(accepted, processorInstructionHandler);
     }
 
     @Test
-    @Disabled("To reactivate after the release of AS 4.6.0")
+    void testStartEventProcessorFailing() throws Exception {
+        AdminChannel adminChannel = connection.adminChannel();
+        FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
+        CompletableFuture<Void> accepted = adminChannel.startEventProcessor(processorName, tokenStoreIdentifier);
+        Thread.sleep(500);
+        assertFalse(accepted.isDone());
+        processorInstructionHandler.performFailing();
+        expectException(accepted, Status.Code.CANCELLED);
+    }
+
+
+    @Test
+//    @Disabled("To reactivate after the release of AS 4.6.0")
+    void testStartEventProcessorTimeout() throws Exception {
+        AdminChannel adminChannel = connection.adminChannel();
+        registerEventProcessor();
+        CompletableFuture<Void> accepted = adminChannel.startEventProcessor(processorName, tokenStoreIdentifier);
+        expectException(accepted, 10, Status.Code.DEADLINE_EXCEEDED);
+    }
+
+    @Test
     void testSplitEventProcessor() throws Exception {
         AdminChannel adminChannel = connection.adminChannel();
-        CompletableFuture<Void> accepted = adminChannel.splitEventProcessor("processor", "tokenStore");
+        FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
+        CompletableFuture<Void> accepted = adminChannel.splitEventProcessor(processorName, tokenStoreIdentifier);
+        checkHandleSuccess(accepted, processorInstructionHandler);
+    }
+
+    @Test
+    void testSplitEventProcessorFailing() throws Exception {
+        AdminChannel adminChannel = connection.adminChannel();
+        FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
+        CompletableFuture<Void> accepted = adminChannel.splitEventProcessor(processorName, tokenStoreIdentifier);
+        Thread.sleep(500);
+        assertFalse(accepted.isDone());
+        processorInstructionHandler.performFailing();
+        expectException(accepted, Status.Code.CANCELLED);
+    }
+
+    @Test
+    void testSplitEventProcessorCompletedExceptionally() throws Exception {
+        AdminChannel adminChannel = connection.adminChannel();
+        FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
+        CompletableFuture<Void> accepted = adminChannel.splitEventProcessor(processorName, tokenStoreIdentifier);
+        Thread.sleep(500);
+        assertFalse(accepted.isDone());
+        processorInstructionHandler.completeExceptionally(new RuntimeException("something failed"));
+        expectException(accepted, Status.Code.CANCELLED);
+    }
+
+    @NotNull
+    private FakeProcessorInstructionHandler registerEventProcessor() {
+        FakeProcessorInstructionHandler processorInstructionHandler = new FakeProcessorInstructionHandler();
+        connection.controlChannel().registerEventProcessor(processorName,
+                                                           this::eventProcessorInfo,
+                                                           processorInstructionHandler);
+        waitUntilEventProcessorExists(processorName, adminClientId);
+        return processorInstructionHandler;
+    }
+
+    @Test
+    void testSplitEventProcessorTimeout() throws Exception {
+        AdminChannel adminChannel = connection.adminChannel();
+        registerEventProcessor();
+        CompletableFuture<Void> accepted = adminChannel.splitEventProcessor(processorName, tokenStoreIdentifier);
+        expectException(accepted, 10, Status.Code.DEADLINE_EXCEEDED);
+    }
+
+    @Test
+    void testMergeEventProcessor() throws Exception {
+        AdminChannel adminChannel = connection.adminChannel();
+        FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
+        CompletableFuture<Void> accepted = adminChannel.mergeEventProcessor(processorName, tokenStoreIdentifier);
+        checkHandleSuccess(accepted, processorInstructionHandler);
+    }
+
+    @Test
+    void testMergeEventProcessorFailing() throws Exception {
+        AdminChannel adminChannel = connection.adminChannel();
+        FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
+
+        connection.controlChannel().registerEventProcessor(processorName,
+                                                           this::eventProcessorInfo,
+                                                           processorInstructionHandler);
+        waitUntilEventProcessorExists(processorName, adminClientId);
+        CompletableFuture<Void> accepted = adminChannel.mergeEventProcessor(processorName, tokenStoreIdentifier);
+        Thread.sleep(500);
+        assertFalse(accepted.isDone());
+        processorInstructionHandler.performFailing();
+        expectException(accepted, Status.Code.CANCELLED);
+    }
+
+    @Test
+    void testMergeEventProcessorTimeout() throws Exception {
+        AdminChannel adminChannel = connection.adminChannel();
+        registerEventProcessor();
+        CompletableFuture<Void> accepted = adminChannel.mergeEventProcessor(processorName, tokenStoreIdentifier);
+        expectException(accepted, 10, Status.Code.DEADLINE_EXCEEDED);
+    }
+
+    @Test
+    void testMergeEventProcessorCompletedExceptionally() throws Exception {
+        AdminChannel adminChannel = connection.adminChannel();
+        FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
+        CompletableFuture<Void> accepted = adminChannel.mergeEventProcessor(processorName, tokenStoreIdentifier);
+        Thread.sleep(500);
+        assertFalse(accepted.isDone());
+        processorInstructionHandler.completeExceptionally(new RuntimeException("something failed"));
+        expectException(accepted, Status.Code.CANCELLED);
+    }
+
+    @Test
+    void testMoveEventProcessorSegmentWhenAlreadyClaimed() throws Exception {
+        AdminChannel adminChannel = connection.adminChannel();
+        registerEventProcessor();
+        CompletableFuture<Void> accepted = adminChannel.moveEventProcessorSegment(processorName,
+                                                                                  tokenStoreIdentifier,
+                                                                                  0,
+                                                                                  adminClientId);
         accepted.get(1, SECONDS);
         Assertions.assertTrue(accepted.isDone());
     }
 
+
     @Test
-    @Disabled("To reactivate after the release of AS 4.6.0")
-    void testMergeEventProcessor() throws Exception {
+    void testMoveEventProcessorSegment() throws Exception {
+        AxonServerConnectionFactory anotherClient = AxonServerConnectionFactory.forClient("admin-client-2",
+                                                                                          "another-client-id")
+                                                                               .routingServers(axonServerAddress)
+                                                                               .reconnectInterval(500, MILLISECONDS)
+                                                                               .build();
+        try {
+            AxonServerConnection anotherConnection = anotherClient.connect("default");
+            AdminChannel adminChannel = connection.adminChannel();
+            FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
+            anotherConnection.controlChannel().registerEventProcessor(processorName,
+                                                                      this::anotherEventProcessorInfo,
+                                                                      new FakeProcessorInstructionHandler());
+            waitUntilEventProcessorExists(processorName, "another-client-id");
+            CompletableFuture<Void> accepted = adminChannel.moveEventProcessorSegment(processorName,
+                                                                                      tokenStoreIdentifier,
+                                                                                      0,
+                                                                                      "another-client-id");
+            checkHandleSuccess(accepted, processorInstructionHandler);
+        } finally {
+            anotherClient.shutdown();
+        }
+    }
+
+    @Test
+    void testMoveEventProcessorSegmentTimeout() throws Exception {
+        AxonServerConnectionFactory anotherClient = AxonServerConnectionFactory.forClient("admin-client-2",
+                                                                                          "another-client-id")
+                                                                               .routingServers(axonServerAddress)
+                                                                               .reconnectInterval(500, MILLISECONDS)
+                                                                               .build();
+        try {
+            AxonServerConnection anotherConnection = anotherClient.connect("default");
+            AdminChannel adminChannel = connection.adminChannel();
+            registerEventProcessor();
+            anotherConnection.controlChannel().registerEventProcessor(processorName,
+                                                                      this::anotherEventProcessorInfo,
+                                                                      new FakeProcessorInstructionHandler());
+            waitUntilEventProcessorExists(processorName, "another-client-id");
+            CompletableFuture<Void> accepted = adminChannel.moveEventProcessorSegment(processorName,
+                                                                                      tokenStoreIdentifier,
+                                                                                      0,
+                                                                                      "another-client-id");
+            expectException(accepted, 10, Status.Code.DEADLINE_EXCEEDED);
+        } finally {
+            anotherClient.shutdown();
+        }
+    }
+
+    @Test
+    void testMoveEventProcessorSegmentWhenTargetMissing() throws Exception {
         AdminChannel adminChannel = connection.adminChannel();
-        CompletableFuture<Void> accepted = adminChannel.mergeEventProcessor("processor", "tokenStore");
+        FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
+        connection.controlChannel().registerEventProcessor(processorName,
+                                                           this::eventProcessorInfo,
+                                                           processorInstructionHandler);
+        CompletableFuture<Void> accepted = adminChannel.moveEventProcessorSegment(processorName,
+                                                                                  tokenStoreIdentifier,
+                                                                                  0,
+                                                                                  "anotherClient");
+        expectException(accepted, Status.Code.NOT_FOUND);
+    }
+
+    private void expectException(CompletableFuture<Void> accepted, Status.Code expected)
+            throws InterruptedException, TimeoutException {
+        expectException(accepted, 1, expected);
+    }
+
+    private void expectException(CompletableFuture<Void> accepted, int timeout, Status.Code expected)
+            throws InterruptedException, TimeoutException {
+        try {
+            accepted.get(timeout, SECONDS);
+            fail("Execution should throw an exception");
+        } catch (ExecutionException executionException) {
+            assertEquals(expected, Status.fromThrowable(executionException).getCode());
+        }
+    }
+
+    private void checkHandleSuccess(CompletableFuture<Void> accepted,
+                                    FakeProcessorInstructionHandler processorInstructionHandler)
+            throws InterruptedException, ExecutionException, TimeoutException {
+        Thread.sleep(500);
+        assertFalse(accepted.isDone());
+        processorInstructionHandler.performSuccessfully();
         accepted.get(1, SECONDS);
         Assertions.assertTrue(accepted.isDone());
+    }
+
+    private void waitUntilEventProcessorExists(String processorName, String clientId) {
+        assertWithin(1, SECONDS, () -> {
+            ResultStreamPublisher<EventProcessor> publisher = new ResultStreamPublisher<>(() -> connection.adminChannel()
+                                                                                                          .eventProcessorsByComponent(
+                                                                                                                  componentName));
+            assertEquals(Boolean.TRUE, Flux.from(publisher)
+                                           .any(ep -> ep.getIdentifier().getProcessorName().equals(processorName)
+                                                   && hasClient(ep.getClientInstanceList(), clientId))
+                                           .block());
+        });
+    }
+
+    private boolean hasClient(List<EventProcessorInstance> clientInstanceList, String clientId) {
+        return clientInstanceList.stream().anyMatch(epi -> epi.getClientId().equals(clientId));
     }
 }

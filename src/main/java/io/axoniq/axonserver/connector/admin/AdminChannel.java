@@ -60,58 +60,67 @@ public interface AdminChannel {
     ResultStream<EventProcessor> eventProcessorsByComponent(String component);
 
     /**
-     * Request to pause a specific event processor.
-     * Returns a {@link CompletableFuture} that completes when the request has been received by AxonServer.
-     * This doesn't imply that the event processor has been paused already, but only that the request has been properly
-     * delivered.
+     * Request to pause a specific event processor. Returns a {@link CompletableFuture} that completes when the pause
+     * has been performed
      *
      * @param eventProcessorName   the name of the event processor to pause
      * @param tokenStoreIdentifier the token store identifier of the processor to pause
-     * @return a {@link CompletableFuture} that completes when the request has been delivered to AxonServer
+     * @return a {@link CompletableFuture} that completes when the pause has been performed
      */
     CompletableFuture<Void> pauseEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
 
     /**
-     * Request to start a specific event processor.
-     * Returns a {@link CompletableFuture} that completes when the request has been received by AxonServer.
-     * This doesn't imply that the event processor has been started already, but only that the request has been properly
-     * delivered.
+     * Request to start a specific event processor. Returns a {@link CompletableFuture} that completes when the start
+     * has been performed
      *
      * @param eventProcessorName   the name of the event processor to start
      * @param tokenStoreIdentifier the token store identifier of the processor to start
-     * @return a {@link CompletableFuture} that completes when the request has been delivered to AxonServer
+     * @return a {@link CompletableFuture} that completes when the start has been performed
      */
     CompletableFuture<Void> startEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
 
     /**
-     * Request to split the biggest segment of a specific event processor.
-     * Returns a {@link CompletableFuture} that completes when the request has been received by AxonServer.
-     * This doesn't imply that the segment has been split already, but only that the request has been properly
-     * delivered.
+     * Request to split the biggest segment of a specific event processor. Returns a {@link CompletableFuture} that
+     * completes when the split has been performed
      *
      * @param eventProcessorName   the name of the event processor to split
      * @param tokenStoreIdentifier the token store identifier of the processor to split
-     * @return a {@link CompletableFuture} that completes when the request has been delivered to AxonServer
+     * @return a {@link CompletableFuture} that completes when the split has been performed
      */
     CompletableFuture<Void> splitEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
 
     /**
-     * Request to merge the two smallest segments of a specific event processor.
-     * Returns a {@link CompletableFuture} that completes when the request has been received by AxonServer.
-     * This doesn't imply that the segments has been merged already, but only that the request has been properly
-     * delivered.
+     * Request to merge the two smallest segments of a specific event processor. Returns a {@link CompletableFuture}
+     * that completes when the merge has been performed
      *
      * @param eventProcessorName   the name of the event processor to merge
      * @param tokenStoreIdentifier the token store identifier of the processor to merge
-     * @return a {@link CompletableFuture} that completes when the request has been delivered to AxonServer
+     * @return a {@link CompletableFuture} that completes when the merge has been performed
      */
     CompletableFuture<Void> mergeEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
 
     /**
-     * Request to create an Axon Server user, or update it if it's already present.
-     * Returns a {@link CompletableFuture} that completes when the request has been processed by AxonServer.
+     * Requests to move a specific event processor segment to a certain client. Returns a {@link CompletableFuture} that
+     * completes when all the other clients released the segment. There is no guarantee that the target client has
+     * already claimed the segment when the result completes.
      *
-     * @param request {@link CreateOrUpdateUserRequest} to create the user, containing the username, password and user roles
+     * @param eventProcessorName
+     * @param tokenStoreIdentifier
+     * @param segmentId
+     * @param targetClientIdentifier
+     * @return
+     */
+    CompletableFuture<Void> moveEventProcessorSegment(String eventProcessorName,
+                                                      String tokenStoreIdentifier,
+                                                      int segmentId,
+                                                      String targetClientIdentifier);
+
+    /**
+     * Request to create an Axon Server user, or update it if it's already present. Returns a {@link CompletableFuture}
+     * that completes when the request has been processed by AxonServer.
+     *
+     * @param request {@link CreateOrUpdateUserRequest} to create the user, containing the username, password and user
+     *                roles
      * @return a {@link CompletableFuture} that completes when the request has been processed by Axon Server
      */
     CompletableFuture<Void> createOrUpdateUser(CreateOrUpdateUserRequest request);

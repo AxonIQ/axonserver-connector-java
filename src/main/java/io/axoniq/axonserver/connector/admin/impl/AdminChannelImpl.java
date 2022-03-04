@@ -47,6 +47,7 @@ import io.axoniq.axonserver.grpc.admin.GetContextRequest;
 import io.axoniq.axonserver.grpc.admin.GetReplicationGroupRequest;
 import io.axoniq.axonserver.grpc.admin.JoinReplicationGroup;
 import io.axoniq.axonserver.grpc.admin.LeaveReplicationGroup;
+import io.axoniq.axonserver.grpc.admin.MoveSegment;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupAdminServiceGrpc;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupOverview;
 import io.axoniq.axonserver.grpc.admin.Token;
@@ -164,6 +165,21 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
         EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
         FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
         eventProcessorServiceStub.mergeEventProcessor(eventProcessorIdentifier, responseObserver);
+        return responseObserver.thenRun(() -> {
+        });
+    }
+
+    @Override
+    public CompletableFuture<Void> moveEventProcessorSegment(String eventProcessorName, String tokenStoreIdentifier,
+                                                             int segmentId, String targetClientIdentifier) {
+        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
+        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
+        MoveSegment request = MoveSegment.newBuilder()
+                                         .setEventProcessor(eventProcessorIdentifier)
+                                         .setSegment(segmentId)
+                                         .setTargetClientId(targetClientIdentifier)
+                                         .build();
+        eventProcessorServiceStub.moveEventProcessorSegment(request, responseObserver);
         return responseObserver.thenRun(() -> {
         });
     }
