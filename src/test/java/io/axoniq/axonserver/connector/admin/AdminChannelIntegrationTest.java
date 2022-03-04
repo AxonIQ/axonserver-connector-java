@@ -22,7 +22,6 @@ import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
 import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.ResultStreamPublisher;
 import io.axoniq.axonserver.connector.control.ProcessorInstructionHandler;
-import io.axoniq.axonserver.connector.impl.ServerAddress;
 import io.axoniq.axonserver.grpc.admin.EventProcessor;
 import io.axoniq.axonserver.grpc.admin.EventProcessorInstance;
 import io.axoniq.axonserver.grpc.admin.EventProcessorSegment;
@@ -200,6 +199,20 @@ class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
         AdminChannel adminChannel = connection.adminChannel();
         CompletableFuture<Void> accepted = adminChannel.getBalancingStrategies()
                 .thenCompose(balancingStrategies -> adminChannel.loadBalanceEventProcessor("processor", "tokenStore", balancingStrategies.get(0).getStrategy()));
+
+        accepted.get(1, SECONDS);
+        Assertions.assertTrue(accepted.isDone());
+    }
+
+    @Test
+    @Disabled("To reactivate after the release of AS 4.6.0")
+    void autoLoadBalance() throws Exception {
+        Supplier<EventProcessorInfo> eventProcessorInfoSupplier = this::eventProcessorInfo;
+        ProcessorInstructionHandler handler = mock(ProcessorInstructionHandler.class);
+        connection.controlChannel().registerEventProcessor(processorName, eventProcessorInfoSupplier, handler);
+        AdminChannel adminChannel = connection.adminChannel();
+        CompletableFuture<Void> accepted = adminChannel.getBalancingStrategies()
+                                                       .thenCompose(balancingStrategies -> adminChannel.autoLoadBalanceEventProcessor("processor", "tokenStore", balancingStrategies.get(1).getStrategy()));
 
         accepted.get(1, SECONDS);
         Assertions.assertTrue(accepted.isDone());
