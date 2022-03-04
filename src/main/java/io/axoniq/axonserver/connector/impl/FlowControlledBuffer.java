@@ -152,7 +152,7 @@ public abstract class FlowControlledBuffer<T, R> extends FlowControlledStream<T,
     /**
      * Retrieves, but does not remove, the first entry of this buffer, or returns {@code null} if the buffer is empty.
      *
-     * @return he first entry of this buffer without removing it, or {@code null} if it is empty
+     * @return the first entry of this buffer without removing it, or {@code null} if it is empty
      */
     protected T peek() {
         return validate(buffer.peek(), true);

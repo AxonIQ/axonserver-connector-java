@@ -25,6 +25,7 @@ import io.axoniq.axonserver.grpc.ErrorMessage;
  * @author Milan Savic
  * @author Stefan Dragisic
  * @author Allard Buijze
+ * @since 4.6.0
  */
 public interface CloseableBuffer<T> extends CloseableReadonlyBuffer<T> {
 

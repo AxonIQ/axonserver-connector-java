@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * @author Milan Savic
  * @author Stefan Dragisic
  * @author Allard Buijze
+ * @since 4.6.0
  */
 public class BlockingCloseableBuffer<T> implements CloseableBuffer<T> {
 

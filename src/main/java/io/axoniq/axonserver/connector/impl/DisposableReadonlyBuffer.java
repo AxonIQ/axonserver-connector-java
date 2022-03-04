@@ -23,6 +23,7 @@ package io.axoniq.axonserver.connector.impl;
  * @author Milan Savic
  * @author Stefan Dragisic
  * @author Allard Buijze
+ * @since 4.6.0
  */
 public interface DisposableReadonlyBuffer<T> extends CloseableReadonlyBuffer<T> {
 

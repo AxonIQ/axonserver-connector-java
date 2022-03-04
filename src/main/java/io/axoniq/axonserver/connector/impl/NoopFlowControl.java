@@ -20,9 +20,11 @@ import io.axoniq.axonserver.connector.FlowControl;
 
 /**
  * NOOP implementation of {@link FlowControl}.
+ *
  * @author Milan Savic
  * @author Stefan Dragisic
  * @author Allard Buijze
+ * @since 4.6.0
  */
 public enum NoopFlowControl implements FlowControl {
 

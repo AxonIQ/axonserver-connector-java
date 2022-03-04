@@ -34,6 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @author Milan Savic
  * @author Stefan Dragisic
  * @author Allard Buijze
+ * @since 4.6.0
  */
 public class RoundRobinMultiReadonlyBuffer<T> implements DisposableReadonlyBuffer<T> {
 

@@ -33,6 +33,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * @author Milan Savic
  * @author Stefan Dragisic
  * @author Allard Buijze
+ * @since 4.6.0
  */
 public class FlowControlledReplyChannelWriter<T> implements FlowControl {
 
@@ -69,6 +70,9 @@ public class FlowControlledReplyChannelWriter<T> implements FlowControl {
 
     @Override
     public void request(long requested) {
+        if (requested <= 0) {
+            return;
+        }
         requestedRef.getAndUpdate(current -> {
             try {
                 return Math.addExact(requested, current);

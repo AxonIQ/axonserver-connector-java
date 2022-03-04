@@ -29,6 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author Milan Savic
  * @author Stefan Dragisic
  * @author Allard Buijze
+ * @since 4.6.0
  */
 public class CloseAwareReplyChannel<T> implements ReplyChannel<T> {
 

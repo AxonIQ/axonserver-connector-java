@@ -18,9 +18,11 @@ package io.axoniq.axonserver.connector;
 
 /**
  * Flow control.
+ *
  * @author Milan Savic
  * @author Stefan Dragisic
  * @author Allard Buijze
+ * @since 4.6.0
  */
 public interface FlowControl {
 

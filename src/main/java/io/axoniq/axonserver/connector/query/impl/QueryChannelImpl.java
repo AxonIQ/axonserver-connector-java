@@ -531,6 +531,15 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         }
     }
 
+    /**
+     * Executes the {@code query} by invoking the given {@code handler}. Query responses will be sent via {@code
+     * replyChannel}. In order to improve performance, responses are buffered.
+     *
+     * @param handler      the handler for the given query
+     * @param query        the query to be executed
+     * @param replyChannel the channel for sending query responses
+     * @return a buffer that is going to be replenished automatically
+     */
     private DisposableReadonlyBuffer<QueryResponse> executeQuery(QueryHandler handler,
                                                                  QueryRequest query,
                                                                  ReplyChannel<QueryResponse> replyChannel) {

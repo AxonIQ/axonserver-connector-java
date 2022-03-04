@@ -259,6 +259,25 @@ class StreamingQueryIntegrationTest extends AbstractAxonServerIntegrationTest {
         assertTrue(response.hasErrorMessage());
     }
 
+    @Test
+    void testStreamingQueryWhenFlowControlThrowsAnException() throws InterruptedException, TimeoutException {
+        connection1.queryChannel()
+                   .registerQueryHandler(new ExceptionThrowingQueryHandler(),
+                                         new QueryDefinition("testQuery", "testResult"))
+                   .awaitAck(1, TimeUnit.SECONDS);
+
+        QueryRequest queryRequest = QueryRequest.newBuilder()
+                                                .setQuery("testQuery")
+                                                .addProcessingInstructions(clientSupportsStreaming())
+                                                .build();
+        ResultStream<QueryResponse> resultStream = connection2.queryChannel()
+                                                              .query(queryRequest);
+
+        QueryResponse response = resultStream.next();
+
+        assertTrue(response.hasErrorMessage());
+    }
+
     @NotNull
     private ProcessingInstruction clientSupportsStreaming() {
         return ProcessingInstruction.newBuilder()
@@ -267,6 +286,29 @@ class StreamingQueryIntegrationTest extends AbstractAxonServerIntegrationTest {
                                                            .setBooleanValue(true)
                                                            .build())
                                     .build();
+    }
+
+    private static class ExceptionThrowingQueryHandler implements QueryHandler {
+
+        @Override
+        public void handle(QueryRequest query, ReplyChannel<QueryResponse> responseHandler) {
+            // noop
+        }
+
+        @Override
+        public FlowControl stream(QueryRequest query, ReplyChannel<QueryResponse> responseHandler) {
+            return new FlowControl() {
+                @Override
+                public void request(long requested) {
+                    throw new RuntimeException("oops");
+                }
+
+                @Override
+                public void cancel() {
+                    throw new RuntimeException("oops");
+                }
+            };
+        }
     }
 
     private static class ErroringQueryHandler implements QueryHandler {
