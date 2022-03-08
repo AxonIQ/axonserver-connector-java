@@ -48,6 +48,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -450,8 +451,8 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
         }
 
         @Override
-        protected CommandProviderOutbound buildResultMessage(InstructionResult result) {
-            throw new UnsupportedOperationException("Command stream does not support InstructionResult");
+        protected Optional<CommandProviderOutbound> buildResultMessage(InstructionResult result) {
+            return Optional.empty();
         }
 
         @Override

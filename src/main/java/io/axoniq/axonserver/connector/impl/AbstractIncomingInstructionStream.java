@@ -28,6 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.invoke.MethodHandles;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
@@ -115,7 +116,7 @@ public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowCon
      * @param result the {@link InstructionResult} to base the stream specific acknowledgement on
      * @return a stream specific acknowledgment message of type {@code OUT} based on the given {@code result}
      */
-    protected abstract OUT buildResultMessage(InstructionResult result);
+    protected abstract Optional<OUT> buildResultMessage(InstructionResult result);
 
     /**
      * Returns the instruction identifier of the given {@code instruction}.

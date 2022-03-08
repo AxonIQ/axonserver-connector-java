@@ -56,6 +56,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -510,15 +511,6 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                 responseHandler.completeWithError(errorCategory, message);
             }
 
-            @Override
-            public void sendFailureResult(ErrorMessage errorMessage) {
-                responseHandler.sendFailureResult(errorMessage);
-            }
-
-            @Override
-            public void sendSuccessResult() {
-                responseHandler.sendSuccessResult();
-            }
         }));
     }
 
@@ -551,15 +543,6 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                 result.completeWithError(errorCategory, message);
             }
 
-            @Override
-            public void sendFailureResult(ErrorMessage errorMessage) {
-                result.sendFailureResult(errorMessage);
-            }
-
-            @Override
-            public void sendSuccessResult() {
-                result.sendSuccessResult();
-            }
         });
     }
 
@@ -596,16 +579,6 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                     public void completeWithError(ErrorCategory errorCategory, String message) {
                         result.completeWithError(errorCategory, message);
                     }
-
-                    @Override
-                    public void sendFailureResult(ErrorMessage errorMessage) {
-                        result.sendFailureResult(errorMessage);
-                    }
-
-                    @Override
-                    public void sendSuccessResult() {
-                        result.sendSuccessResult();
-                    }
                 }
         );
     }
@@ -628,21 +601,6 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         public void sendLast(QueryResponse outboundMessage) {
             delegate.sendLast(outboundMessage);
             onClose.run();
-        }
-
-        @Override
-        public void sendSuccessResult() {
-            delegate.sendSuccessResult();
-        }
-
-        @Override
-        public void sendFailureResult() {
-            delegate.sendFailureResult();
-        }
-
-        @Override
-        public void sendFailureResult(ErrorMessage errorMessage) {
-            delegate.sendFailureResult(errorMessage);
         }
 
         @Override
@@ -686,8 +644,8 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         }
 
         @Override
-        protected QueryProviderOutbound buildResultMessage(InstructionResult result) {
-            throw new UnsupportedOperationException("Query stream does not support InstructionResult");
+        protected Optional<QueryProviderOutbound> buildResultMessage(InstructionResult result) {
+            return Optional.empty();
         }
 
         @Override

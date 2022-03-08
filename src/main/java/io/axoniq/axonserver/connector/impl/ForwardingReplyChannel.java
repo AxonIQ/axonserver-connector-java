@@ -22,6 +22,7 @@ import io.axoniq.axonserver.grpc.ErrorMessage;
 import io.axoniq.axonserver.grpc.InstructionResult;
 import io.grpc.stub.StreamObserver;
 
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
@@ -37,7 +38,7 @@ public class ForwardingReplyChannel<T> implements ReplyChannel<T> {
     private final String instructionId;
     private final String clientId;
     private final StreamObserver<T> stream;
-    private final Function<InstructionResult, T> resultBuilder;
+    private final Function<InstructionResult, Optional<T>> resultBuilder;
     private final Runnable onConsumed;
     private final AtomicBoolean completed = new AtomicBoolean();
 
@@ -50,14 +51,14 @@ public class ForwardingReplyChannel<T> implements ReplyChannel<T> {
      *                      #completeWithError(ErrorCategory, String)} invocation
      * @param stream        the {@link StreamObserver} to forward replies of this {@link ReplyChannel} on
      * @param resultBuilder the builder function used to construct the {@link InstructionResult} message,
-     *                      used for both a {@link #sendSuccessResult()} and {@link #sendFailureResult()}
+     *                      used for both a {@link #sendSuccessResult()} and {@link #sendFailureResult(ErrorMessage)}
      * @param onComplete    operation to perform when this {@link ReplyChannel} is completed, both successfully and
      *                      exceptionally
      */
     public ForwardingReplyChannel(String instructionId,
                                   String clientId,
                                   StreamObserver<T> stream,
-                                  Function<InstructionResult, T> resultBuilder,
+                                  Function<InstructionResult, Optional<T>> resultBuilder,
                                   Runnable onComplete) {
         this.instructionId = instructionId;
         this.clientId = clientId;
@@ -71,13 +72,19 @@ public class ForwardingReplyChannel<T> implements ReplyChannel<T> {
         stream.onNext(outboundMessage);
     }
 
-    @Override
-    public void sendSuccessResult() {
+    /**
+     * Sends a confirmation that the instruction has been executed with success.
+     * If not explicitly sent, it will be sent once the {@link #complete()} method is invoked.
+     * <p>
+     * If the incoming instruction has no instruction ID, this method does nothing.
+     */
+    private void sendSuccessResult() {
         if (instructionId != null && !instructionId.isEmpty() && resultSent.compareAndSet(false, true)) {
-            stream.onNext(resultBuilder.apply(InstructionResult.newBuilder()
-                                                               .setInstructionId(instructionId)
-                                                               .setSuccess(true)
-                                                               .build()));
+            resultBuilder.apply(InstructionResult.newBuilder()
+                                                 .setInstructionId(instructionId)
+                                                 .setSuccess(true)
+                                                 .build())
+                         .ifPresent(stream::onNext);
         }
     }
 
@@ -93,8 +100,15 @@ public class ForwardingReplyChannel<T> implements ReplyChannel<T> {
         markConsumed();
     }
 
-    @Override
-    public void sendFailureResult(ErrorMessage errorMessage) {
+    /**
+     * Sends a failed result, indicating that the incoming message could not be handled as expected, using
+     * given {@code errorMessage} to describe the reason. If not explicitly sent, it will be sent once the {@link
+     * #completeWithError(ErrorMessage)} or {@link #completeWithError(ErrorCategory, String)} methods are invoked. The
+     * given {@code errorMessage} should provide sufficient information about the error.
+     * <p>
+     * If the incoming instruction has no instruction ID, this method does nothing.
+     */
+    private void sendFailureResult(ErrorMessage errorMessage) {
         if (instructionId != null && !instructionId.isEmpty() && resultSent.compareAndSet(false, true)) {
             InstructionResult failure =
                     InstructionResult.newBuilder()
@@ -102,7 +116,7 @@ public class ForwardingReplyChannel<T> implements ReplyChannel<T> {
                                      .setError(errorMessage == null ? ErrorMessage.getDefaultInstance() : errorMessage)
                                      .setSuccess(false)
                                      .build();
-            stream.onNext(resultBuilder.apply(failure));
+            resultBuilder.apply(failure).ifPresent(stream::onNext);
         }
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2022. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import io.grpc.stub.CallStreamObserver;
 import io.grpc.stub.ClientCallStreamObserver;
 import org.junit.jupiter.api.*;
 
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -81,8 +82,8 @@ class AbstractIncomingInstructionStreamTest {
         }
 
         @Override
-        protected Object buildResultMessage(InstructionResult result) {
-            throw new UnsupportedOperationException();
+        protected Optional<Object> buildResultMessage(InstructionResult result) {
+            return Optional.empty();
         }
 
         @Override

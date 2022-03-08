@@ -53,38 +53,6 @@ public interface ReplyChannel<T> {
     }
 
     /**
-     * Sends a confirmation that the instruction has been executed with success.
-     * If not explicitly sent, it will be sent once the {@link #complete()} method is invoked.
-     * <p>
-     * If the incoming instruction has no instruction ID, this method does nothing.
-     */
-    void sendSuccessResult();
-
-    /**
-     * Sends a failed result, indicating that the incoming message could not be handled as expected. Unlike
-     * {@link #sendFailureResult(ErrorMessage)}, no specific error details are provided. If not explicitly sent, it will
-     * be sent once the {@link #completeWithError(ErrorMessage)} or {@link #completeWithError(ErrorCategory, String)}
-     * methods are invoked.
-     * <p>
-     * If the incoming instruction has no instruction ID, this method does nothing.
-     *
-     * @see #sendFailureResult(ErrorMessage)
-     */
-    default void sendFailureResult() {
-        sendFailureResult(ErrorMessage.getDefaultInstance());
-    }
-
-    /**
-     * Sends a failed result, indicating that the incoming message could not be handled as expected, using
-     * given {@code errorMessage} to describe the reason. If not explicitly sent, it will be sent once the {@link
-     * #completeWithError(ErrorMessage)} or {@link #completeWithError(ErrorCategory, String)} methods are invoked. The
-     * given {@code errorMessage} should provide sufficient information about the error.
-     * <p>
-     * If the incoming instruction has no instruction ID, this method does nothing.
-     */
-    void sendFailureResult(ErrorMessage errorMessage);
-
-    /**
      * Marks the inbound instruction as completed.
      */
     void complete();
