@@ -53,19 +53,18 @@ public interface ReplyChannel<T> {
     }
 
     /**
-     * Sends an receipt acknowledgement if one hasn't been sent yet for this instruction. If not explicitly sent, it
-     * will be sent once the {@link #complete()} method is invoked.
+     * Sends a confirmation that the instruction has been executed with success.
+     * If not explicitly sent, it will be sent once the {@link #complete()} method is invoked.
      * <p>
      * If the incoming instruction has no instruction ID, this method does nothing.
      */
     void sendSuccessResult();
 
     /**
-     * Sends a negative acknowledgement, indicating that the incoming message could not be handled as expected. Unlike
+     * Sends a failed result, indicating that the incoming message could not be handled as expected. Unlike
      * {@link #sendFailureResult(ErrorMessage)}, no specific error details are provided. If not explicitly sent, it will
-     * be send
-     * once the {@link #completeWithError(ErrorMessage)} or {@link #completeWithError(ErrorCategory, String)} methods
-     * are invoked.
+     * be sent once the {@link #completeWithError(ErrorMessage)} or {@link #completeWithError(ErrorCategory, String)}
+     * methods are invoked.
      * <p>
      * If the incoming instruction has no instruction ID, this method does nothing.
      *
@@ -76,8 +75,8 @@ public interface ReplyChannel<T> {
     }
 
     /**
-     * Sends a negative acknowledgement, indicating that the incoming message could not be handled as expected, using
-     * given {@code errorMessage} to describe the reason. If not explicitly sent, it will be send once the {@link
+     * Sends a failed result, indicating that the incoming message could not be handled as expected, using
+     * given {@code errorMessage} to describe the reason. If not explicitly sent, it will be sent once the {@link
      * #completeWithError(ErrorMessage)} or {@link #completeWithError(ErrorCategory, String)} methods are invoked. The
      * given {@code errorMessage} should provide sufficient information about the error.
      * <p>

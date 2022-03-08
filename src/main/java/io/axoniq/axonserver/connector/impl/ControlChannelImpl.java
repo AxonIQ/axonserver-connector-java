@@ -144,8 +144,8 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
     void handleReconnectRequest(PlatformOutboundInstruction platformOutboundInstruction,
                                 ReplyChannel<PlatformInboundInstruction> replyChannel) {
         logger.info("AxonServer requested reconnect for context '{}'", context);
-        replyChannel.sendSuccessResult();
         reconnectHandler.run();
+        replyChannel.sendSuccessResult();
     }
 
     @Override

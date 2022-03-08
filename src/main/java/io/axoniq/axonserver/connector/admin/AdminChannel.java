@@ -104,11 +104,12 @@ public interface AdminChannel {
      * completes when all the other clients released the segment. There is no guarantee that the target client has
      * already claimed the segment when the result completes.
      *
-     * @param eventProcessorName
-     * @param tokenStoreIdentifier
-     * @param segmentId
-     * @param targetClientIdentifier
-     * @return
+     * @param eventProcessorName     the name of the event processor to move
+     * @param tokenStoreIdentifier   the token store identifier of the processor to move
+     * @param segmentId              the identifier of the segment to move
+     * @param targetClientIdentifier the desired destination for the segment
+     * @return a {@link CompletableFuture} that completes when all the other clients released the segment.
+     * There is no guarantee that the target client has already claimed the segment when the result completes.
      */
     CompletableFuture<Void> moveEventProcessorSegment(String eventProcessorName,
                                                       String tokenStoreIdentifier,
@@ -193,7 +194,8 @@ public interface AdminChannel {
     /**
      * Request to delete a context in Axon Server.
      *
-     * @param request {@link DeleteContextRequest} to delete the context, containing the context name and option to preserve event store.
+     * @param request {@link DeleteContextRequest} to delete the context, containing the context name and option to
+     *                preserve event store.
      * @return a {@link CompletableFuture} that completes when context has been deleted
      */
     CompletableFuture<Void> deleteContext(DeleteContextRequest request);
@@ -225,7 +227,7 @@ public interface AdminChannel {
      * Returns a {@link CompletableFuture} that completes when the request has been processed by Axon Server.
      *
      * @param request {@link CreateReplicationGroupRequest} to create replication group,
-     * containing the replication group name, the node name, role...
+     *                containing the replication group name, the node name, role...
      * @return a {@link CompletableFuture} that completes when the request has been processed to AxonServer
      */
     CompletableFuture<Void> createReplicationGroup(CreateReplicationGroupRequest request);
@@ -234,7 +236,7 @@ public interface AdminChannel {
      * Request to delete a replication group in Axon Server.
      *
      * @param request {@link DeleteReplicationGroupRequest} to delete the replication group,
-     * containing the replication group name and option to preserve event store.
+     *                containing the replication group name and option to preserve event store.
      * @return a {@link CompletableFuture} that completes when the replication group has been deleted
      */
     CompletableFuture<Void> deleteReplicationGroup(DeleteReplicationGroupRequest request);
@@ -243,7 +245,8 @@ public interface AdminChannel {
      * Request to retrieve replication group overview in Axon Server.
      *
      * @param replicationGroup is the name of the replication group to retrieve
-     * @return a {@link CompletableFuture} containing {@link ReplicationGroupOverview} data such as members, contexts roles, etc.
+     * @return a {@link CompletableFuture} containing {@link ReplicationGroupOverview} data such as members, contexts
+     * roles, etc.
      */
     CompletableFuture<ReplicationGroupOverview> getReplicationGroup(String replicationGroup);
 
@@ -259,7 +262,7 @@ public interface AdminChannel {
      * Returns a {@link CompletableFuture} that completes when the request has been processed by AxonServer.
      *
      * @param request {@link JoinReplicationGroup} to add a node to replication group,
-     * containing the replication group name, the node name, role...
+     *                containing the replication group name, the node name, role...
      * @return a {@link CompletableFuture} that completes when the request has been processed to AxonServer
      */
     CompletableFuture<Void> addNodeToReplicationGroup(JoinReplicationGroup request);
@@ -272,6 +275,4 @@ public interface AdminChannel {
      * @return a {@link CompletableFuture} that completes when the request has been processed by Axon Server
      */
     CompletableFuture<Void> removeNodeFromReplicationGroup(LeaveReplicationGroup request);
-
-
 }

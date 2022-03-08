@@ -469,7 +469,6 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         ReplyChannel<QueryResponse> responseHandler = new CloseAwareReplyChannelAdapter(responseChannel, () -> completionHandle.complete(null));
         Set<QueryHandler> handlers = queryHandlers.getOrDefault(query.getQuery(), Collections.emptySet());
         if (handlers.isEmpty()) {
-            responseHandler.sendFailureResult();
             responseHandler.sendLast(QueryResponse.newBuilder()
                                                   .setRequestIdentifier(query.getMessageIdentifier())
                                                   .setErrorCode(ErrorCategory.NO_HANDLER_FOR_QUERY.errorCode())
@@ -478,8 +477,6 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                                                                                .build())
                                                   .build());
         }
-
-        responseHandler.sendSuccessResult();
 
         AtomicInteger completeCounter = new AtomicInteger(handlers.size());
         handlers.forEach(queryHandler -> queryHandler.handle(query, new ReplyChannel<QueryResponse>() {

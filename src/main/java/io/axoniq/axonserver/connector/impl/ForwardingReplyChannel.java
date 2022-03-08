@@ -19,7 +19,6 @@ package io.axoniq.axonserver.connector.impl;
 import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.grpc.ErrorMessage;
-import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.InstructionResult;
 import io.grpc.stub.StreamObserver;
 
@@ -45,14 +44,14 @@ public class ForwardingReplyChannel<T> implements ReplyChannel<T> {
     /**
      * Construct a {@link ForwardingReplyChannel} to forward replies to the given {@code stream}.
      *
-     * @param instructionId the instruction identifier used to send ACK or NACK messages. If the given instruction
-     *                      identifier is {@code null} or empty, no ACK/NACK will be send
+     * @param instructionId the instruction identifier used to send Result Messages. If the given instruction
+     *                      identifier is {@code null} or empty, no result will be sent
      * @param clientId      the client identifier used to define the error location upon a {@link
      *                      #completeWithError(ErrorCategory, String)} invocation
      * @param stream        the {@link StreamObserver} to forward replies of this {@link ReplyChannel} on
-     * @param resultBuilder the builder function used to construct the {@link InstructionAck} message, used for both a
-     *                      {@link #sendSuccessResult()} and {@link #sendFailureResult()}
-     * @param onComplete    operation to perform when this this {@link ReplyChannel} is completed, both successfully and
+     * @param resultBuilder the builder function used to construct the {@link InstructionResult} message,
+     *                      used for both a {@link #sendSuccessResult()} and {@link #sendFailureResult()}
+     * @param onComplete    operation to perform when this {@link ReplyChannel} is completed, both successfully and
      *                      exceptionally
      */
     public ForwardingReplyChannel(String instructionId,

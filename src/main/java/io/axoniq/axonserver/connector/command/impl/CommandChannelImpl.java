@@ -112,10 +112,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
     private void handleIncomingCommand(CommandProviderInbound message, ReplyChannel<CommandProviderOutbound> outbound) {
         Command command = message.getCommand();
         CommandHandler handler = commandHandlers.get(command.getName());
-        if (handler != null) {
-            outbound.sendSuccessResult();
-        } else {
-            outbound.sendFailureResult();
+        if (handler == null) {
             handler = noCommandHandler;
         }
 
