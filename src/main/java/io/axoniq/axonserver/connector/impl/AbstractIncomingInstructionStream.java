@@ -112,6 +112,7 @@ public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowCon
 
     /**
      * Builds a stream specific result message of type {@code OUT} based on the given {@code result}.
+     * If the {@link Optional<OUT>} is empty, no instruction result will be sent.
      *
      * @param result the {@link InstructionResult} to base the stream specific acknowledgement on
      * @return a stream specific acknowledgment message of type {@code OUT} based on the given {@code result}
