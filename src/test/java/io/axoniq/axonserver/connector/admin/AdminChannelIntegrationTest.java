@@ -174,7 +174,7 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         EventProcessorInstance instance = eventProcessor.getClientInstanceList().get(0);
         assertEquals("admin-client-1", instance.getClientId());
         assertTrue(instance.getIsRunning());
-        assertEquals(12, instance.getMaxSegments());
+        assertEquals(12, instance.getMaxCapacity());
         assertEquals(2, instance.getClaimedSegmentCount());
         EventProcessorSegment segment = instance.getClaimedSegmentList().get(0);
         assertEquals(2, segment.getOnePartOf());
