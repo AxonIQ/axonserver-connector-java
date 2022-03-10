@@ -184,11 +184,11 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public CompletableFuture<Void> autoLoadBalanceEventProcessor(String eventProcessorName, String tokenStoreIdentifier,
-                                                             String strategy) {
+    public CompletableFuture<Void> setAutoLoadBalanceStrategy(String eventProcessorName, String tokenStoreIdentifier,
+                                                              String strategy) {
         EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
         FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
-        eventProcessorServiceStub.autoLoadBalanceProcessor(LoadBalanceRequest.newBuilder().setProcessor(
+        eventProcessorServiceStub.setAutoLoadBalanceStrategy(LoadBalanceRequest.newBuilder().setProcessor(
                                                                                  eventProcessorIdentifier)
                                                                          .setStrategy(strategy)
                                                                          .build(), responseObserver);

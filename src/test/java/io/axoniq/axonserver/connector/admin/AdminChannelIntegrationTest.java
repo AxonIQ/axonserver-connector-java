@@ -212,7 +212,7 @@ class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
         connection.controlChannel().registerEventProcessor(processorName, eventProcessorInfoSupplier, handler);
         AdminChannel adminChannel = connection.adminChannel();
         CompletableFuture<Void> accepted = adminChannel.getBalancingStrategies()
-                                                       .thenCompose(balancingStrategies -> adminChannel.autoLoadBalanceEventProcessor("processor", "tokenStore", balancingStrategies.get(1).getStrategy()));
+                                                       .thenCompose(balancingStrategies -> adminChannel.setAutoLoadBalanceStrategy("processor", "tokenStore", balancingStrategies.get(1).getStrategy()));
 
         accepted.get(1, SECONDS);
         Assertions.assertTrue(accepted.isDone());

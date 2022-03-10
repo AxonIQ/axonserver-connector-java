@@ -122,7 +122,7 @@ public interface AdminChannel {
     CompletableFuture<Void> loadBalanceEventProcessor(String eventProcessorName, String tokenStoreIdentifier, String strategy);
 
     /**
-     * Request to auto balance the load for the given {@code eventProcessorName} within the connected client.
+     *  Updates the autoloadbalance strategy for a {@code eventProcessorName} within the connected client.
      * Returns a {@link CompletableFuture} that completes when the request has been received by Axon Server.
      * Note that this doesn't imply that the processor is balanced, but only that the request has been properly
      * delivered.
@@ -132,7 +132,7 @@ public interface AdminChannel {
      * @param strategy             the balancing strategy to use
      * @return a {@link CompletableFuture} that completes when the request is delivered to Axon Server
      */
-    CompletableFuture<Void> autoLoadBalanceEventProcessor(String eventProcessorName, String tokenStoreIdentifier, String strategy);
+    CompletableFuture<Void> setAutoLoadBalanceStrategy(String eventProcessorName, String tokenStoreIdentifier, String strategy);
 
 
     /**
