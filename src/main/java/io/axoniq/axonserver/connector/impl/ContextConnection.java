@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2020-2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,9 @@ import io.axoniq.axonserver.connector.command.CommandChannel;
 import io.axoniq.axonserver.connector.command.impl.CommandChannelImpl;
 import io.axoniq.axonserver.connector.control.ControlChannel;
 import io.axoniq.axonserver.connector.event.EventChannel;
+import io.axoniq.axonserver.connector.event.EventTransformationChannel;
 import io.axoniq.axonserver.connector.event.impl.EventChannelImpl;
+import io.axoniq.axonserver.connector.event.impl.EventTransformationImpl;
 import io.axoniq.axonserver.connector.query.QueryChannel;
 import io.axoniq.axonserver.connector.query.impl.QueryChannelImpl;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
@@ -48,6 +50,7 @@ public class ContextConnection implements AxonServerConnection {
     private final AtomicReference<CommandChannelImpl> commandChannel = new AtomicReference<>();
     private final AtomicReference<EventChannelImpl> eventChannel = new AtomicReference<>();
     private final AtomicReference<QueryChannelImpl> queryChannel = new AtomicReference<>();
+    private final AtomicReference<EventTransformationImpl> eventTransformerChannel = new AtomicReference<>();
     private final ScheduledExecutorService executorService;
     private final AxonServerManagedChannel connection;
     private final String context;
@@ -149,6 +152,14 @@ public class ContextConnection implements AxonServerConnection {
     public EventChannel eventChannel() {
         EventChannelImpl channel = this.eventChannel.updateAndGet(
                 createIfNull(() -> new EventChannelImpl(clientIdentification, executorService, connection))
+        );
+        return ensureConnected(channel);
+    }
+
+    @Override
+    public EventTransformationChannel eventTransformationChannel() {
+        EventTransformationImpl channel = this.eventTransformerChannel.updateAndGet(
+                createIfNull(() -> new EventTransformationImpl(clientIdentification, executorService, connection))
         );
         return ensureConnected(channel);
     }
