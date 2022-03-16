@@ -101,7 +101,7 @@ public interface AdminChannel {
 
     /**
      * Requests to move a specific event processor segment to a certain client. Returns a {@link CompletableFuture} that
-     * completes when all the other clients released the segment. There is no guarantee that the target client has
+     * completes when all clients other than the {@code targetClientIdentifier} release or disregard the segment for claiming. There is no guarantee that the target client has
      * already claimed the segment when the result completes.
      *
      * @param eventProcessorName     the name of the event processor to move
