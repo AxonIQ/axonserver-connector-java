@@ -12,14 +12,12 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * @author Stefan Dragisic
+ * @since 4.6.0
  */
 public interface EventTransformationChannel {
 
-    CompletableFuture<TransformationId> startTransformation();
-    CompletableFuture<Confirmation> transformEvents(List<TransformEventsRequest> request);
-    CompletableFuture<Confirmation> cancelTransformation(TransformationId request);
-    CompletableFuture<Confirmation> applyTransformation(ApplyTransformationRequest request);
-    CompletableFuture<Confirmation> rollbackTransformation(TransformationId request);
-    CompletableFuture<Confirmation> deleteOldVersions(TransformationId request);
+    //todo get all transformation
+    //todo get transformation by id
+    CompletableFuture<EventTransformation> newTransformation();
 
 }

@@ -23,7 +23,7 @@ import io.axoniq.axonserver.connector.control.ControlChannel;
 import io.axoniq.axonserver.connector.event.EventChannel;
 import io.axoniq.axonserver.connector.event.EventTransformationChannel;
 import io.axoniq.axonserver.connector.event.impl.EventChannelImpl;
-import io.axoniq.axonserver.connector.event.impl.EventTransformationImpl;
+import io.axoniq.axonserver.connector.event.impl.EventTransformationChannelImpl;
 import io.axoniq.axonserver.connector.query.QueryChannel;
 import io.axoniq.axonserver.connector.query.impl.QueryChannelImpl;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
@@ -50,7 +50,7 @@ public class ContextConnection implements AxonServerConnection {
     private final AtomicReference<CommandChannelImpl> commandChannel = new AtomicReference<>();
     private final AtomicReference<EventChannelImpl> eventChannel = new AtomicReference<>();
     private final AtomicReference<QueryChannelImpl> queryChannel = new AtomicReference<>();
-    private final AtomicReference<EventTransformationImpl> eventTransformerChannel = new AtomicReference<>();
+    private final AtomicReference<EventTransformationChannelImpl> eventTransformerChannel = new AtomicReference<>();
     private final ScheduledExecutorService executorService;
     private final AxonServerManagedChannel connection;
     private final String context;
@@ -158,8 +158,8 @@ public class ContextConnection implements AxonServerConnection {
 
     @Override
     public EventTransformationChannel eventTransformationChannel() {
-        EventTransformationImpl channel = this.eventTransformerChannel.updateAndGet(
-                createIfNull(() -> new EventTransformationImpl(clientIdentification, executorService, connection))
+        EventTransformationChannelImpl channel = this.eventTransformerChannel.updateAndGet(
+                createIfNull(() -> new EventTransformationChannelImpl(clientIdentification, executorService, connection))
         );
         return ensureConnected(channel);
     }
