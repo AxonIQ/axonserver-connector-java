@@ -128,8 +128,8 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
         return responseObserver;
     }
 
-    private CompletableFuture<Confirmation> deleteOldVersions(
-            io.axoniq.axonserver.connector.event.EventTransformation.TransformationId request) {
+    @Override
+    public CompletableFuture<Confirmation> deleteOldVersions() {
         FutureStreamObserver<Confirmation> responseObserver = new FutureStreamObserver<>(new AxonServerException(
                 ErrorCategory.OTHER,
                 "An unknown error occurred while cancelling transformation. No response received from Server.",
@@ -236,12 +236,6 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
                                                             .build())
                         .thenRun(() -> lastEventToken.set(token))
                         .thenApply(this::applyOrCancelEventTransformationStep);
-            }
-
-            @Override
-            public CompletableFuture<Void> cleanUpBackupFiles() {
-                return deleteOldVersions(id()).thenAccept(confirmation -> {
-                });
             }
         };
     }

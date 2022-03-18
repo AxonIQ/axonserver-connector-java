@@ -19,5 +19,5 @@ public interface EventTransformationChannel {
     //todo get all transformation
     //todo get transformation by id
     CompletableFuture<EventTransformation> newTransformation(String description);
-
+    CompletableFuture<Confirmation> deleteOldVersions();
 }
