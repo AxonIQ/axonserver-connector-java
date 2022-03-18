@@ -5,7 +5,7 @@ import io.axoniq.axonserver.grpc.event.Event;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * @author Marc Gathier
+ * @author Stefan Dragisic
  * @since 4.6.0
  */
 public interface EventTransformation {
