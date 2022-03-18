@@ -1,6 +1,5 @@
 package io.axoniq.axonserver.connector.event.impl;
 
-import com.google.protobuf.Empty;
 import io.axoniq.axonserver.connector.AxonServerException;
 import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.event.EventTransformation;
@@ -14,6 +13,7 @@ import io.axoniq.axonserver.grpc.event.Confirmation;
 import io.axoniq.axonserver.grpc.event.DeletedEvent;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.EventTransformationServiceGrpc;
+import io.axoniq.axonserver.grpc.event.StartTransformationRequest;
 import io.axoniq.axonserver.grpc.event.TransformEventsRequest;
 import io.axoniq.axonserver.grpc.event.TransformationId;
 import io.axoniq.axonserver.grpc.event.TransformedEvent;
@@ -43,14 +43,15 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
     }
 
     @Override
-    public CompletableFuture<EventTransformation> newTransformation() {
+    public CompletableFuture<EventTransformation> newTransformation(String description) {
         FutureStreamObserver<TransformationId> responseObserver = new FutureStreamObserver<>(new AxonServerException(
                 ErrorCategory.OTHER,
                 "An unknown error occurred while starting transformation. No response received from Server.",
                 ""
         ));
 
-        eventTransformationService.startTransformation(Empty.newBuilder().build(),
+        eventTransformationService.startTransformation(StartTransformationRequest.newBuilder()
+                                                                                 .setDescription(description).build(),
                                                        responseObserver);
         return responseObserver.thenApply(this::startedTransformationStep);
     }
@@ -210,11 +211,12 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
                                                             .setTransformationId(io.axoniq.axonserver.grpc.event.TransformationId.newBuilder()
                                                                                                                                  .setId(id().id())
                                                                                                                                  .build())
+                                                            .setPreviousToken(
+                                                                    previousToken)
                                                             .setEvent(TransformedEvent.newBuilder()
                                                                                       .setEvent(event)
                                                                                       .setToken(token)
-                                                                                      .setPreviousToken(
-                                                                                              previousToken)
+
                                                                                       .build())
                                                             .build()).thenRun(() -> lastEventToken.set(token))
                                                                      .thenApply(this::applyOrCancelEventTransformationStep);
@@ -226,10 +228,10 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
                                                             .setTransformationId(io.axoniq.axonserver.grpc.event.TransformationId.newBuilder()
                                                                                                                                  .setId(id().id())
                                                                                                                                  .build())
+                                                            .setPreviousToken(
+                                                                    previousToken)
                                                             .setDeleteEvent(DeletedEvent.newBuilder()
                                                                                         .setToken(token)
-                                                                                        .setPreviousToken(
-                                                                                                previousToken)
                                                                                         .build())
                                                             .build())
                         .thenRun(() -> lastEventToken.set(token))

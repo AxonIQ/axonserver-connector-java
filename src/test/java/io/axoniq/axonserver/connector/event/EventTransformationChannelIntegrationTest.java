@@ -35,7 +35,7 @@ public class EventTransformationChannelIntegrationTest {  //extends AbstractAxon
     void startAndCancelTransformation() throws Exception {
         EventTransformationChannel eventTransformationChannel = connection.eventTransformationChannel();
 
-        eventTransformationChannel.newTransformation()
+        eventTransformationChannel.newTransformation("my transformation")
                 .thenCompose(transformation -> transformation.deleteEvent(24,-1))
                 .thenCompose(EventTransformation.ApplyOrCancelEventTransformation::apply)
                 .thenCompose(EventTransformation.RollbackEventTransformation::rollback);

@@ -18,6 +18,6 @@ public interface EventTransformationChannel {
 
     //todo get all transformation
     //todo get transformation by id
-    CompletableFuture<EventTransformation> newTransformation();
+    CompletableFuture<EventTransformation> newTransformation(String description);
 
 }
