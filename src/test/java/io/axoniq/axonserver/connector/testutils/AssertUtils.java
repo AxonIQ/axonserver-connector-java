@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2020-2022. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,13 @@
 
 package io.axoniq.axonserver.connector.testutils;
 
-import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.*;
 
+import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Utility class for special assertions
@@ -90,10 +90,61 @@ public abstract class AssertUtils {
         assertWithin(time, unit, () -> assertFalse(booleanSupplier));
     }
 
+    /**
+     * Assert that the given {@code assertion} succeeds for the entire {@code timeFrame}. The given {@code
+     * validationInterval} defines the interval between consecutive validations of the {@code assertion}.
+     *
+     * @param timeFrame          the {@link Duration} for which the given {@code assertion} should succeed
+     * @param validationInterval the {@link Duration} to wait between consecutive validation attempts of the given
+     *                           {@code assertion}
+     * @param assertion          a {@link Runnable} containing the assertion to succeed for the given {@code timeFrame}
+     */
+    public static void assertFor(Duration timeFrame, Duration validationInterval, Runnable assertion) {
+        long now = System.currentTimeMillis();
+        long deadline = timeFrame.plusMillis(now).toMillis();
+        while (now < deadline) {
+            assertion.run();
+            try {
+                Thread.sleep(validationInterval.toMillis());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(
+                        "Testing thread has been interrupted. Unable to keep validating the given assertion."
+                );
+            }
+            now = System.currentTimeMillis();
+        }
+    }
+
+    /**
+     * Assert that the given {@code assertion} succeeds, up to and {@code until} the {@link BooleanSupplier} returns
+     * {@code false}. The given {@code validationInterval} defines the interval between consecutive validations of the
+     * {@code assertion}.
+     *
+     * @param until              a {@link BooleanSupplier} to return {@code false} if the given {@code assertion} should
+     *                           not be validated any more
+     * @param validationInterval the {@link Duration} to wait between consecutive validation attempts of the given
+     *                           {@code assertion}
+     * @param assertion          a {@link Runnable} containing the assertion to succeed up to and {@code until} the
+     *                           supplier returns {@code false}
+     */
+    public static void assertUntil(BooleanSupplier until, Duration validationInterval, Runnable assertion) {
+        while (until.getAsBoolean()) {
+            assertion.run();
+            try {
+                Thread.sleep(validationInterval.toMillis());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(
+                        "Testing thread has been interrupted. Unable to keep validating the given assertion."
+                );
+            }
+        }
+    }
+
     @FunctionalInterface
     public interface ExceptionThrowingRunnable {
 
         void run() throws Exception;
-
     }
 }

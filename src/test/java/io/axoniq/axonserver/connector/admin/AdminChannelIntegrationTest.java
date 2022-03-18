@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022. AxonIQ
+ * Copyright (c) 2020-2022. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,12 +34,14 @@ import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 
+import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertFor;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -207,8 +209,7 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         AdminChannel adminChannel = connection.adminChannel();
         FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
         CompletableFuture<Void> accepted = adminChannel.pauseEventProcessor(processorName, tokenStoreIdentifier);
-        Thread.sleep(500);
-        assertFalse(accepted.isDone());
+        assertFor(Duration.ofMillis(500), Duration.ofMillis(100), () -> assertFalse(accepted.isDone()));
         processorInstructionHandler.performFailing();
         expectException(accepted, Status.Code.CANCELLED);
     }
@@ -235,8 +236,7 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         AdminChannel adminChannel = connection.adminChannel();
         FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
         CompletableFuture<Void> accepted = adminChannel.startEventProcessor(processorName, tokenStoreIdentifier);
-        Thread.sleep(500);
-        assertFalse(accepted.isDone());
+        assertFor(Duration.ofMillis(500), Duration.ofMillis(100), () -> assertFalse(accepted.isDone()));
         processorInstructionHandler.performFailing();
         expectException(accepted, Status.Code.CANCELLED);
     }
@@ -264,8 +264,7 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         AdminChannel adminChannel = connection.adminChannel();
         FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
         CompletableFuture<Void> accepted = adminChannel.splitEventProcessor(processorName, tokenStoreIdentifier);
-        Thread.sleep(500);
-        assertFalse(accepted.isDone());
+        assertFor(Duration.ofMillis(500), Duration.ofMillis(100), () -> assertFalse(accepted.isDone()));
         processorInstructionHandler.performFailing();
         expectException(accepted, Status.Code.CANCELLED);
     }
@@ -275,8 +274,7 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         AdminChannel adminChannel = connection.adminChannel();
         FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
         CompletableFuture<Void> accepted = adminChannel.splitEventProcessor(processorName, tokenStoreIdentifier);
-        Thread.sleep(500);
-        assertFalse(accepted.isDone());
+        assertFor(Duration.ofMillis(500), Duration.ofMillis(100), () -> assertFalse(accepted.isDone()));
         processorInstructionHandler.completeExceptionally(new RuntimeException("something failed"));
         expectException(accepted, Status.Code.CANCELLED);
     }
@@ -317,8 +315,7 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                                                            processorInstructionHandler);
         waitUntilEventProcessorExists(processorName, adminClientId);
         CompletableFuture<Void> accepted = adminChannel.mergeEventProcessor(processorName, tokenStoreIdentifier);
-        Thread.sleep(500);
-        assertFalse(accepted.isDone());
+        assertFor(Duration.ofMillis(500), Duration.ofMillis(100), () -> assertFalse(accepted.isDone()));
         processorInstructionHandler.performFailing();
         expectException(accepted, Status.Code.CANCELLED);
     }
@@ -336,8 +333,7 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         AdminChannel adminChannel = connection.adminChannel();
         FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
         CompletableFuture<Void> accepted = adminChannel.mergeEventProcessor(processorName, tokenStoreIdentifier);
-        Thread.sleep(500);
-        assertFalse(accepted.isDone());
+        assertFor(Duration.ofMillis(500), Duration.ofMillis(100), () -> assertFalse(accepted.isDone()));
         processorInstructionHandler.completeExceptionally(new RuntimeException("something failed"));
         expectException(accepted, Status.Code.CANCELLED);
     }
@@ -437,8 +433,7 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     private void checkHandleSuccess(CompletableFuture<Void> accepted,
                                     FakeProcessorInstructionHandler processorInstructionHandler)
             throws InterruptedException, ExecutionException, TimeoutException {
-        Thread.sleep(500);
-        assertFalse(accepted.isDone());
+        assertFor(Duration.ofMillis(500), Duration.ofMillis(100), () -> assertFalse(accepted.isDone()));
         processorInstructionHandler.performSuccessfully();
         accepted.get(1, SECONDS);
         Assertions.assertTrue(accepted.isDone());
