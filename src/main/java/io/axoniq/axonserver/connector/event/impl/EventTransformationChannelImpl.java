@@ -192,7 +192,8 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
 
                     @Override
                     public CompletableFuture<Void> cancel() {
-                        return cancelTransformation(id()).thenAccept(n -> {});
+                        return cancelTransformation(id()).thenAccept(n -> {
+                        });
                     }
                 };
             }
@@ -206,6 +207,9 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
             public CompletableFuture<ApplyOrCancelEventTransformation> replaceEvent(long token, long previousToken,
                                                                                     Event event) {
                 return transformEvent(TransformEventsRequest.newBuilder()
+                                                            .setTransformationId(io.axoniq.axonserver.grpc.event.TransformationId.newBuilder()
+                                                                                                                                 .setId(id().id())
+                                                                                                                                 .build())
                                                             .setEvent(TransformedEvent.newBuilder()
                                                                                       .setEvent(event)
                                                                                       .setToken(token)
@@ -219,6 +223,9 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
             @Override
             public CompletableFuture<ApplyOrCancelEventTransformation> deleteEvent(long token, long previousToken) {
                 return transformEvent(TransformEventsRequest.newBuilder()
+                                                            .setTransformationId(io.axoniq.axonserver.grpc.event.TransformationId.newBuilder()
+                                                                                                                                 .setId(id().id())
+                                                                                                                                 .build())
                                                             .setDeleteEvent(DeletedEvent.newBuilder()
                                                                                         .setToken(token)
                                                                                         .setPreviousToken(
