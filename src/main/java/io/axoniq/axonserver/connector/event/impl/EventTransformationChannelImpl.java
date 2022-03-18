@@ -52,63 +52,7 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
 
         eventTransformationService.startTransformation(Empty.newBuilder().build(),
                                                        responseObserver);
-        return responseObserver.thenApply(transformationId -> new EventTransformation() {
-
-            private final AtomicLong lastEventToken = new AtomicLong(-1);
-
-            @Override
-            public TransformationId transformationId() {
-                return transformationId;
-            }
-
-            @Override
-            public CompletableFuture<EventTransformation> replaceEvent(long token, long previousToken, Event event) {
-                return transformEvent(TransformEventsRequest.newBuilder()
-                                                            .setEvent(TransformedEvent.newBuilder()
-                                                                                      .setEvent(event)
-                                                                                      .setToken(token)
-                                                                                      .setPreviousToken(previousToken)
-                                                                                      .build())
-                                                            .build()).thenRun(() -> lastEventToken.set(token))
-                                                                     .thenApply(confirmation -> this);
-            }
-
-            @Override
-            public CompletableFuture<EventTransformation> deleteEvent(long token, long previousToken) {
-                return transformEvent(TransformEventsRequest.newBuilder()
-                                                            .setDeleteEvent(DeletedEvent.newBuilder()
-                                                                                        .setToken(token)
-                                                                                        .setPreviousToken(previousToken)
-                                                                                        .build())
-                                                            .build())
-                        .thenRun(() -> lastEventToken.set(token))
-                        .thenApply(confirmation -> this);
-            }
-
-            @Override
-            public CompletableFuture<EventTransformation> apply() {
-                return applyTransformation(ApplyTransformationRequest.newBuilder()
-                                                                     .setTransformationId(transformationId())
-                                                                     .setLastEventToken(lastEventToken.get())
-                                                                     .setKeepOldVersions(true)
-                                                                     .build()).thenApply(confirmation -> this);
-            }
-
-            @Override
-            public CompletableFuture<EventTransformation> cancel() {
-                return cancelTransformation(transformationId()).thenApply(confirmation -> this);
-            }
-
-            @Override
-            public CompletableFuture<EventTransformation> rollback() {
-                return rollbackTransformation(transformationId()).thenApply(confirmation -> this);
-            }
-
-            @Override
-            public CompletableFuture<EventTransformation> cleanUp() {
-                return deleteOldVersions(transformationId()).thenApply(confirmation -> this);
-            }
-        });
+        return responseObserver.thenApply(this::startedTransformationStep);
     }
 
 
@@ -144,14 +88,15 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
     }
 
 
-    private CompletableFuture<Confirmation> cancelTransformation(TransformationId request) {
+    private CompletableFuture<Confirmation> cancelTransformation(
+            io.axoniq.axonserver.connector.event.EventTransformation.TransformationId request) {
         FutureStreamObserver<Confirmation> responseObserver = new FutureStreamObserver<>(new AxonServerException(
                 ErrorCategory.OTHER,
                 "An unknown error occurred while cancelling transformation. No response received from Server.",
                 ""
         ));
 
-        eventTransformationService.cancelTransformation(request,
+        eventTransformationService.cancelTransformation(TransformationId.newBuilder().setId(request.id()).build(),
                                                         responseObserver);
         return responseObserver;
     }
@@ -168,26 +113,28 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
         return responseObserver;
     }
 
-    private CompletableFuture<Confirmation> rollbackTransformation(TransformationId request) {
+    private CompletableFuture<Confirmation> rollbackTransformation(
+            io.axoniq.axonserver.connector.event.EventTransformation.TransformationId request) {
         FutureStreamObserver<Confirmation> responseObserver = new FutureStreamObserver<>(new AxonServerException(
                 ErrorCategory.OTHER,
                 "An unknown error occurred while executing rollback on transformation. No response received from Server.",
                 ""
         ));
 
-        eventTransformationService.rollbackTransformation(request,
+        eventTransformationService.rollbackTransformation(TransformationId.newBuilder().setId(request.id()).build(),
                                                           responseObserver);
         return responseObserver;
     }
 
-    private CompletableFuture<Confirmation> deleteOldVersions(TransformationId request) {
+    private CompletableFuture<Confirmation> deleteOldVersions(
+            io.axoniq.axonserver.connector.event.EventTransformation.TransformationId request) {
         FutureStreamObserver<Confirmation> responseObserver = new FutureStreamObserver<>(new AxonServerException(
                 ErrorCategory.OTHER,
                 "An unknown error occurred while cancelling transformation. No response received from Server.",
                 ""
         ));
 
-        eventTransformationService.deleteOldVersions(request,
+        eventTransformationService.deleteOldVersions(TransformationId.newBuilder().setId(request.id()).build(),
                                                      responseObserver);
         return responseObserver;
     }
@@ -210,5 +157,83 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
     @Override
     public boolean isReady() {
         return true;
+    }
+
+    private EventTransformation startedTransformationStep(TransformationId transformationId) {
+        return new EventTransformation() {
+
+            private final AtomicLong lastEventToken = new AtomicLong(-1);
+
+            private ApplyOrCancelEventTransformation applyOrCancelEventTransformationStep(Void confirmation) {
+                return new ApplyOrCancelEventTransformation() {
+
+                    private CompletableFuture<Void> rollbackEventTransformationStep() {
+                        return rollbackTransformation(
+                                id()).thenAccept(n -> {
+                        });
+                    }
+
+                    @Override
+                    public CompletableFuture<RollbackEventTransformation> apply() {
+                        return apply(true);
+                    }
+
+                    @Override
+                    public CompletableFuture<RollbackEventTransformation> apply(
+                            boolean keepBackup) {
+                        return applyTransformation(ApplyTransformationRequest.newBuilder()
+                                                                             .setTransformationId(io.axoniq.axonserver.grpc.event.TransformationId.newBuilder()
+                                                                                                                                                  .setId(id().id())
+                                                                                                                                                  .build())
+                                                                             .setLastEventToken(lastEventToken.get())
+                                                                             .setKeepOldVersions(keepBackup)
+                                                                             .build()).thenApply(confirmation -> this::rollbackEventTransformationStep);
+                    }
+
+                    @Override
+                    public CompletableFuture<Void> cancel() {
+                        return cancelTransformation(id()).thenAccept(n -> {});
+                    }
+                };
+            }
+
+            @Override
+            public TransformationId id() {
+                return transformationId::getId;
+            }
+
+            @Override
+            public CompletableFuture<ApplyOrCancelEventTransformation> replaceEvent(long token, long previousToken,
+                                                                                    Event event) {
+                return transformEvent(TransformEventsRequest.newBuilder()
+                                                            .setEvent(TransformedEvent.newBuilder()
+                                                                                      .setEvent(event)
+                                                                                      .setToken(token)
+                                                                                      .setPreviousToken(
+                                                                                              previousToken)
+                                                                                      .build())
+                                                            .build()).thenRun(() -> lastEventToken.set(token))
+                                                                     .thenApply(this::applyOrCancelEventTransformationStep);
+            }
+
+            @Override
+            public CompletableFuture<ApplyOrCancelEventTransformation> deleteEvent(long token, long previousToken) {
+                return transformEvent(TransformEventsRequest.newBuilder()
+                                                            .setDeleteEvent(DeletedEvent.newBuilder()
+                                                                                        .setToken(token)
+                                                                                        .setPreviousToken(
+                                                                                                previousToken)
+                                                                                        .build())
+                                                            .build())
+                        .thenRun(() -> lastEventToken.set(token))
+                        .thenApply(this::applyOrCancelEventTransformationStep);
+            }
+
+            @Override
+            public CompletableFuture<Void> cleanUpBackupFiles() {
+                return deleteOldVersions(id()).thenAccept(confirmation -> {
+                });
+            }
+        };
     }
 }

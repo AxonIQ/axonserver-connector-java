@@ -1,7 +1,6 @@
 package io.axoniq.axonserver.connector.event;
 
 import io.axoniq.axonserver.grpc.event.Event;
-import io.axoniq.axonserver.grpc.event.TransformationId;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -11,18 +10,29 @@ import java.util.concurrent.CompletableFuture;
  */
 public interface EventTransformation {
 
-    TransformationId transformationId();
+    TransformationId id();
 
-    CompletableFuture<EventTransformation> replaceEvent(long token, long previousToken, Event event);
+    CompletableFuture<ApplyOrCancelEventTransformation> replaceEvent(long token, long previousToken, Event event);
 
-    CompletableFuture<EventTransformation> deleteEvent(long token, long previousToken);
+    CompletableFuture<ApplyOrCancelEventTransformation> deleteEvent(long token, long previousToken);
 
-    CompletableFuture<EventTransformation> apply();
+    CompletableFuture<Void> cleanUpBackupFiles();
 
-    CompletableFuture<EventTransformation> cancel();
+    interface ApplyOrCancelEventTransformation {
+        CompletableFuture<RollbackEventTransformation> apply();
 
-    CompletableFuture<EventTransformation> cleanUp();
+        CompletableFuture<RollbackEventTransformation> apply(boolean keepBackup);
 
-    CompletableFuture<EventTransformation> rollback();
+        CompletableFuture<Void> cancel();
+    }
+
+    interface RollbackEventTransformation {
+        CompletableFuture<Void> rollback();
+    }
+
+    interface TransformationId {
+        String id();
+    }
 
 }
+

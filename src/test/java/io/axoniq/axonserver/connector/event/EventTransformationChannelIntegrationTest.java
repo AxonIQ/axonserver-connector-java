@@ -36,8 +36,8 @@ public class EventTransformationChannelIntegrationTest {  //extends AbstractAxon
         EventTransformationChannel eventTransformationChannel = connection.eventTransformationChannel();
 
         eventTransformationChannel.newTransformation()
-                                  .thenCompose(transformation -> transformation.deleteEvent(24L, -1L)
-                                                                               .exceptionallyCompose(t -> transformation.rollback()))
-                                  .thenCompose(EventTransformation::apply).join();
+                .thenCompose(transformation -> transformation.deleteEvent(24,-1))
+                .thenCompose(EventTransformation.ApplyOrCancelEventTransformation::apply)
+                .thenCompose(EventTransformation.RollbackEventTransformation::rollback);
     }
 }
