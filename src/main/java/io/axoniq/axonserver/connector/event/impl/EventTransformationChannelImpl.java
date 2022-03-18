@@ -1,5 +1,6 @@
 package io.axoniq.axonserver.connector.event.impl;
 
+import com.google.protobuf.Empty;
 import io.axoniq.axonserver.connector.AxonServerException;
 import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.event.EventTransformation;
@@ -135,8 +136,7 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
                 ""
         ));
 
-        eventTransformationService.deleteOldVersions(TransformationId.newBuilder().setId(request.id()).build(),
-                                                     responseObserver);
+        eventTransformationService.deleteOldVersions(Empty.newBuilder().build(),responseObserver);
         return responseObserver;
     }
 
