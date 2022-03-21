@@ -21,7 +21,7 @@ import io.axoniq.axonserver.grpc.ErrorMessage;
 import java.util.Optional;
 
 /**
- * A readonly view of buffer that can be closed from the producing side.
+ * A readonly buffer that can be closed from the producing side.
  *
  * @param <T> the type of messages in this buffer
  * @author Milan Savic
@@ -32,23 +32,23 @@ import java.util.Optional;
 public interface CloseableReadonlyBuffer<T> {
 
     /**
-     * Polls the message from the buffer. If returned {@link Optional} is empty, that doesn't mean that this buffer will
-     * stay forever empty. {@link #closed()} should be checked for those scenarios.
+     * Polls the message from this buffer. If the returned {@link Optional} is empty, that doesn't mean that this buffer
+     * stays empty forever. The {@link #closed()} method should be consolidated to validate this.
      *
      * @return an {@link Optional} with polled message
      */
     Optional<T> poll();
 
     /**
-     * Indicates whether there are messages in the buffer. If returns {@code false}, that doesn't mean that this buffer
-     * will stay forever empty. {@link #closed()} should be checked for those scenarios.
+     * Indicates whether there are messages in the buffer. If this returns {@code false}, that doesn't mean that this
+     * buffer stays empty forever. The {@link #closed()} method should be consolidated to validate this.
      *
      * @return {@code true} if buffer is empty, {@code false} otherwise
      */
     boolean isEmpty();
 
     /**
-     * Returns an overall capacity of this buffer.
+     * Returns the overall capacity of this buffer.
      *
      * @return the overall capacity of this buffer
      */
@@ -56,7 +56,8 @@ public interface CloseableReadonlyBuffer<T> {
 
     /**
      * Registers an action to be triggered when there is a new message added to the buffer, or the buffer is closed, or
-     * the buffer is closed with an error. Check {@link #poll()}, {@link #closed()}, {@link #error()}.
+     * the buffer is closed with an error. The action can check {@link #poll()}, {@link #closed()}, and {@link #error()}
+     * to validate this.
      *
      * @param onAvailable to be invoked when there are changes in this buffer
      */

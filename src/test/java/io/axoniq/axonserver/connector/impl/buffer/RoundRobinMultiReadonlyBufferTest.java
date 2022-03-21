@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Tests for {@link RoundRobinMultiReadonlyBuffer}.
+ * Tests for the {@link RoundRobinMultiReadonlyBuffer}.
  */
 class RoundRobinMultiReadonlyBufferTest {
 

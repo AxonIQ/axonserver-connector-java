@@ -27,8 +27,8 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * An implementation of {@link DisposableReadonlyBuffer} that operates across multiple instances of {@link
- * DisposableReadonlyBuffer}. Operations are delegated to instances in a round-robin fashion.
+ * An implementation of the {@link DisposableReadonlyBuffer} that operates across multiple {@link
+ * DisposableReadonlyBuffer} instances. Operations are delegated to these instances in a round-robin fashion.
  *
  * @param <T> the type of messages this buffer contain
  * @author Milan Savic
@@ -52,6 +52,12 @@ public class RoundRobinMultiReadonlyBuffer<T> implements DisposableReadonlyBuffe
         this.buffers = new ArrayList<>(buffers);
     }
 
+    /**
+     * Polls the element from one of the buffers in a round-robin fashion.
+     *
+     * @return an {@link Optional} with polled message
+     * @see DisposableReadonlyBuffer#poll()
+     */
     @Override
     public Optional<T> poll() {
         for (int i = 0; i < buffers.size(); i++) {
@@ -64,6 +70,12 @@ public class RoundRobinMultiReadonlyBuffer<T> implements DisposableReadonlyBuffe
         return Optional.empty();
     }
 
+    /**
+     * Checks whether all buffers are closed.
+     *
+     * @return {@code true} if all buffers are closed, {@code false} otherwise
+     * @see DisposableReadonlyBuffer#closed()
+     */
     @Override
     public boolean closed() {
         return buffers.stream()
@@ -71,6 +83,12 @@ public class RoundRobinMultiReadonlyBuffer<T> implements DisposableReadonlyBuffe
                       .reduce(true, Boolean::logicalAnd);
     }
 
+    /**
+     * Retrieves an error from the first buffer if all buffers errored out.
+     *
+     * @return the error from the first buffer if all buffers errored out
+     * @see DisposableReadonlyBuffer#error()
+     */
     @Override
     public Optional<ErrorMessage> error() {
         boolean allInError = buffers.stream()
@@ -80,6 +98,12 @@ public class RoundRobinMultiReadonlyBuffer<T> implements DisposableReadonlyBuffe
         return allInError ? buffers.get(0).error() : Optional.empty();
     }
 
+    /**
+     * Checks whether all buffers are empty.
+     *
+     * @return {@code true} if all buffers are empty, {@code false} otherwise
+     * @see DisposableReadonlyBuffer#isEmpty()
+     */
     @Override
     public boolean isEmpty() {
         return buffers.stream()
@@ -87,6 +111,12 @@ public class RoundRobinMultiReadonlyBuffer<T> implements DisposableReadonlyBuffe
                       .reduce(true, Boolean::logicalAnd);
     }
 
+    /**
+     * Sums up capacities of all buffers.
+     *
+     * @return the sum of capacities of all buffers
+     * @see DisposableReadonlyBuffer#capacity()
+     */
     @Override
     public int capacity() {
         return buffers.stream()
@@ -94,11 +124,22 @@ public class RoundRobinMultiReadonlyBuffer<T> implements DisposableReadonlyBuffe
                       .reduce(0, Integer::sum);
     }
 
+    /**
+     * Registers {@link Runnable onAvailable} handler to all buffers
+     *
+     * @param onAvailable to be invoked when there are changes in buffers
+     * @see DisposableReadonlyBuffer#onAvailable(Runnable)
+     */
     @Override
     public void onAvailable(Runnable onAvailable) {
         buffers.forEach(b -> b.onAvailable(onAvailable));
     }
 
+    /**
+     * Calls a {@link DisposableReadonlyBuffer#dispose()} on each and every buffer.
+     *
+     * @see DisposableReadonlyBuffer#dispose()
+     */
     @Override
     public void dispose() {
         buffers.forEach(DisposableReadonlyBuffer::dispose);

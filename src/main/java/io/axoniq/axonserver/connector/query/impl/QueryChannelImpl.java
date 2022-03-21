@@ -526,7 +526,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                 new FlowControlledReplyChannelWriter<>(buffers, requestIdReplenishmentReplyChannel);
         flowControlRef.set(flowControl);
         if (!supportsStreaming(query)) {
-            // if streaming is not supported by axon server(s) or query sender we have to be eager in requesting
+            // If streaming is not supported by axon server(s) or the query sender we have to be eager in requesting
             flowControl.request(Long.MAX_VALUE);
         }
     }

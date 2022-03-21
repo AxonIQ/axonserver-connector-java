@@ -17,7 +17,8 @@
 package io.axoniq.axonserver.connector;
 
 /**
- * Flow control.
+ * Controls the flow of the messages via communication channel. Implementations should send messages only when
+ * requested. Once the cancellation is invoked, implementations should stop sending messages.
  *
  * @author Milan Savic
  * @author Stefan Dragisic
@@ -27,7 +28,7 @@ package io.axoniq.axonserver.connector;
 public interface FlowControl {
 
     /**
-     * Requests {@code requested} amount of responses to be sent.
+     * Requests the {@code requested} amount of responses to be sent.
      *
      * @param requested number of responses to be sent
      */

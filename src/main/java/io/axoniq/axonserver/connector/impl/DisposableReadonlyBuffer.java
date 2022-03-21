@@ -17,7 +17,7 @@
 package io.axoniq.axonserver.connector.impl;
 
 /**
- * A buffer that can be disposed from subscriber side.
+ * A {@link CloseableReadonlyBuffer buffer} that can be disposed of from the subscriber's side.
  *
  * @param <T> the type of messages in this buffer
  * @author Milan Savic
@@ -28,7 +28,7 @@ package io.axoniq.axonserver.connector.impl;
 public interface DisposableReadonlyBuffer<T> extends CloseableReadonlyBuffer<T> {
 
     /**
-     * Disposes the buffer from subscriber side.
+     * Disposes this buffer from the subscriber's side.
      */
     void dispose();
 }

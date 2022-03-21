@@ -27,7 +27,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * {@link FlowControl} that when requested asks a buffer for messages and send them via {@link ReplyChannel}.
+ * A {@link FlowControl} implementation that on {@link #request(long)} retrieves messages from the {@link
+ * DisposableReadonlyBuffer buffer}. These are in turn send via a {@link ReplyChannel}.
  *
  * @param <T> the type of message
  * @author Milan Savic
@@ -44,11 +45,13 @@ public class FlowControlledReplyChannelWriter<T> implements FlowControl {
     private final AtomicBoolean completed = new AtomicBoolean();
 
     /**
-     * Instantiates this flow control with given {@link DisposableReadonlyBuffer}s as sources, and {@link ReplyChannel}
-     * as destination. Buffers will be organized in a round-robin fashion (see {@link RoundRobinMultiReadonlyBuffer}).
+     * Instantiates this flow control with given {@link DisposableReadonlyBuffer buffers} as sources, and {@link
+     * ReplyChannel} as the destination. Buffers will be organized in a {@link RoundRobinMultiReadonlyBuffer round-robin
+     * fashion}.
      *
      * @param sources     {@link DisposableReadonlyBuffer}s to read messages from
      * @param destination {@link ReplyChannel} to write messages to
+     * @see RoundRobinMultiReadonlyBuffer
      */
     public FlowControlledReplyChannelWriter(List<? extends DisposableReadonlyBuffer<T>> sources,
                                             ReplyChannel<T> destination) {
@@ -56,8 +59,8 @@ public class FlowControlledReplyChannelWriter<T> implements FlowControl {
     }
 
     /**
-     * Instantiates this flow control with given {@link DisposableReadonlyBuffer} as source, and {@link ReplyChannel}
-     * as destination.
+     * Instantiates this flow control with the given {@link DisposableReadonlyBuffer} as source, and a {@link
+     * ReplyChannel} as the destination.
      *
      * @param source      {@link DisposableReadonlyBuffer} to read messages from
      * @param destination {@link ReplyChannel} to write messages to

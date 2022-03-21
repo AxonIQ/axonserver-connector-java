@@ -35,7 +35,7 @@ import java.util.stream.LongStream;
 import static org.mockito.Mockito.*;
 
 /**
- * Tests for {@link FlowControlledReplyChannelWriter}.
+ * Tests for the {@link FlowControlledReplyChannelWriter}.
  */
 class FlowControlledReplyChannelWriterTest {
 

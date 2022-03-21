@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Tests for {@link FlowControlledDisposableReadonlyBuffer}.
+ * Tests for the {@link FlowControlledDisposableReadonlyBuffer}.
  */
 class FlowControlledDisposableReadonlyBufferTest {
 

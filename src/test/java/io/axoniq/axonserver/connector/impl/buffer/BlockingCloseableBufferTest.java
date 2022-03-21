@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Tests for {@link BlockingCloseableBuffer}.
+ * Tests for the {@link BlockingCloseableBuffer}.
  */
 class BlockingCloseableBufferTest {
 

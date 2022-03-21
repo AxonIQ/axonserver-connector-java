@@ -25,8 +25,8 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Connects a {@link FlowControl} with {@link DisposableReadonlyBuffer} assuming that requesting from a flow control
- * will trigger a replenishment of the buffer.
+ * Connects a {@link FlowControl} instance with a {@link DisposableReadonlyBuffer} assuming that {@link
+ * FlowControl#request(long) requesting} from the flow control will trigger a replenishment of the buffer.
  *
  * @param <T> the type of messages this buffer deals with
  * @author Milan Savic
@@ -41,10 +41,10 @@ public class FlowControlledDisposableReadonlyBuffer<T> implements DisposableRead
     private final AtomicBoolean started = new AtomicBoolean();
 
     /**
-     * Instantiates this buffer with given {@code flowControl} and {@code buffer}.
+     * Instantiates this buffer with the given {@code flowControl} and {@code buffer}.
      *
-     * @param flowControl used for buffer replenishment
-     * @param buffer      used for message retrieval
+     * @param flowControl used for {@code buffer} replenishment
+     * @param buffer      used for message retrieval on {@link FlowControl#request(long)}
      */
     public FlowControlledDisposableReadonlyBuffer(FlowControl flowControl, CloseableReadonlyBuffer<T> buffer) {
         this.flowControl = flowControl;

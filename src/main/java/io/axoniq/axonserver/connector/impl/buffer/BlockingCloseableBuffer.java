@@ -25,7 +25,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * An implementation of {@link CloseableBuffer} that uses {@link LinkedBlockingQueue} as backing buffer.
+ * An implementation of the {@link CloseableBuffer} that uses a {@link LinkedBlockingQueue} as the backing buffer.
  *
  * @param <T> the type of messages in this buffer
  * @author Milan Savic

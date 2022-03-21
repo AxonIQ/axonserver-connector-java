@@ -23,7 +23,7 @@ import io.axoniq.axonserver.grpc.ErrorMessage;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * A {@link ReplyChannel} that will trigger given action when is closed.
+ * A {@link ReplyChannel} implementation that will trigger a given {@link Runnable action} when it is closed.
  *
  * @param <T> the type of messages flowing through this {@link ReplyChannel}
  * @author Milan Savic
@@ -48,8 +48,8 @@ public class CloseAwareReplyChannel<T> implements ReplyChannel<T> {
     }
 
     /**
-     * Instantiates this {@link ReplyChannel} with given {@code delegate} and {@code onClose} execution to be executed
-     * once the channel is closed.
+     * Instantiates this {@link ReplyChannel} with given {@code delegate} and {@code onClose} {@link Runnable} execution
+     * to be executed once the channel is closed.
      *
      * @param delegate the delegate
      * @param onClose  to be executed when channel is closed

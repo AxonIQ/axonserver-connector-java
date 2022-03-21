@@ -21,8 +21,8 @@ import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.grpc.ErrorMessage;
 
 /**
- * A reply channel that uses a given {@code buffer} to buffer sends, completes and completes with error. {@code ack}s
- * and {@code nack}s are delegated via given {@code delegate}.
+ * A {@link ReplyChannel} implementation that uses a given {@link CloseableBuffer buffer} to buffer send, complete and
+ * complete-with-error. {@code ACK}s and {@code NACK}s are delegated via {@code delegate ReplyChannel}.
  *
  * @param <T> the type of messages this {@link ReplyChannel} deals with
  * @author Milan Savic

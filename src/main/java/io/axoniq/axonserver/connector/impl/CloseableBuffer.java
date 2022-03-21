@@ -19,7 +19,7 @@ package io.axoniq.axonserver.connector.impl;
 import io.axoniq.axonserver.grpc.ErrorMessage;
 
 /**
- * A buffer that can be closed by the producing side.
+ * A {@link CloseableReadonlyBuffer buffer} that can be closed by the producing side.
  *
  * @param <T> the type of messages in this buffer
  * @author Milan Savic
@@ -42,7 +42,7 @@ public interface CloseableBuffer<T> extends CloseableReadonlyBuffer<T> {
     void close();
 
     /**
-     * Closes exceptionally this buffer from the producing side.
+     * Closes this buffer exceptionally from the producing side.
      *
      * @param errorMessage an error indicating why this buffer is closed
      */

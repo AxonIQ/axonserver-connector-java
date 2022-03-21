@@ -43,15 +43,15 @@ public interface QueryHandler {
     void handle(QueryRequest query, ReplyChannel<QueryResponse> responseHandler);
 
     /**
-     * Handle the given {@code query}, using given {@code responseHandler} to send the response(s). It is flow control
-     * aware - messages should be sent via {@code responseHandler} when requested.
+     * Handle the given {@code query}, using the given {@code responseHandler} to send the response(s). This operation
+     * is flow control aware, hence messages should be sent via {@code responseHandler} when requested.
      * <p>
      * Note that the query <em>must</em> be completed using {@link ReplyChannel#complete()} or {@link
      * ReplyChannel#sendLast(Object)}.
      *
-     * @param query the message representing the query request
+     * @param query           the message representing the query request
      * @param responseHandler the handler to send responses with
-     * @return a {@link FlowControl} to request more responses and also to cancel sending responses
+     * @return a {@link FlowControl} to request more responses and cancel sending responses
      */
     default FlowControl stream(QueryRequest query, ReplyChannel<QueryResponse> responseHandler) {
         handle(query, responseHandler);

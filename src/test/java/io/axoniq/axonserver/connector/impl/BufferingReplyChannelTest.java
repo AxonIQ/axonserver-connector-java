@@ -24,7 +24,7 @@ import org.junit.jupiter.api.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Tests for {@link BufferingReplyChannel}.
+ * Tests for the {@link BufferingReplyChannel}.
  */
 class BufferingReplyChannelTest {
 
