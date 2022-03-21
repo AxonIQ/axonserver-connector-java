@@ -18,8 +18,10 @@ package io.axoniq.axonserver.connector.impl.buffer;
 
 import io.axoniq.axonserver.connector.impl.DisposableReadonlyBuffer;
 import io.axoniq.axonserver.grpc.ErrorMessage;
+import io.axoniq.axonserver.grpc.query.QueryResponse;
 import org.junit.jupiter.api.*;
 
+import java.util.List;
 import java.util.Optional;
 
 import static java.util.Arrays.asList;
@@ -53,7 +55,8 @@ class RoundRobinMultiReadonlyBufferTest {
 
     @Test
     void testCreationWithNoBuffers() {
-        assertThrows(IllegalArgumentException.class, () -> new RoundRobinMultiReadonlyBuffer<>(emptyList()));
+        List<DisposableReadonlyBuffer<QueryResponse>> buffers = emptyList();
+        assertThrows(IllegalArgumentException.class, () -> new RoundRobinMultiReadonlyBuffer<>(buffers));
     }
 
     @Test

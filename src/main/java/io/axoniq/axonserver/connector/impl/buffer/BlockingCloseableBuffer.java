@@ -35,12 +35,12 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class BlockingCloseableBuffer<T> implements CloseableBuffer<T> {
 
-    private final int capacity = 32;
+    private static final int DEFAULT_CAPACITY = 32;
 
-    private final BlockingQueue<T> buffer = new LinkedBlockingQueue<>(capacity);
+    private final BlockingQueue<T> buffer = new LinkedBlockingQueue<>(DEFAULT_CAPACITY);
     private volatile boolean closed = false;
-    private volatile ErrorMessage error;
-    private final AtomicReference<Runnable> onAvailable = new AtomicReference<>();
+    private final AtomicReference<ErrorMessage> errorRef = new AtomicReference<>();
+    private final AtomicReference<Runnable> onAvailableRef = new AtomicReference<>();
 
     @Override
     public Optional<T> poll() {
@@ -54,7 +54,7 @@ public class BlockingCloseableBuffer<T> implements CloseableBuffer<T> {
 
     @Override
     public int capacity() {
-        return capacity;
+        return DEFAULT_CAPACITY;
     }
 
     /**
@@ -68,7 +68,7 @@ public class BlockingCloseableBuffer<T> implements CloseableBuffer<T> {
 
     @Override
     public void onAvailable(Runnable onAvailable) {
-        this.onAvailable.set(onAvailable);
+        onAvailableRef.set(onAvailable);
         if (!isEmpty() || closed) {
             notifyOnAvailable();
         }
@@ -91,7 +91,7 @@ public class BlockingCloseableBuffer<T> implements CloseableBuffer<T> {
 
     @Override
     public Optional<ErrorMessage> error() {
-        return Optional.ofNullable(error);
+        return Optional.ofNullable(errorRef.get());
     }
 
     @Override
@@ -102,12 +102,12 @@ public class BlockingCloseableBuffer<T> implements CloseableBuffer<T> {
 
     @Override
     public void closeExceptionally(ErrorMessage errorMessage) {
-        error = errorMessage;
+        errorRef.set(errorMessage);
         close();
     }
 
     protected void notifyOnAvailable() {
-        Runnable onAvailable = this.onAvailable.get();
+        Runnable onAvailable = onAvailableRef.get();
         if (onAvailable != null) {
             onAvailable.run();
         }
