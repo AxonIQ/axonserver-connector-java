@@ -94,16 +94,17 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
 
 
     private CompletableFuture<Void> transformEvent(TransformEventsRequest request) {
-        transformEventsRequestStreamObserver.onNext(request); //todo: should be synchronized?
-
         long token = -1;
         if (request.hasEvent()) {
             token = request.getEvent().getToken();
         } else if (request.hasDeleteEvent()) {
             token = request.getDeleteEvent().getToken();
         }
+        CompletableFuture<Void> future = transformationsInProgress.computeIfAbsent(token,
+                                                                                   k -> new CompletableFuture<>());
+        transformEventsRequestStreamObserver.onNext(request); //todo: should be synchronized?
 
-        return transformationsInProgress.computeIfAbsent(token, k -> new CompletableFuture<>());
+        return future;
     }
 
 
