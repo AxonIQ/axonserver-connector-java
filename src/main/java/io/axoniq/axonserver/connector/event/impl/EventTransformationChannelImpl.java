@@ -6,22 +6,24 @@ import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.event.EventTransformation;
 import io.axoniq.axonserver.connector.event.EventTransformationChannel;
 import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
+import io.axoniq.axonserver.connector.impl.AbstractBufferedStream;
 import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
 import io.axoniq.axonserver.connector.impl.FutureStreamObserver;
+import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
 import io.axoniq.axonserver.grpc.event.ApplyTransformationRequest;
-import io.axoniq.axonserver.grpc.event.Confirmation;
 import io.axoniq.axonserver.grpc.event.DeletedEvent;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.EventTransformationServiceGrpc;
+import io.axoniq.axonserver.grpc.event.EventTransformedAck;
 import io.axoniq.axonserver.grpc.event.StartTransformationRequest;
 import io.axoniq.axonserver.grpc.event.TransformEventsRequest;
 import io.axoniq.axonserver.grpc.event.TransformationId;
 import io.axoniq.axonserver.grpc.event.TransformedEvent;
 import io.grpc.stub.StreamObserver;
 
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -33,6 +35,8 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
         implements EventTransformationChannel {
 
     private final EventTransformationServiceGrpc.EventTransformationServiceStub eventTransformationService;
+    private final ConcurrentHashMap<Long, CompletableFuture<Void>> transformationsInProgress = new ConcurrentHashMap<>();
+    private StreamObserver<TransformEventsRequest> transformEventsRequestStreamObserver;
 
     /**
      * todo
@@ -54,45 +58,58 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
         eventTransformationService.startTransformation(StartTransformationRequest.newBuilder()
                                                                                  .setDescription(description).build(),
                                                        responseObserver);
-        return responseObserver.thenApply(this::startedTransformationStep);
+        initTransformChannel();
+        return responseObserver.thenApply(this::startedTransformationStep); //todo point to self replace event and remove event
+    }
+
+    private void initTransformChannel() {
+        AbstractBufferedStream<EventTransformedAck, TransformEventsRequest> results = new AbstractBufferedStream<EventTransformedAck, TransformEventsRequest>(
+                "??? todo", 32, 8
+        ) {
+
+            @Override
+            protected TransformEventsRequest buildFlowControlMessage(FlowControl flowControl) {
+                return null;
+            }
+
+            @Override
+            protected EventTransformedAck terminalMessage() {
+                return null;
+            }
+        };
+
+        results.onAvailable(() -> {
+            EventTransformedAck ack = results.nextIfAvailable();
+            if (ack != null) {
+                CompletableFuture<Void> transformedFuture = transformationsInProgress.remove(ack.getToken());
+                transformedFuture.complete(null);
+            }
+        });
+
+        //todo catch error and complete future exceptionally
+
+        transformEventsRequestStreamObserver = eventTransformationService.transformEvents(
+                results);
     }
 
 
-    private CompletableFuture<Confirmation> transformEvents(List<TransformEventsRequest> request) {
-        FutureStreamObserver<Confirmation> responseObserver = new FutureStreamObserver<>(new AxonServerException(
-                ErrorCategory.OTHER,
-                "An unknown error occurred while cancelling transformation. No response received from Server.",
-                ""
-        ));
+    private CompletableFuture<Void> transformEvent(TransformEventsRequest request) {
+        transformEventsRequestStreamObserver.onNext(request); //todo: should be synchronized?
 
-        StreamObserver<TransformEventsRequest> transformEventsRequestStreamObserver = eventTransformationService.transformEvents(
-                responseObserver);
-        request.forEach(transformEventsRequestStreamObserver::onNext);
-        //   transformEventsRequestStreamObserver.onCompleted();
+        long token = -1;
+        if (request.hasEvent()) {
+            token = request.getEvent().getToken();
+        } else if (request.hasDeleteEvent()) {
+            token = request.getDeleteEvent().getToken();
+        }
 
-        return responseObserver;
+        return transformationsInProgress.computeIfAbsent(token, k -> new CompletableFuture<>());
     }
 
 
-    private CompletableFuture<Confirmation> transformEvent(TransformEventsRequest request) {
-        FutureStreamObserver<Confirmation> responseObserver = new FutureStreamObserver<>(new AxonServerException(
-                ErrorCategory.OTHER,
-                "An unknown error occurred while cancelling transformation. No response received from Server.",
-                ""
-        ));
-
-        StreamObserver<TransformEventsRequest> transformEventsRequestStreamObserver = eventTransformationService.transformEvents(
-                responseObserver);
-        transformEventsRequestStreamObserver.onNext(request);
-        //  transformEventsRequestStreamObserver.onCompleted();
-
-        return responseObserver;
-    }
-
-
-    private CompletableFuture<Confirmation> cancelTransformation(
+    private CompletableFuture<Void> cancelTransformation(
             io.axoniq.axonserver.connector.event.EventTransformation.TransformationId request) {
-        FutureStreamObserver<Confirmation> responseObserver = new FutureStreamObserver<>(new AxonServerException(
+        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(new AxonServerException(
                 ErrorCategory.OTHER,
                 "An unknown error occurred while cancelling transformation. No response received from Server.",
                 ""
@@ -100,11 +117,11 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
 
         eventTransformationService.cancelTransformation(TransformationId.newBuilder().setId(request.id()).build(),
                                                         responseObserver);
-        return responseObserver;
+        return responseObserver.thenAccept(empty -> completeTransformationChannel());
     }
 
-    private CompletableFuture<Confirmation> applyTransformation(ApplyTransformationRequest request) {
-        FutureStreamObserver<Confirmation> responseObserver = new FutureStreamObserver<>(new AxonServerException(
+    private CompletableFuture<Void> applyTransformation(ApplyTransformationRequest request) {
+        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(new AxonServerException(
                 ErrorCategory.OTHER,
                 "An unknown error occurred while applying transformation. No response received from Server.",
                 ""
@@ -112,12 +129,16 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
 
         eventTransformationService.applyTransformation(request,
                                                        responseObserver);
-        return responseObserver;
+        return responseObserver.thenAccept(empty -> completeTransformationChannel());
     }
 
-    private CompletableFuture<Confirmation> rollbackTransformation(
+    private void completeTransformationChannel() {
+        transformEventsRequestStreamObserver.onCompleted();
+    }
+
+    private CompletableFuture<Void> rollbackTransformation(
             io.axoniq.axonserver.connector.event.EventTransformation.TransformationId request) {
-        FutureStreamObserver<Confirmation> responseObserver = new FutureStreamObserver<>(new AxonServerException(
+        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(new AxonServerException(
                 ErrorCategory.OTHER,
                 "An unknown error occurred while executing rollback on transformation. No response received from Server.",
                 ""
@@ -125,19 +146,21 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
 
         eventTransformationService.rollbackTransformation(TransformationId.newBuilder().setId(request.id()).build(),
                                                           responseObserver);
-        return responseObserver;
+        return responseObserver.thenAccept(empty -> {
+        });
     }
 
     @Override
-    public CompletableFuture<Confirmation> deleteOldVersions() {
-        FutureStreamObserver<Confirmation> responseObserver = new FutureStreamObserver<>(new AxonServerException(
+    public CompletableFuture<Void> deleteOldVersions() {
+        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(new AxonServerException(
                 ErrorCategory.OTHER,
                 "An unknown error occurred while cancelling transformation. No response received from Server.",
                 ""
         ));
 
-        eventTransformationService.deleteOldVersions(Empty.newBuilder().build(),responseObserver);
-        return responseObserver;
+        eventTransformationService.deleteOldVersions(Empty.newBuilder().build(), responseObserver);
+        return responseObserver.thenAccept(empty -> {
+        });
     }
 
     @Override
