@@ -27,6 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * @author Stefan Dragisic
@@ -38,7 +39,9 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
     private final EventTransformationServiceGrpc.EventTransformationServiceStub eventTransformationService;
     private final ConcurrentHashMap<Long, CompletableFuture<Void>> transformationsInProgress = new ConcurrentHashMap<>();
     private StreamObserver<TransformEventsRequest> transformEventsRequestStreamObserver;
-    private AtomicBoolean isFailed = new AtomicBoolean(false);
+    private final AtomicBoolean isFailed = new AtomicBoolean(false);
+    private final AtomicReference<Throwable> failure = new AtomicReference<>();
+    private final ClientIdentification clientIdentification;
 
     /**
      * todo
@@ -46,6 +49,7 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
     public EventTransformationChannelImpl(ClientIdentification clientIdentification, ScheduledExecutorService executor,
                                           AxonServerManagedChannel channel) {
         super(clientIdentification, executor, channel);
+        this.clientIdentification = clientIdentification;
         eventTransformationService = EventTransformationServiceGrpc.newStub(channel);
     }
 
@@ -66,16 +70,8 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
 
     private void initTransformChannel() {
         AbstractBufferedStream<EventTransformedAck, TransformEventsRequest> results = new AbstractBufferedStream<EventTransformedAck, TransformEventsRequest>(
-                "??? todo", 32, 8
+                clientIdentification.getClientId(), 32, 8
         ) {
-
-            @Override
-            public void onError(Throwable t) {
-                isFailed.set(true);
-                transformationsInProgress.values().forEach(c->c.completeExceptionally(t));
-                super.onError(t);
-            }
-
             @Override
             protected TransformEventsRequest buildFlowControlMessage(FlowControl flowControl) {
                 return null;
@@ -88,6 +84,13 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
         };
 
         results.onAvailable(() -> {
+            if (results.getError().isPresent()) {
+                Throwable t = results.getError().get();
+                isFailed.set(true);
+                failure.set(t);
+                transformationsInProgress.values().forEach(c->c.completeExceptionally(t));
+            }
+            //todo or its stream is closed
             EventTransformedAck ack = results.nextIfAvailable();
             if (ack != null) {
                 CompletableFuture<Void> transformedFuture = transformationsInProgress.remove(ack.getToken());
@@ -109,7 +112,7 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
         }
         CompletableFuture<Void> future = transformationsInProgress.computeIfAbsent(token,
                                                                                    k -> new CompletableFuture<>());
-        transformEventsRequestStreamObserver.onNext(request); //todo: should be synchronized?
+        transformEventsRequestStreamObserver.onNext(request);
 
         return future;
     }
