@@ -11,8 +11,8 @@ import java.util.concurrent.CompletableFuture;
 public interface EventTransformation {
 
     TransformationId id();
-    CompletableFuture<ApplyOrCancelEventTransformation> replaceEvent(long token, long previousToken, Event event);
-    CompletableFuture<ApplyOrCancelEventTransformation> deleteEvent(long token, long previousToken);
+    CompletableFuture<ApplyOrCancelEventTransformation> replaceEvent(long token, Event event);
+    CompletableFuture<ApplyOrCancelEventTransformation> deleteEvent(long token);
 
     interface ApplyOrCancelEventTransformation {
         CompletableFuture<RollbackEventTransformation> apply();

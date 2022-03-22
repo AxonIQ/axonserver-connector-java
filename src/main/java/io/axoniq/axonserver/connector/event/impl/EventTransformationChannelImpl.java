@@ -15,9 +15,9 @@ import io.axoniq.axonserver.grpc.event.ApplyTransformationRequest;
 import io.axoniq.axonserver.grpc.event.DeletedEvent;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.EventTransformationServiceGrpc;
-import io.axoniq.axonserver.grpc.event.EventTransformedAck;
 import io.axoniq.axonserver.grpc.event.StartTransformationRequest;
-import io.axoniq.axonserver.grpc.event.TransformEventsRequest;
+import io.axoniq.axonserver.grpc.event.TransformRequest;
+import io.axoniq.axonserver.grpc.event.TransformRequestAck;
 import io.axoniq.axonserver.grpc.event.TransformationId;
 import io.axoniq.axonserver.grpc.event.TransformedEvent;
 import io.grpc.stub.StreamObserver;
@@ -38,9 +38,9 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
 
     private final EventTransformationServiceGrpc.EventTransformationServiceStub eventTransformationService;
     private final ConcurrentHashMap<Long, CompletableFuture<Void>> transformationsInProgress = new ConcurrentHashMap<>();
-    private StreamObserver<TransformEventsRequest> transformEventsRequestStreamObserver;
     private final AtomicBoolean isFailed = new AtomicBoolean(false);
     private final AtomicReference<Throwable> failure = new AtomicReference<>();
+    private StreamObserver<TransformRequest> transformEventsRequestStreamObserver;
     private final ClientIdentification clientIdentification;
 
     /**
@@ -65,20 +65,20 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
                                                                                  .setDescription(description).build(),
                                                        responseObserver);
         initTransformChannel();
-        return responseObserver.thenApply(this::startedTransformationStep); //todo point to self replace event and remove event
+        return responseObserver.thenApply(this::startedTransformationStep);
     }
 
-    private void initTransformChannel() {
-        AbstractBufferedStream<EventTransformedAck, TransformEventsRequest> results = new AbstractBufferedStream<EventTransformedAck, TransformEventsRequest>(
+    private void initTransformChannel() { //todo move inside transformation
+        AbstractBufferedStream<TransformRequestAck, TransformRequest> results = new AbstractBufferedStream<TransformRequestAck, TransformRequest>(
                 clientIdentification.getClientId(), 32, 8
         ) {
             @Override
-            protected TransformEventsRequest buildFlowControlMessage(FlowControl flowControl) {
+            protected TransformRequest buildFlowControlMessage(FlowControl flowControl) {
                 return null;
             }
 
             @Override
-            protected EventTransformedAck terminalMessage() {
+            protected TransformRequestAck terminalMessage() {
                 return null;
             }
         };
@@ -88,12 +88,12 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
                 Throwable t = results.getError().get();
                 isFailed.set(true);
                 failure.set(t);
-                transformationsInProgress.values().forEach(c->c.completeExceptionally(t));
+                transformationsInProgress.values().forEach(c -> c.completeExceptionally(t));
             }
             //todo or its stream is closed
-            EventTransformedAck ack = results.nextIfAvailable();
+            TransformRequestAck ack = results.nextIfAvailable();
             if (ack != null) {
-                CompletableFuture<Void> transformedFuture = transformationsInProgress.remove(ack.getToken());
+                CompletableFuture<Void> transformedFuture = transformationsInProgress.remove(ack.getSequence());
                 transformedFuture.complete(null);
             }
         });
@@ -103,14 +103,8 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
     }
 
 
-    private CompletableFuture<Void> transformEvent(TransformEventsRequest request) {
-        long token = -1;
-        if (request.hasEvent()) {
-            token = request.getEvent().getToken();
-        } else if (request.hasDeleteEvent()) {
-            token = request.getDeleteEvent().getToken();
-        }
-        CompletableFuture<Void> future = transformationsInProgress.computeIfAbsent(token,
+    private CompletableFuture<Void> transformEvent(TransformRequest request) {
+        CompletableFuture<Void> future = transformationsInProgress.computeIfAbsent(request.getSequence(),
                                                                                    k -> new CompletableFuture<>());
         transformEventsRequestStreamObserver.onNext(request);
 
@@ -195,9 +189,11 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
     }
 
     private EventTransformation startedTransformationStep(TransformationId transformationId) {
+
+
         return new EventTransformation() {
 
-            private final AtomicLong lastEventToken = new AtomicLong(-1);
+            private final AtomicLong sequenceNumber = new AtomicLong(-1);
 
             private ApplyOrCancelEventTransformation applyOrCancelEventTransformationStep(Void confirmation) {
                 return new ApplyOrCancelEventTransformation() {
@@ -220,7 +216,7 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
                                                                              .setTransformationId(io.axoniq.axonserver.grpc.event.TransformationId.newBuilder()
                                                                                                                                                   .setId(id().id())
                                                                                                                                                   .build())
-                                                                             .setLastEventToken(lastEventToken.get())
+                                                                             //.setLastEventToken(lastEventToken.get()) todo replace with sequence number?
                                                                              .setKeepOldVersions(keepBackup)
                                                                              .build()).thenApply(confirmation -> this::rollbackEventTransformationStep);
                     }
@@ -239,36 +235,32 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
             }
 
             @Override
-            public CompletableFuture<ApplyOrCancelEventTransformation> replaceEvent(long token, long previousToken,
+            public CompletableFuture<ApplyOrCancelEventTransformation> replaceEvent(long token,
                                                                                     Event event) {
-                return transformEvent(TransformEventsRequest.newBuilder()
-                                                            .setTransformationId(io.axoniq.axonserver.grpc.event.TransformationId.newBuilder()
-                                                                                                                                 .setId(id().id())
-                                                                                                                                 .build())
-                                                            .setPreviousToken(
-                                                                    previousToken)
-                                                            .setEvent(TransformedEvent.newBuilder()
-                                                                                      .setEvent(event)
-                                                                                      .setToken(token)
+                return transformEvent(TransformRequest.newBuilder()
+                                                      .setTransformationId(io.axoniq.axonserver.grpc.event.TransformationId.newBuilder()
+                                                                                                                           .setId(id().id())
+                                                                                                                           .build())
+                                                      .setSequence(sequenceNumber.incrementAndGet())
+                                                      .setEvent(TransformedEvent.newBuilder()
+                                                                                .setEvent(event)
+                                                                                .setToken(token)
 
-                                                                                      .build())
-                                                            .build()).thenRun(() -> lastEventToken.set(token))
-                                                                     .thenApply(this::applyOrCancelEventTransformationStep);
+                                                                                .build())
+                                                      .build()).thenApply(this::applyOrCancelEventTransformationStep);
             }
 
             @Override
-            public CompletableFuture<ApplyOrCancelEventTransformation> deleteEvent(long token, long previousToken) {
-                return transformEvent(TransformEventsRequest.newBuilder()
-                                                            .setTransformationId(io.axoniq.axonserver.grpc.event.TransformationId.newBuilder()
-                                                                                                                                 .setId(id().id())
-                                                                                                                                 .build())
-                                                            .setPreviousToken(
-                                                                    previousToken)
-                                                            .setDeleteEvent(DeletedEvent.newBuilder()
-                                                                                        .setToken(token)
-                                                                                        .build())
-                                                            .build())
-                        .thenRun(() -> lastEventToken.set(token))
+            public CompletableFuture<ApplyOrCancelEventTransformation> deleteEvent(long token) {
+                return transformEvent(TransformRequest.newBuilder()
+                                                      .setTransformationId(io.axoniq.axonserver.grpc.event.TransformationId.newBuilder()
+                                                                                                                           .setId(id().id())
+                                                                                                                           .build())
+                                                      .setSequence(sequenceNumber.incrementAndGet())
+                                                      .setDeleteEvent(DeletedEvent.newBuilder()
+                                                                                  .setToken(token)
+                                                                                  .build())
+                                                      .build())
                         .thenApply(this::applyOrCancelEventTransformationStep);
             }
         };
