@@ -95,10 +95,6 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
             }
         });
 
-
-
-        //todo catch error and complete future exceptionally
-
         transformEventsRequestStreamObserver = eventTransformationService.transformEvents(
                 results);
     }
