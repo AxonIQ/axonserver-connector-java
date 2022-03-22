@@ -25,6 +25,7 @@ import io.grpc.stub.StreamObserver;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -37,6 +38,7 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
     private final EventTransformationServiceGrpc.EventTransformationServiceStub eventTransformationService;
     private final ConcurrentHashMap<Long, CompletableFuture<Void>> transformationsInProgress = new ConcurrentHashMap<>();
     private StreamObserver<TransformEventsRequest> transformEventsRequestStreamObserver;
+    private AtomicBoolean isFailed = new AtomicBoolean(false);
 
     /**
      * todo
@@ -68,6 +70,13 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
         ) {
 
             @Override
+            public void onError(Throwable t) {
+                isFailed.set(true);
+                transformationsInProgress.values().forEach(c->c.completeExceptionally(t));
+                super.onError(t);
+            }
+
+            @Override
             protected TransformEventsRequest buildFlowControlMessage(FlowControl flowControl) {
                 return null;
             }
@@ -85,6 +94,8 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
                 transformedFuture.complete(null);
             }
         });
+
+
 
         //todo catch error and complete future exceptionally
 
