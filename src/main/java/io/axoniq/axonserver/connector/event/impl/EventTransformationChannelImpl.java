@@ -37,10 +37,7 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
         implements EventTransformationChannel {
 
     private final EventTransformationServiceGrpc.EventTransformationServiceStub eventTransformationService;
-    private final ConcurrentHashMap<Long, CompletableFuture<Void>> transformationsInProgress = new ConcurrentHashMap<>();
-    private final AtomicBoolean isFailed = new AtomicBoolean(false);
-    private final AtomicReference<Throwable> failure = new AtomicReference<>();
-    private StreamObserver<TransformRequest> transformEventsRequestStreamObserver;
+
     private final ClientIdentification clientIdentification;
 
     /**
@@ -64,95 +61,7 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
         eventTransformationService.startTransformation(StartTransformationRequest.newBuilder()
                                                                                  .setDescription(description).build(),
                                                        responseObserver);
-        initTransformChannel();
         return responseObserver.thenApply(this::startedTransformationStep);
-    }
-
-    private void initTransformChannel() { //todo move inside transformation
-        AbstractBufferedStream<TransformRequestAck, TransformRequest> results = new AbstractBufferedStream<TransformRequestAck, TransformRequest>(
-                clientIdentification.getClientId(), 32, 8
-        ) {
-            @Override
-            protected TransformRequest buildFlowControlMessage(FlowControl flowControl) {
-                return null;
-            }
-
-            @Override
-            protected TransformRequestAck terminalMessage() {
-                return null;
-            }
-        };
-
-        results.onAvailable(() -> {
-            if (results.getError().isPresent()) {
-                Throwable t = results.getError().get();
-                isFailed.set(true);
-                failure.set(t);
-                transformationsInProgress.values().forEach(c -> c.completeExceptionally(t));
-            }
-            //todo or its stream is closed
-            TransformRequestAck ack = results.nextIfAvailable();
-            if (ack != null) {
-                CompletableFuture<Void> transformedFuture = transformationsInProgress.remove(ack.getSequence());
-                transformedFuture.complete(null);
-            }
-        });
-
-        transformEventsRequestStreamObserver = eventTransformationService.transformEvents(
-                results);
-    }
-
-
-    private CompletableFuture<Void> transformEvent(TransformRequest request) {
-        CompletableFuture<Void> future = transformationsInProgress.computeIfAbsent(request.getSequence(),
-                                                                                   k -> new CompletableFuture<>());
-        transformEventsRequestStreamObserver.onNext(request);
-
-        return future;
-    }
-
-
-    private CompletableFuture<Void> cancelTransformation(
-            io.axoniq.axonserver.connector.event.EventTransformation.TransformationId request) {
-        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(new AxonServerException(
-                ErrorCategory.OTHER,
-                "An unknown error occurred while cancelling transformation. No response received from Server.",
-                ""
-        ));
-
-        eventTransformationService.cancelTransformation(TransformationId.newBuilder().setId(request.id()).build(),
-                                                        responseObserver);
-        return responseObserver.thenAccept(empty -> completeTransformationChannel());
-    }
-
-    private CompletableFuture<Void> applyTransformation(ApplyTransformationRequest request) {
-        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(new AxonServerException(
-                ErrorCategory.OTHER,
-                "An unknown error occurred while applying transformation. No response received from Server.",
-                ""
-        ));
-
-        eventTransformationService.applyTransformation(request,
-                                                       responseObserver);
-        return responseObserver.thenAccept(empty -> completeTransformationChannel());
-    }
-
-    private void completeTransformationChannel() {
-        transformEventsRequestStreamObserver.onCompleted();
-    }
-
-    private CompletableFuture<Void> rollbackTransformation(
-            io.axoniq.axonserver.connector.event.EventTransformation.TransformationId request) {
-        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(new AxonServerException(
-                ErrorCategory.OTHER,
-                "An unknown error occurred while executing rollback on transformation. No response received from Server.",
-                ""
-        ));
-
-        eventTransformationService.rollbackTransformation(TransformationId.newBuilder().setId(request.id()).build(),
-                                                          responseObserver);
-        return responseObserver.thenAccept(empty -> {
-        });
     }
 
     @Override
@@ -189,14 +98,122 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
     }
 
     private EventTransformation startedTransformationStep(TransformationId transformationId) {
-
-
         return new EventTransformation() {
-
+            private final ConcurrentHashMap<Long, CompletableFuture<Void>> transformationsInProgress = new ConcurrentHashMap<>();
+            private final AtomicBoolean isFailed = new AtomicBoolean(false);
+            private final AtomicReference<Throwable> failure = new AtomicReference<>();
             private final AtomicLong sequenceNumber = new AtomicLong(-1);
+            private StreamObserver<TransformRequest> transformEventsRequestStreamObserver;
+
+            private EventTransformation initializeState() {
+                AbstractBufferedStream<TransformRequestAck, TransformRequest> results = new AbstractBufferedStream<TransformRequestAck, TransformRequest>(
+                        clientIdentification.getClientId(), 32, 8
+                ) {
+                    @Override
+                    protected TransformRequest buildFlowControlMessage(FlowControl flowControl) {
+                        return null;
+                    }
+
+                    @Override
+                    protected TransformRequestAck terminalMessage() {
+                        return null;
+                    }
+                };
+
+                results.onAvailable(() -> {
+                    if (results.getError().isPresent()) {
+                        Throwable t = results.getError().get();
+                        isFailed.set(true);
+                        failure.set(t);
+                        transformationsInProgress.values().forEach(c -> c.completeExceptionally(t));
+                    }
+                    //todo or its stream is closed
+                    TransformRequestAck ack = results.nextIfAvailable();
+                    if (ack != null) {
+                        CompletableFuture<Void> transformedFuture = transformationsInProgress.remove(ack.getSequence());
+                        transformedFuture.complete(null);
+                    }
+                });
+
+                transformEventsRequestStreamObserver = eventTransformationService.transformEvents(
+                        results);
+
+                return this;
+            }
+
+            private CompletableFuture<Void> transformEvent(TransformRequest request) {
+                CompletableFuture<Void> future = transformationsInProgress.computeIfAbsent(request.getSequence(),
+                                                                                           k -> new CompletableFuture<>());
+                transformEventsRequestStreamObserver.onNext(request);
+
+                return future;
+            }
+
+            private CompletableFuture<Void> cancelTransformation(
+                    io.axoniq.axonserver.connector.event.EventTransformation.TransformationId request) {
+                FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(new AxonServerException(
+                        ErrorCategory.OTHER,
+                        "An unknown error occurred while cancelling transformation. No response received from Server.",
+                        ""
+                ));
+
+                eventTransformationService.cancelTransformation(io.axoniq.axonserver.grpc.event.TransformationId.newBuilder()
+                                                                                                                .setId(request.id())
+                                                                                                                .build(),
+                                                                responseObserver);
+                return responseObserver.thenAccept(empty -> completeTransformationChannel());
+            }
+
+            private CompletableFuture<Void> applyTransformation(ApplyTransformationRequest request) {
+                FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(new AxonServerException(
+                        ErrorCategory.OTHER,
+                        "An unknown error occurred while applying transformation. No response received from Server.",
+                        ""
+                ));
+
+                eventTransformationService.applyTransformation(request,
+                                                               responseObserver);
+                return responseObserver.thenAccept(empty -> completeTransformationChannel());
+            }
+
+            private void completeTransformationChannel() {
+                transformEventsRequestStreamObserver.onCompleted();
+            }
+
+            private CompletableFuture<Void> rollbackTransformation(
+                    io.axoniq.axonserver.connector.event.EventTransformation.TransformationId request) {
+                FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(new AxonServerException(
+                        ErrorCategory.OTHER,
+                        "An unknown error occurred while executing rollback on transformation. No response received from Server.",
+                        ""
+                ));
+
+                eventTransformationService.rollbackTransformation(io.axoniq.axonserver.grpc.event.TransformationId.newBuilder()
+                                                                                                                  .setId(request.id())
+                                                                                                                  .build(),
+                                                                  responseObserver);
+                return responseObserver.thenAccept(empty -> {
+                });
+            }
 
             private ApplyOrCancelEventTransformation applyOrCancelEventTransformationStep(Void confirmation) {
+                EventTransformation parent = this;
                 return new ApplyOrCancelEventTransformation() {
+
+                    @Override
+                    public TransformationId id() {
+                        return parent.id();
+                    }
+
+                    @Override
+                    public CompletableFuture<ApplyOrCancelEventTransformation> replaceEvent(long token, Event event) {
+                        return parent.replaceEvent(token, event);
+                    }
+
+                    @Override
+                    public CompletableFuture<ApplyOrCancelEventTransformation> deleteEvent(long token) {
+                        return parent.deleteEvent(token);
+                    }
 
                     private CompletableFuture<Void> rollbackEventTransformationStep() {
                         return rollbackTransformation(
@@ -263,6 +280,6 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
                                                       .build())
                         .thenApply(this::applyOrCancelEventTransformationStep);
             }
-        };
+        }.initializeState();
     }
 }

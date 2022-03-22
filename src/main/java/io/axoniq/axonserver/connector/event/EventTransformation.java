@@ -14,7 +14,7 @@ public interface EventTransformation {
     CompletableFuture<ApplyOrCancelEventTransformation> replaceEvent(long token, Event event);
     CompletableFuture<ApplyOrCancelEventTransformation> deleteEvent(long token);
 
-    interface ApplyOrCancelEventTransformation {
+    interface ApplyOrCancelEventTransformation extends EventTransformation {
         CompletableFuture<RollbackEventTransformation> apply();
         CompletableFuture<RollbackEventTransformation> apply(boolean keepBackup);
         CompletableFuture<Void> cancel();
