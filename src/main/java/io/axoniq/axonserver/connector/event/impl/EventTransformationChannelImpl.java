@@ -61,8 +61,11 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
         eventTransformationService.startTransformation(StartTransformationRequest.newBuilder()
                                                                                  .setDescription(description).build(),
                                                        responseObserver);
-        return responseObserver.thenApply(this::startedTransformationStep);
+        return responseObserver.thenApply(this::activeTransformationStep);
     }
+
+    //todo read transformation by id
+    //todo read all transformations
 
     @Override
     public CompletableFuture<Void> deleteOldVersions() {
@@ -97,7 +100,7 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
         return true;
     }
 
-    private EventTransformation startedTransformationStep(TransformationId transformationId) {
+    private EventTransformation activeTransformationStep(TransformationId transformationId) {
         return new EventTransformation() {
             private final ConcurrentHashMap<Long, CompletableFuture<Void>> transformationsInProgress = new ConcurrentHashMap<>();
             private final AtomicBoolean isFailed = new AtomicBoolean(false);
@@ -233,7 +236,7 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
                                                                              .setTransformationId(io.axoniq.axonserver.grpc.event.TransformationId.newBuilder()
                                                                                                                                                   .setId(id().id())
                                                                                                                                                   .build())
-                                                                             //.setLastEventToken(lastEventToken.get()) todo replace with sequence number?
+                                                                             .setLastSequence(sequenceNumber.get())
                                                                              .setKeepOldVersions(keepBackup)
                                                                              .build()).thenApply(confirmation -> this::rollbackEventTransformationStep);
                     }
