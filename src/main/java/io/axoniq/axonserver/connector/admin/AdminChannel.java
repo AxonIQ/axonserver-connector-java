@@ -31,6 +31,7 @@ import io.axoniq.axonserver.grpc.admin.JoinReplicationGroup;
 import io.axoniq.axonserver.grpc.admin.LeaveReplicationGroup;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupOverview;
 import io.axoniq.axonserver.grpc.admin.Token;
+import io.axoniq.axonserver.grpc.admin.UpdateContextPropertiesRequest;
 import io.axoniq.axonserver.grpc.admin.UserOverview;
 
 import java.util.List;
@@ -173,8 +174,8 @@ public interface AdminChannel {
     CompletableFuture<Void> deleteApplication(String applicationName);
 
     /**
-     * Request to create an Axon Server context.
-     * Returns a {@link CompletableFuture} that completes when the request has been processed by Axon Server.
+     * Request to create an Axon Server context. Returns a {@link CompletableFuture} that completes when the request has
+     * been processed by Axon Server.
      *
      * @param request {@link CreateContextRequest} to create the context
      * @return a {@link CompletableFuture} that completes when the request has been processed by Axon Server
@@ -182,9 +183,19 @@ public interface AdminChannel {
     CompletableFuture<Void> createContext(CreateContextRequest request);
 
     /**
+     * Request to update the properties for an Axon Server context. Returns a {@link CompletableFuture} that completes
+     * when the request has been processed by Axon Server.
+     *
+     * @param request {@link UpdateContextPropertiesRequest} to update the context properties
+     * @return a {@link CompletableFuture} that completes when the request has been processed by Axon Server
+     */
+    CompletableFuture<Void> updateContextProperties(UpdateContextPropertiesRequest request);
+
+    /**
      * Request to delete a context in Axon Server.
      *
-     * @param request {@link DeleteContextRequest} to delete the context, containing the context name and option to preserve event store.
+     * @param request {@link DeleteContextRequest} to delete the context, containing the context name and option to
+     *                preserve event store.
      * @return a {@link CompletableFuture} that completes when context has been deleted
      */
     CompletableFuture<Void> deleteContext(DeleteContextRequest request);
