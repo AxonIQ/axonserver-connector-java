@@ -554,7 +554,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
 
     private boolean axonServerSupportsQueryStreaming(QueryRequest queryRequest) {
         return booleanProcessingValue(queryRequest.getProcessingInstructionsList(),
-                                      ProcessingKey.AS_SUPPORTS_STREAMING);
+                                      ProcessingKey.SERVER_SUPPORTS_STREAMING);
     }
 
     private boolean querySenderSupportsStreaming(QueryRequest queryRequest) {
