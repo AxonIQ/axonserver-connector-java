@@ -26,6 +26,7 @@ import io.axoniq.axonserver.connector.impl.FutureListStreamObserver;
 import io.axoniq.axonserver.connector.impl.FutureStreamObserver;
 import io.axoniq.axonserver.grpc.Component;
 import io.axoniq.axonserver.grpc.FlowControl;
+import io.axoniq.axonserver.grpc.admin.AdminActionResult;
 import io.axoniq.axonserver.grpc.admin.ApplicationAdminServiceGrpc;
 import io.axoniq.axonserver.grpc.admin.ApplicationId;
 import io.axoniq.axonserver.grpc.admin.ApplicationOverview;
@@ -50,15 +51,16 @@ import io.axoniq.axonserver.grpc.admin.LeaveReplicationGroup;
 import io.axoniq.axonserver.grpc.admin.MoveSegment;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupAdminServiceGrpc;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupOverview;
+import io.axoniq.axonserver.grpc.admin.Result;
 import io.axoniq.axonserver.grpc.admin.Token;
 import io.axoniq.axonserver.grpc.admin.UserAdminServiceGrpc;
 import io.axoniq.axonserver.grpc.admin.UserOverview;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
 
+import javax.annotation.Nonnull;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
-import javax.annotation.Nonnull;
 
 /**
  * {@link AdminChannel} GRPC implementation to allow a client application sending and receiving administration related
@@ -133,55 +135,50 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public CompletableFuture<Void> pauseEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
+    public CompletableFuture<Result> pauseEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
         EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
-        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
+        FutureStreamObserver<AdminActionResult> responseObserver = new FutureStreamObserver<>(null);
         eventProcessorServiceStub.pauseEventProcessor(eventProcessorIdentifier, responseObserver);
-        return responseObserver.thenAccept(empty -> {
-        });
+        return responseObserver.thenApply(AdminActionResult::getResult);
     }
 
     @Override
-    public CompletableFuture<Void> startEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
+    public CompletableFuture<Result> startEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
         EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
-        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
+        FutureStreamObserver<AdminActionResult> responseObserver = new FutureStreamObserver<>(null);
         eventProcessorServiceStub.startEventProcessor(eventProcessorIdentifier, responseObserver);
-        return responseObserver.thenAccept(empty -> {
-        });
+        return responseObserver.thenApply(AdminActionResult::getResult);
     }
 
 
     @Override
-    public CompletableFuture<Void> splitEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
+    public CompletableFuture<Result> splitEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
         EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
-        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
+        FutureStreamObserver<AdminActionResult> responseObserver = new FutureStreamObserver<>(null);
         eventProcessorServiceStub.splitEventProcessor(eventProcessorIdentifier, responseObserver);
-        return responseObserver.thenAccept(empty -> {
-        });
+        return responseObserver.thenApply(AdminActionResult::getResult);
     }
 
     @Override
-    public CompletableFuture<Void> mergeEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
+    public CompletableFuture<Result> mergeEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
         EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
-        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
+        FutureStreamObserver<AdminActionResult> responseObserver = new FutureStreamObserver<>(null);
         eventProcessorServiceStub.mergeEventProcessor(eventProcessorIdentifier, responseObserver);
-        return responseObserver.thenRun(() -> {
-        });
+        return responseObserver.thenApply(AdminActionResult::getResult);
     }
 
     @Override
-    public CompletableFuture<Void> moveEventProcessorSegment(String eventProcessorName, String tokenStoreIdentifier,
-                                                             int segmentId, String targetClientIdentifier) {
+    public CompletableFuture<Result> moveEventProcessorSegment(String eventProcessorName, String tokenStoreIdentifier,
+                                                               int segmentId, String targetClientIdentifier) {
         EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
-        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
+        FutureStreamObserver<AdminActionResult> responseObserver = new FutureStreamObserver<>(null);
         MoveSegment request = MoveSegment.newBuilder()
                                          .setEventProcessor(eventProcessorIdentifier)
                                          .setSegment(segmentId)
                                          .setTargetClientId(targetClientIdentifier)
                                          .build();
         eventProcessorServiceStub.moveEventProcessorSegment(request, responseObserver);
-        return responseObserver.thenRun(() -> {
-        });
+        return responseObserver.thenApply(AdminActionResult::getResult);
     }
 
     @Nonnull

@@ -30,6 +30,7 @@ import io.axoniq.axonserver.grpc.admin.EventProcessor;
 import io.axoniq.axonserver.grpc.admin.JoinReplicationGroup;
 import io.axoniq.axonserver.grpc.admin.LeaveReplicationGroup;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupOverview;
+import io.axoniq.axonserver.grpc.admin.Result;
 import io.axoniq.axonserver.grpc.admin.Token;
 import io.axoniq.axonserver.grpc.admin.UserOverview;
 
@@ -67,7 +68,7 @@ public interface AdminChannel {
      * @param tokenStoreIdentifier the token store identifier of the processor to pause
      * @return a {@link CompletableFuture} that completes when the pause has been performed
      */
-    CompletableFuture<Void> pauseEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
+    CompletableFuture<Result> pauseEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
 
     /**
      * Request to start a specific event processor. Returns a {@link CompletableFuture} that completes when the start
@@ -77,7 +78,7 @@ public interface AdminChannel {
      * @param tokenStoreIdentifier the token store identifier of the processor to start
      * @return a {@link CompletableFuture} that completes when the start has been performed
      */
-    CompletableFuture<Void> startEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
+    CompletableFuture<Result> startEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
 
     /**
      * Request to split the biggest segment of a specific event processor. Returns a {@link CompletableFuture} that
@@ -87,7 +88,7 @@ public interface AdminChannel {
      * @param tokenStoreIdentifier the token store identifier of the processor to split
      * @return a {@link CompletableFuture} that completes when the split has been performed
      */
-    CompletableFuture<Void> splitEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
+    CompletableFuture<Result> splitEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
 
     /**
      * Request to merge the two smallest segments of a specific event processor. Returns a {@link CompletableFuture}
@@ -97,7 +98,7 @@ public interface AdminChannel {
      * @param tokenStoreIdentifier the token store identifier of the processor to merge
      * @return a {@link CompletableFuture} that completes when the merge has been performed
      */
-    CompletableFuture<Void> mergeEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
+    CompletableFuture<Result> mergeEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
 
     /**
      * Requests to move a specific event processor segment to a certain client. Returns a {@link CompletableFuture} that
@@ -111,10 +112,10 @@ public interface AdminChannel {
      * @return a {@link CompletableFuture} that completes when all the other clients released the segment.
      * There is no guarantee that the target client has already claimed the segment when the result completes.
      */
-    CompletableFuture<Void> moveEventProcessorSegment(String eventProcessorName,
-                                                      String tokenStoreIdentifier,
-                                                      int segmentId,
-                                                      String targetClientIdentifier);
+    CompletableFuture<Result> moveEventProcessorSegment(String eventProcessorName,
+                                                        String tokenStoreIdentifier,
+                                                        int segmentId,
+                                                        String targetClientIdentifier);
 
     /**
      * Request to create an Axon Server user, or update it if it's already present. Returns a {@link CompletableFuture}
