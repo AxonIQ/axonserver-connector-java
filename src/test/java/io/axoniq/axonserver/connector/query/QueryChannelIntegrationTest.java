@@ -382,10 +382,8 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     void testReconnectFinishesQueriesInTransit() throws InterruptedException {
         Queue<ReplyChannel<QueryResponse>> queriesInProgress = new ConcurrentLinkedQueue<>();
         QueryChannel queryChannel = connection1.queryChannel();
-        queryChannel.registerQueryHandler((command, reply) -> {
-            CompletableFuture<QueryResponse> result = new CompletableFuture<>();
-            queriesInProgress.add(reply);
-        }, new QueryDefinition("testQuery", String.class));
+        queryChannel.registerQueryHandler((command, reply) -> queriesInProgress.add(reply),
+                                          new QueryDefinition("testQuery", String.class));
 
         QueryChannel queryChannel2 = connection2.queryChannel();
 
@@ -458,9 +456,7 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                 return fail(e);
             }
         }).collect(Collectors.toList());
-        actualMessages.forEach(r -> {
-            assertFalse(r.hasErrorMessage());
-        });
+        actualMessages.forEach(r -> assertFalse(r.hasErrorMessage()));
 
         assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(((ContextConnection) connection1).getManagedChannel().isTerminated()));
     }

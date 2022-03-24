@@ -89,6 +89,11 @@ public class ForwardingReplyChannel<T> implements ReplyChannel<T> {
 
     @Override
     public void completeWithError(ErrorMessage errorMessage) {
+        if (errorMessage.getLocation().isEmpty()) {
+            errorMessage = errorMessage.toBuilder()
+                                       .setLocation(clientId)
+                                       .build();
+        }
         sendNack(errorMessage);
         markConsumed();
     }

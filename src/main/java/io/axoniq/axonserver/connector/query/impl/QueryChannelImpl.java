@@ -26,7 +26,14 @@ import io.axoniq.axonserver.connector.impl.AbstractBufferedStream;
 import io.axoniq.axonserver.connector.impl.AbstractIncomingInstructionStream;
 import io.axoniq.axonserver.connector.impl.AsyncRegistration;
 import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
+import io.axoniq.axonserver.connector.impl.BufferingReplyChannel;
+import io.axoniq.axonserver.connector.impl.CloseAwareReplyChannel;
+import io.axoniq.axonserver.connector.impl.DisposableReadonlyBuffer;
+import io.axoniq.axonserver.connector.impl.FlowControlledReplyChannelWriter;
+import io.axoniq.axonserver.connector.impl.NoopFlowControl;
 import io.axoniq.axonserver.connector.impl.ObjectUtils;
+import io.axoniq.axonserver.connector.impl.buffer.BlockingCloseableBuffer;
+import io.axoniq.axonserver.connector.impl.buffer.FlowControlledDisposableReadonlyBuffer;
 import io.axoniq.axonserver.connector.query.QueryChannel;
 import io.axoniq.axonserver.connector.query.QueryDefinition;
 import io.axoniq.axonserver.connector.query.QueryHandler;
@@ -34,6 +41,8 @@ import io.axoniq.axonserver.connector.query.SubscriptionQueryResult;
 import io.axoniq.axonserver.grpc.ErrorMessage;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.InstructionAck;
+import io.axoniq.axonserver.grpc.ProcessingInstruction;
+import io.axoniq.axonserver.grpc.ProcessingKey;
 import io.axoniq.axonserver.grpc.SerializedObject;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
 import io.axoniq.axonserver.grpc.query.QueryComplete;
@@ -54,6 +63,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -66,6 +76,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
 
@@ -92,7 +104,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
     private final Object queryHandlerMonitor = new Object();
     private final Map<String, Set<Registration>> subscriptionQueries = new ConcurrentHashMap<>();
     private final QueryServiceGrpc.QueryServiceStub queryServiceStub;
-    private final Set<CompletableFuture<?>> queriesInProgress = ConcurrentHashMap.newKeySet();
+    private final Map<String, QueryInProgress> queriesInProgress = new ConcurrentHashMap<>();
     private final AtomicBoolean subscriptionsCompleted = new AtomicBoolean(false);
 
     /**
@@ -122,6 +134,8 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         instructionHandlers.put(SubscriptionQueryRequest.RequestCase.GET_INITIAL_RESULT, this::getInitialResult);
         instructionHandlers.put(SubscriptionQueryRequest.RequestCase.SUBSCRIBE, this::subscribeToQueryUpdates);
         instructionHandlers.put(SubscriptionQueryRequest.RequestCase.UNSUBSCRIBE, this::unsubscribeToQueryUpdates);
+        instructionHandlers.put(QueryProviderInbound.RequestCase.QUERY_CANCEL, this::handleCancelRequest);
+        instructionHandlers.put(QueryProviderInbound.RequestCase.QUERY_FLOW_CONTROL, this::handleFlowControlRequest);
         queryServiceStub = QueryServiceGrpc.newStub(channel);
     }
 
@@ -188,6 +202,21 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                 ).add(registration);
             }
         });
+        result.complete();
+    }
+
+    private void handleCancelRequest(QueryProviderInbound complete, ReplyChannel<QueryProviderOutbound> result) {
+        queriesInProgress.getOrDefault(complete.getQueryCancel().getRequestId(), QueryInProgress.noop())
+                         .cancel();
+        result.complete();
+    }
+
+    private void handleFlowControlRequest(QueryProviderInbound flowControl,
+                                          ReplyChannel<QueryProviderOutbound> result) {
+        queriesInProgress.getOrDefault(flowControl.getQueryFlowControl()
+                                                  .getQueryReference()
+                                                  .getRequestId(), QueryInProgress.noop())
+                         .request(flowControl.getQueryFlowControl().getPermits());
         result.complete();
     }
 
@@ -342,7 +371,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
 
             @Override
             public void close() {
-                // this is a one-way stream. No need to close it.
+                outboundStream().cancel("Client cancelled the stream.", null);
             }
         };
         if ("".equals(query.getMessageIdentifier())) {
@@ -424,9 +453,11 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
             if (!queriesInProgress.isEmpty()) {
                 logger.info("Disconnect requested. Waiting for {} queries to be completed", queriesInProgress.size());
             }
-            return CompletableFuture.allOf(queriesInProgress.stream()
-                                                            .reduce(CompletableFuture::allOf)
-                                                            .orElseGet(() -> CompletableFuture.completedFuture(null)));
+            return queriesInProgress.values()
+                                    .stream()
+                                    .map(QueryInProgress::whenComplete)
+                                    .reduce(CompletableFuture::allOf)
+                                    .orElseGet(() -> CompletableFuture.completedFuture(null));
         }).thenAccept(previousStream -> doIfNotNull(previousOutbound, StreamObserver::onCompleted));
     }
 
@@ -462,10 +493,14 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
     }
 
     private void doHandleQuery(QueryRequest query, ReplyChannel<QueryResponse> responseChannel) {
-        CompletableFuture<?> completionHandle = new CompletableFuture<>();
-        queriesInProgress.add(completionHandle);
-        completionHandle.whenComplete((r, e) -> queriesInProgress.remove(completionHandle));
-        ReplyChannel<QueryResponse> responseHandler = new CloseAwareReplyChannelAdapter(responseChannel, () -> completionHandle.complete(null));
+        AtomicReference<io.axoniq.axonserver.connector.FlowControl> flowControlRef = new AtomicReference<>();
+        Runnable removeQuery = () -> queriesInProgress.remove(query.getMessageIdentifier());
+        QueryInProgress queryInProgress = new QueryInProgress(removeQuery, flowControlRef::get);
+        if (queriesInProgress.putIfAbsent(query.getMessageIdentifier(), queryInProgress) != null) {
+            return;
+        }
+        ReplyChannel<QueryResponse> responseHandler = new CloseAwareReplyChannel<>(responseChannel,
+                                                                                   queryInProgress::cancel);
         Set<QueryHandler> handlers = queryHandlers.getOrDefault(query.getQuery(), Collections.emptySet());
         if (handlers.isEmpty()) {
             responseHandler.sendNack();
@@ -480,48 +515,59 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
 
         responseHandler.sendAck();
 
-        AtomicInteger completeCounter = new AtomicInteger(handlers.size());
-        handlers.forEach(queryHandler -> queryHandler.handle(query, new ReplyChannel<QueryResponse>() {
-            @Override
-            public void send(QueryResponse response) {
-                if (!query.getMessageIdentifier().equals(response.getRequestIdentifier())) {
-                    logger.debug("RequestIdentifier not properly set, modifying message");
-                    QueryResponse newResponse = response.toBuilder()
-                                                        .setRequestIdentifier(query.getMessageIdentifier())
-                                                        .build();
-                    responseHandler.send(newResponse);
-                } else {
-                    responseHandler.send(response);
-                }
-            }
+        List<DisposableReadonlyBuffer<QueryResponse>> buffers =
+                handlers.stream()
+                        .map(queryHandler -> executeQuery(queryHandler, query, responseChannel))
+                        .collect(Collectors.toList());
 
-            @Override
-            public void complete() {
-                if (completeCounter.decrementAndGet() == 0) {
-                    responseHandler.complete();
-                }
-            }
+        ReplyChannel<QueryResponse> requestIdReplenishmentReplyChannel =
+                new RequestIdEnhancementReplyChannel(query, responseHandler);
+        FlowControlledReplyChannelWriter<QueryResponse> flowControl =
+                new FlowControlledReplyChannelWriter<>(buffers, requestIdReplenishmentReplyChannel);
+        flowControlRef.set(flowControl);
+        if (!supportsStreaming(query)) {
+            // If streaming is not supported by axon server(s) or the query sender we have to be eager in requesting
+            flowControl.request(Long.MAX_VALUE);
+        }
+    }
 
-            @Override
-            public void completeWithError(ErrorMessage errorMessage) {
-                responseHandler.completeWithError(errorMessage);
-            }
+    /**
+     * Executes the {@code query} by invoking the given {@code handler}. Query responses will be sent via {@code
+     * replyChannel}. In order to improve performance, responses are buffered.
+     *
+     * @param handler      the handler for the given query
+     * @param query        the query to be executed
+     * @param replyChannel the channel for sending query responses
+     * @return a buffer that is going to be replenished automatically
+     */
+    private DisposableReadonlyBuffer<QueryResponse> executeQuery(QueryHandler handler,
+                                                                 QueryRequest query,
+                                                                 ReplyChannel<QueryResponse> replyChannel) {
+        BlockingCloseableBuffer<QueryResponse> buffer = new BlockingCloseableBuffer<>();
+        BufferingReplyChannel<QueryResponse> bufferingReplyChannel = new BufferingReplyChannel<>(replyChannel, buffer);
+        return new FlowControlledDisposableReadonlyBuffer<>(handler.stream(query, bufferingReplyChannel), buffer);
+    }
 
-            @Override
-            public void completeWithError(ErrorCategory errorCategory, String message) {
-                responseHandler.completeWithError(errorCategory, message);
-            }
+    private boolean supportsStreaming(QueryRequest queryRequest) {
+        return axonServerSupportsQueryStreaming(queryRequest) && querySenderSupportsStreaming(queryRequest);
+    }
 
-            @Override
-            public void sendNack(ErrorMessage errorMessage) {
-                responseHandler.sendNack(errorMessage);
-            }
+    private boolean axonServerSupportsQueryStreaming(QueryRequest queryRequest) {
+        return booleanProcessingValue(queryRequest.getProcessingInstructionsList(),
+                                      ProcessingKey.SERVER_SUPPORTS_STREAMING);
+    }
 
-            @Override
-            public void sendAck() {
-                responseHandler.sendAck();
-            }
-        }));
+    private boolean querySenderSupportsStreaming(QueryRequest queryRequest) {
+        return booleanProcessingValue(queryRequest.getProcessingInstructionsList(),
+                                      ProcessingKey.CLIENT_SUPPORTS_STREAMING);
+    }
+
+    private boolean booleanProcessingValue(List<ProcessingInstruction> instructions, ProcessingKey processingKey) {
+        return instructions.stream()
+                           .filter(instruction -> processingKey.equals(instruction.getKey()))
+                           .map(instruction -> instruction.getValue().getBooleanValue())
+                           .findFirst()
+                           .orElse(false);
     }
 
     private void handleQuery(QueryProviderInbound inbound, ReplyChannel<QueryProviderOutbound> result) {
@@ -612,34 +658,82 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         );
     }
 
-    private static class CloseAwareReplyChannelAdapter implements ReplyChannel<QueryResponse> {
+    private static class QueryInProgress {
+
+        private final CompletableFuture<?> cancelHandler;
+        private final Supplier<io.axoniq.axonserver.connector.FlowControl> flowControlSupplier;
+
+        public static QueryInProgress noop() {
+            return new QueryInProgress(() -> {
+            }, () -> NoopFlowControl.INSTANCE);
+        }
+
+        public QueryInProgress(Runnable cancelHandler,
+                               Supplier<io.axoniq.axonserver.connector.FlowControl> flowControlSupplier) {
+            this.cancelHandler = new CompletableFuture<>();
+            this.flowControlSupplier = flowControlSupplier;
+            this.cancelHandler.whenComplete((r, e) -> {
+                io.axoniq.axonserver.connector.FlowControl flowControl = flowControlSupplier.get();
+                if (flowControl != null) {
+                    flowControl.cancel();
+                }
+                cancelHandler.run();
+            });
+        }
+
+        public CompletableFuture<?> whenComplete() {
+            return cancelHandler;
+        }
+
+        public void cancel() {
+            whenComplete().complete(null);
+        }
+
+        public void request(long requested) {
+            io.axoniq.axonserver.connector.FlowControl flowControl = flowControlSupplier.get();
+            if (flowControl != null) {
+                flowControl.request(requested);
+            }
+        }
+    }
+
+    private static class RequestIdEnhancementReplyChannel implements ReplyChannel<QueryResponse> {
+
+        private final QueryRequest query;
         private final ReplyChannel<QueryResponse> delegate;
-        private final Runnable onClose;
 
-        public CloseAwareReplyChannelAdapter(ReplyChannel<QueryResponse> delegate, Runnable onClose) {
+        public RequestIdEnhancementReplyChannel(QueryRequest query, ReplyChannel<QueryResponse> delegate) {
+            this.query = query;
             this.delegate = delegate;
-            this.onClose = onClose;
         }
 
         @Override
-        public void send(QueryResponse outboundMessage) {
-            delegate.send(outboundMessage);
+        public void send(QueryResponse response) {
+            if (!query.getMessageIdentifier()
+                      .equals(response.getRequestIdentifier())) {
+                logger.debug("RequestIdentifier not properly set, modifying message");
+                QueryResponse newResponse = response.toBuilder()
+                                                    .setRequestIdentifier(query.getMessageIdentifier())
+                                                    .build();
+                delegate.send(newResponse);
+            } else {
+                delegate.send(response);
+            }
         }
 
         @Override
-        public void sendLast(QueryResponse outboundMessage) {
-            delegate.sendLast(outboundMessage);
-            onClose.run();
+        public void complete() {
+            delegate.complete();
         }
 
         @Override
-        public void sendAck() {
-            delegate.sendAck();
+        public void completeWithError(ErrorMessage errorMessage) {
+            delegate.completeWithError(errorMessage);
         }
 
         @Override
-        public void sendNack() {
-            delegate.sendNack();
+        public void completeWithError(ErrorCategory errorCategory, String message) {
+            delegate.completeWithError(errorCategory, message);
         }
 
         @Override
@@ -648,21 +742,8 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         }
 
         @Override
-        public void complete() {
-            delegate.complete();
-            onClose.run();
-        }
-
-        @Override
-        public void completeWithError(ErrorMessage errorMessage) {
-            delegate.completeWithError(errorMessage);
-            onClose.run();
-        }
-
-        @Override
-        public void completeWithError(ErrorCategory errorCategory, String message) {
-            delegate.completeWithError(errorCategory, message);
-            onClose.run();
+        public void sendAck() {
+            delegate.sendAck();
         }
     }
 
