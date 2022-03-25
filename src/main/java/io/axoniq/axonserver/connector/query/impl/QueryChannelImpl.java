@@ -660,7 +660,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
 
     private static class QueryInProgress {
 
-        private final CompletableFuture<?> cancelHandler;
+        private final CompletableFuture<Void> cancelHandler;
         private final Supplier<io.axoniq.axonserver.connector.FlowControl> flowControlSupplier;
 
         public static QueryInProgress noop() {
@@ -681,7 +681,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
             });
         }
 
-        public CompletableFuture<?> whenComplete() {
+        public CompletableFuture<Void> whenComplete() {
             return cancelHandler;
         }
 
