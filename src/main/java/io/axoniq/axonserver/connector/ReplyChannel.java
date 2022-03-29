@@ -53,6 +53,47 @@ public interface ReplyChannel<T> {
     }
 
     /**
+     * Used to send a positive result, indicating that the incoming message has been handled as expected.
+     * If the incoming instruction has no instruction ID, this method does nothing.
+     * This method is deprecated because the {@link #complete()} sends the result.
+     *
+     * @see #complete()
+     * @deprecated
+     */
+    @Deprecated
+    default void sendSuccessResult() {
+    }
+
+    /**
+     * Used to send a failed result, indicating that the incoming message could not be handled as expected.
+     * If the incoming instruction has no instruction ID, this method does nothing.
+     * This method is deprecated because the {@link #completeWithError(ErrorMessage)} or
+     * {@link #completeWithError(ErrorCategory, String)}sends the failure result.
+     *
+     * @see #completeWithError(ErrorMessage)
+     * @see #completeWithError(ErrorCategory, String)
+     * @deprecated
+     */
+    @Deprecated
+    default void sendFailureResult() {
+        sendFailureResult(ErrorMessage.getDefaultInstance());
+    }
+
+    /**
+     * Used to send a failed result, indicating that the incoming message could not be handled as expected.
+     * If the incoming instruction has no instruction ID, this method does nothing.
+     * This method is deprecated because the {@link #completeWithError(ErrorMessage)} or
+     * {@link #completeWithError(ErrorCategory, String)}sends the failure result.
+     *
+     * @see #completeWithError(ErrorMessage)
+     * @see #completeWithError(ErrorCategory, String)
+     * @deprecated
+     */
+    @Deprecated
+    default void sendFailureResult(ErrorMessage errorMessage) {
+    }
+
+    /**
      * Marks the inbound instruction as completed.
      */
     void complete();

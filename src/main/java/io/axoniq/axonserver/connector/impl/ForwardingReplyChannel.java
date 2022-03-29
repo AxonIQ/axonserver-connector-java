@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022. AxonIQ
+ * Copyright (c) 2020-2022. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,8 +27,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 /**
- * A {@link ReplyChannel} implementation which forwards {@link #send(Object)}, {@link #sendSuccessResult()} and {@link
- * #sendFailureResult(ErrorMessage)} operations through to a {@link StreamObserver}.
+ * A {@link ReplyChannel} implementation which forwards {@link #send(Object)}, {@link #ackSuccess()} and {@link
+ * #ackFailure(ErrorMessage)} operations through to a {@link StreamObserver}.
  *
  * @param <T> the message type forwarded by this {@link ReplyChannel} to the given {@link StreamObserver}
  */
@@ -51,7 +51,7 @@ public class ForwardingReplyChannel<T> implements ReplyChannel<T> {
      *                      #completeWithError(ErrorCategory, String)} invocation
      * @param stream        the {@link StreamObserver} to forward replies of this {@link ReplyChannel} on
      * @param resultBuilder the builder function used to construct the {@link InstructionResult} message,
-     *                      used for both a {@link #sendSuccessResult()} and {@link #sendFailureResult(ErrorMessage)}
+     *                      used for both a {@link #ackSuccess()} and {@link #ackFailure(ErrorMessage)}
      * @param onComplete    operation to perform when this {@link ReplyChannel} is completed, both successfully and
      *                      exceptionally
      */
@@ -78,7 +78,7 @@ public class ForwardingReplyChannel<T> implements ReplyChannel<T> {
      * <p>
      * If the incoming instruction has no instruction ID, this method does nothing.
      */
-    private void sendSuccessResult() {
+    private void ackSuccess() {
         if (instructionId != null && !instructionId.isEmpty() && resultSent.compareAndSet(false, true)) {
             resultBuilder.apply(InstructionResult.newBuilder()
                                                  .setInstructionId(instructionId)
@@ -90,13 +90,13 @@ public class ForwardingReplyChannel<T> implements ReplyChannel<T> {
 
     @Override
     public void complete() {
-        sendSuccessResult();
+        ackSuccess();
         markConsumed();
     }
 
     @Override
     public void completeWithError(ErrorMessage errorMessage) {
-        sendFailureResult(errorMessage);
+        ackFailure(errorMessage);
         markConsumed();
     }
 
@@ -108,7 +108,7 @@ public class ForwardingReplyChannel<T> implements ReplyChannel<T> {
      * <p>
      * If the incoming instruction has no instruction ID, this method does nothing.
      */
-    private void sendFailureResult(ErrorMessage errorMessage) {
+    private void ackFailure(ErrorMessage errorMessage) {
         if (instructionId != null && !instructionId.isEmpty() && resultSent.compareAndSet(false, true)) {
             InstructionResult failure =
                     InstructionResult.newBuilder()
