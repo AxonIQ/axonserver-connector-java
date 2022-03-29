@@ -1,5 +1,6 @@
 package io.axoniq.axonserver.connector.event;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -8,8 +9,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public interface EventTransformationChannel {
 
-    //todo get all transformation
-    //todo get transformation by id
-    CompletableFuture<NewEventTransformation> newTransformation(String description);
+    CompletableFuture<List<EventTransformation>> transformations();
+    CompletableFuture<EventTransformation> newTransformation(String description);
     CompletableFuture<Void> deleteOldVersions();
 }
