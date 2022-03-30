@@ -494,7 +494,10 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
 
     private void doHandleQuery(QueryRequest query, ReplyChannel<QueryResponse> responseChannel) {
         AtomicReference<io.axoniq.axonserver.connector.FlowControl> flowControlRef = new AtomicReference<>();
-        Runnable removeQuery = () -> queriesInProgress.remove(query.getMessageIdentifier());
+        Runnable removeQuery = () -> {
+            queriesInProgress.remove(query.getMessageIdentifier());
+            responseChannel.complete();
+        };
         QueryInProgress queryInProgress = new QueryInProgress(removeQuery, flowControlRef::get);
         if (queriesInProgress.putIfAbsent(query.getMessageIdentifier(), queryInProgress) != null) {
             return;
