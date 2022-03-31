@@ -51,7 +51,7 @@ import static org.mockito.Mockito.mock;
  * @author Sara Pellegrini
  * @since 4.6.0
  */
-class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
+class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
 
     private final String processorName = "eventProcessor";
     private final String tokenStoreIdentifier = "myTokenStore";
@@ -191,6 +191,35 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     void testMergeEventProcessor() throws Exception {
         AdminChannel adminChannel = connection.adminChannel();
         CompletableFuture<Void> accepted = adminChannel.mergeEventProcessor("processor", "tokenStore");
+        accepted.get(1, SECONDS);
+        Assertions.assertTrue(accepted.isDone());
+    }
+
+
+    @Test
+    @Disabled("To reactivate after the release of AS 4.6.0")
+    void loadBalance() throws Exception {
+        Supplier<EventProcessorInfo> eventProcessorInfoSupplier = this::eventProcessorInfo;
+        ProcessorInstructionHandler handler = mock(ProcessorInstructionHandler.class);
+        connection.controlChannel().registerEventProcessor(processorName, eventProcessorInfoSupplier, handler);
+        AdminChannel adminChannel = connection.adminChannel();
+        CompletableFuture<Void> accepted = adminChannel.getBalancingStrategies()
+                .thenCompose(balancingStrategies -> adminChannel.loadBalanceEventProcessor("processor", "tokenStore", balancingStrategies.get(0).getStrategy()));
+
+        accepted.get(1, SECONDS);
+        Assertions.assertTrue(accepted.isDone());
+    }
+
+    @Test
+    @Disabled("To reactivate after the release of AS 4.6.0")
+    void autoLoadBalance() throws Exception {
+        Supplier<EventProcessorInfo> eventProcessorInfoSupplier = this::eventProcessorInfo;
+        ProcessorInstructionHandler handler = mock(ProcessorInstructionHandler.class);
+        connection.controlChannel().registerEventProcessor(processorName, eventProcessorInfoSupplier, handler);
+        AdminChannel adminChannel = connection.adminChannel();
+        CompletableFuture<Void> accepted = adminChannel.getBalancingStrategies()
+                                                       .thenCompose(balancingStrategies -> adminChannel.setAutoLoadBalanceStrategy("processor", "tokenStore", balancingStrategies.get(1).getStrategy()));
+
         accepted.get(1, SECONDS);
         Assertions.assertTrue(accepted.isDone());
     }

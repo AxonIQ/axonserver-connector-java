@@ -47,6 +47,8 @@ import io.axoniq.axonserver.grpc.admin.GetContextRequest;
 import io.axoniq.axonserver.grpc.admin.GetReplicationGroupRequest;
 import io.axoniq.axonserver.grpc.admin.JoinReplicationGroup;
 import io.axoniq.axonserver.grpc.admin.LeaveReplicationGroup;
+import io.axoniq.axonserver.grpc.admin.LoadBalanceRequest;
+import io.axoniq.axonserver.grpc.admin.LoadBalancingStrategy;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupAdminServiceGrpc;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupOverview;
 import io.axoniq.axonserver.grpc.admin.Token;
@@ -166,6 +168,39 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
         eventProcessorServiceStub.mergeEventProcessor(eventProcessorIdentifier, responseObserver);
         return responseObserver.thenRun(() -> {
         });
+    }
+
+    @Override
+    public CompletableFuture<Void> loadBalanceEventProcessor(String eventProcessorName, String tokenStoreIdentifier,
+                                                             String strategy) {
+        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
+        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
+        eventProcessorServiceStub.loadBalanceProcessor(LoadBalanceRequest.newBuilder().setProcessor(
+                                                                                 eventProcessorIdentifier)
+                                                                         .setStrategy(strategy)
+                                                                         .build(), responseObserver);
+        return responseObserver.thenRun(() -> {
+        });
+    }
+
+    @Override
+    public CompletableFuture<Void> setAutoLoadBalanceStrategy(String eventProcessorName, String tokenStoreIdentifier,
+                                                              String strategy) {
+        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
+        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
+        eventProcessorServiceStub.setAutoLoadBalanceStrategy(LoadBalanceRequest.newBuilder().setProcessor(
+                                                                                       eventProcessorIdentifier)
+                                                                               .setStrategy(strategy)
+                                                                               .build(), responseObserver);
+        return responseObserver.thenRun(() -> {
+        });
+    }
+
+    @Override
+    public CompletableFuture<List<LoadBalancingStrategy>> getBalancingStrategies() {
+        FutureListStreamObserver<LoadBalancingStrategy> responseObserver = new FutureListStreamObserver<>();
+        eventProcessorServiceStub.getBalancingStrategies(Empty.newBuilder().build(), responseObserver);
+        return responseObserver;
     }
 
     @Nonnull

@@ -29,6 +29,7 @@ import io.axoniq.axonserver.grpc.admin.DeleteReplicationGroupRequest;
 import io.axoniq.axonserver.grpc.admin.EventProcessor;
 import io.axoniq.axonserver.grpc.admin.JoinReplicationGroup;
 import io.axoniq.axonserver.grpc.admin.LeaveReplicationGroup;
+import io.axoniq.axonserver.grpc.admin.LoadBalancingStrategy;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupOverview;
 import io.axoniq.axonserver.grpc.admin.Token;
 import io.axoniq.axonserver.grpc.admin.UserOverview;
@@ -106,6 +107,40 @@ public interface AdminChannel {
      * @return a {@link CompletableFuture} that completes when the request has been delivered to AxonServer
      */
     CompletableFuture<Void> mergeEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
+
+    /**
+     * Request to balance the load for the given {@code eventProcessorName} within the connected client.
+     * Returns a {@link CompletableFuture} that completes when the request has been received by Axon Server.
+     * Note that this doesn't imply that the processor is balanced, but only that the request has been properly
+     * delivered.
+     *
+     * @param eventProcessorName   the name of the event processor to balance the load for
+     * @param tokenStoreIdentifier the token store identifier of the processor to balance the load for
+     * @param strategy             the balancing strategy to use
+     * @return a {@link CompletableFuture} that completes when the request is delivered to Axon Server
+     */
+    CompletableFuture<Void> loadBalanceEventProcessor(String eventProcessorName, String tokenStoreIdentifier, String strategy);
+
+    /**
+     *  Updates the autoloadbalance strategy for a {@code eventProcessorName} within the connected client.
+     * Returns a {@link CompletableFuture} that completes when the request has been received by Axon Server.
+     * Note that this doesn't imply that the processor is balanced, but only that the request has been properly
+     * delivered.
+     *
+     * @param eventProcessorName   the name of the event processor to balance the load for
+     * @param tokenStoreIdentifier the token store identifier of the processor to balance the load for
+     * @param strategy             the balancing strategy to use
+     * @return a {@link CompletableFuture} that completes when the request is delivered to Axon Server
+     */
+    CompletableFuture<Void> setAutoLoadBalanceStrategy(String eventProcessorName, String tokenStoreIdentifier, String strategy);
+
+
+    /**
+     * Returns all available load balance strategies registered to AxonServer.
+     *
+     * @return the list of all available load balance strategies registered to AxonServer.
+     */
+    CompletableFuture<List<LoadBalancingStrategy>> getBalancingStrategies();
 
     /**
      * Request to create an Axon Server user, or update it if it's already present.
