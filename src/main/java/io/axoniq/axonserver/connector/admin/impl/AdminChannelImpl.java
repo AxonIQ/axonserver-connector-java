@@ -189,9 +189,9 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
         EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
         FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
         eventProcessorServiceStub.setAutoLoadBalanceStrategy(LoadBalanceRequest.newBuilder().setProcessor(
-                                                                                 eventProcessorIdentifier)
-                                                                         .setStrategy(strategy)
-                                                                         .build(), responseObserver);
+                                                                                       eventProcessorIdentifier)
+                                                                               .setStrategy(strategy)
+                                                                               .build(), responseObserver);
         return responseObserver.thenRun(() -> {
         });
     }
