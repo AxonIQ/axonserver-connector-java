@@ -27,7 +27,11 @@ import io.axoniq.axonserver.grpc.admin.EventProcessorInstance;
 import io.axoniq.axonserver.grpc.admin.EventProcessorSegment;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo.SegmentStatus;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 import org.reactivestreams.Publisher;
 import reactor.test.StepVerifier;
 
@@ -36,8 +40,10 @@ import java.util.function.Supplier;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 /**
  * Integration tests for {@link io.axoniq.axonserver.connector.admin.impl.AdminChannelImpl}.
@@ -140,7 +146,7 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         EventProcessorInstance instance = eventProcessor.getClientInstanceList().get(0);
         assertEquals("admin-client-1", instance.getClientId());
         assertTrue(instance.getIsRunning());
-        assertEquals(11, instance.getMaxSegments());
+        assertEquals(11, instance.getMaxCapacity());
         assertEquals(1, instance.getClaimedSegmentCount());
         EventProcessorSegment segment = instance.getClaimedSegmentList().get(0);
         assertEquals(1, segment.getOnePartOf());
