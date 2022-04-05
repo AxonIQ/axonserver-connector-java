@@ -3,8 +3,8 @@ package io.axoniq.axonserver.connector.event.impl;
 import com.google.protobuf.Empty;
 import io.axoniq.axonserver.connector.AxonServerException;
 import io.axoniq.axonserver.connector.ErrorCategory;
-import io.axoniq.axonserver.connector.event.EventTransformationChannel;
 import io.axoniq.axonserver.connector.event.EventTransformation;
+import io.axoniq.axonserver.connector.event.EventTransformationChannel;
 import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
 import io.axoniq.axonserver.connector.impl.AbstractBufferedStream;
 import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
@@ -28,7 +28,6 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -44,9 +43,6 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
 
     private final ClientIdentification clientIdentification;
 
-    /**
-     * todo
-     */
     public EventTransformationChannelImpl(ClientIdentification clientIdentification, ScheduledExecutorService executor,
                                           AxonServerManagedChannel channel) {
         super(clientIdentification, executor, channel);
@@ -72,7 +68,8 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
     public CompletableFuture<List<EventTransformation>> transformations() {
         FutureListStreamObserver<Transformation> responseObserver = new FutureListStreamObserver<>();
         eventTransformationService.transformations(Empty.newBuilder().build(), responseObserver);
-        return responseObserver.thenApply(n -> n.stream().map(ActiveEventTransformation::new).collect(Collectors.toList()));
+        return responseObserver.thenApply(n -> n.stream().map(ActiveEventTransformation::new)
+                                                .collect(Collectors.toList()));
     }
 
     @Override
@@ -112,7 +109,7 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
 
         private final TransformationId transformationId;
         private final ConcurrentHashMap<Long, CompletableFuture<Void>> transformationsInProgress = new ConcurrentHashMap<>();
-        private final AtomicBoolean isFailed = new AtomicBoolean(false); //todo use isFailed and failure
+        private final AtomicReference<TransformationState> transformationState = new AtomicReference<>();
         private final AtomicReference<Throwable> failure = new AtomicReference<>();
         private final AtomicLong sequenceNumber = new AtomicLong(-1);
         private StreamObserver<TransformRequest> transformEventsRequestStreamObserver;
@@ -120,20 +117,22 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
 
         ActiveEventTransformation(io.axoniq.axonserver.grpc.event.TransformationId transformationId) {
             this.transformationId = transformationId::getId;
+            transformationState.set(TransformationState.ACTIVE);
             initializeConnection();
-            //todo set state new
         }
 
         ActiveEventTransformation(Transformation transformation) {
             this.transformationId = () -> transformation.getTransformationId().getId();
+            sequenceNumber.set(transformation.getSequence());
 
             if (transformation.getError().isInitialized()) {
-                isFailed.set(true);
+                transformationState.set(TransformationState.FATAL);
                 failure.set(new AxonServerException(transformation.getError()));
+            } else {
+                transformationState.set(TransformationState.valueOf(transformation.getState().getValueDescriptor()
+                                                                                  .getName()));
+                initializeConnection();
             }
-            sequenceNumber.set(transformation.getSequence());
-            initializeConnection();
-            //todo set state
         }
 
         private void initializeConnection() {
@@ -154,15 +153,20 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
             results.onAvailable(() -> {
                 if (results.getError().isPresent()) {
                     Throwable t = results.getError().get();
-                    isFailed.set(true);
+                    transformationState.set(TransformationState.FATAL);
                     failure.set(t);
                     transformationsInProgress.values().forEach(c -> c.completeExceptionally(t));
-                }
-                //todo or its stream is closed
-                TransformRequestAck ack = results.nextIfAvailable();
-                if (ack != null) {
-                    CompletableFuture<Void> transformedFuture = transformationsInProgress.remove(ack.getSequence());
-                    transformedFuture.complete(null);
+                } else if (results.isClosed()) {
+                    transformationState.set(TransformationState.FATAL);
+                    failure.set(new AxonServerException(ErrorCategory.CONNECTION_FAILED,
+                                                        "Connection was cancelled",
+                                                        ""));
+                } else {
+                    TransformRequestAck ack = results.nextIfAvailable();
+                    if (ack != null) {
+                        CompletableFuture<Void> transformedFuture = transformationsInProgress.remove(ack.getSequence());
+                        transformedFuture.complete(null);
+                    }
                 }
             });
 
@@ -171,9 +175,21 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
         }
 
         private CompletableFuture<Void> transformEvent(TransformRequest request) {
+            if (transformationState.get() == TransformationState.FATAL) {
+                throw new RuntimeException(failure.get());
+            }
+
             CompletableFuture<Void> future = transformationsInProgress.computeIfAbsent(request.getSequence(),
                                                                                        k -> new CompletableFuture<>());
-            transformEventsRequestStreamObserver.onNext(request);
+
+            try {
+                transformEventsRequestStreamObserver.onNext(request);
+            } catch (Throwable t) {
+                transformationState.set(TransformationState.FATAL);
+                failure.set(t);
+                transformationsInProgress.remove(request.getSequence());
+                throw new RuntimeException(t);
+            }
 
             return future;
         }
@@ -227,9 +243,12 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
 
         @Override
         public CompletableFuture<Void> rollback() {
+            if (transformationState.get() == TransformationState.FATAL) {
+                throw new RuntimeException(failure.get());
+            }
+            transformationState.set(TransformationState.ROLLING_BACK);
             return rollbackTransformation(
-                    transformationId).thenAccept(n -> {
-            });
+                    transformationId).thenAccept(n -> transformationState.set(TransformationState.ROLLED_BACK));
         }
 
         @Override
@@ -240,19 +259,30 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
         @Override
         public CompletableFuture<EventTransformation> apply(
                 boolean keepBackup) {
+            if (transformationState.get() == TransformationState.FATAL) {
+                throw new RuntimeException(failure.get());
+            }
+            transformationState.set(TransformationState.APPLYING);
             return applyTransformation(ApplyTransformationRequest.newBuilder()
                                                                  .setTransformationId(io.axoniq.axonserver.grpc.event.TransformationId.newBuilder()
                                                                                                                                       .setId(id().id())
                                                                                                                                       .build())
                                                                  .setLastSequence(sequenceNumber.get())
                                                                  .setKeepOldVersions(keepBackup)
-                                                                 .build()).thenApply(confirmation -> this);
+                                                                 .build())
+                    .thenApply(confirmation -> {
+                        transformationState.set(TransformationState.APPLIED);
+                        return this;
+                    });
         }
 
         @Override
         public CompletableFuture<Void> cancel() {
-            return cancelTransformation(id()).thenAccept(n -> {
-            });
+            if (transformationState.get() == TransformationState.FATAL) {
+                throw new RuntimeException(failure.get());
+            }
+            transformationState.set(TransformationState.CANCELLING);
+            return cancelTransformation(id()).thenAccept(n -> transformationState.set(TransformationState.CANCELLED));
         }
 
         @Override

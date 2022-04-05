@@ -20,4 +20,15 @@ public interface EventTransformation {
     interface TransformationId {
         String id();
     }
+
+    enum TransformationState {
+        ACTIVE,
+        ROLLING_BACK,
+        ROLLED_BACK,
+        CANCELLING,
+        CANCELLED,
+        APPLYING,
+        APPLIED,
+        FATAL
+    }
 }
