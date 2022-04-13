@@ -53,44 +53,46 @@ public interface ReplyChannel<T> {
     }
 
     /**
-     * Used to send a positive result, indicating that the incoming message has been handled as expected.
+     * Sends a receipt acknowledgement if one hasn't been sent yet for this instruction.
      * If the incoming instruction has no instruction ID, this method does nothing.
-     * This method is deprecated because the {@link #complete()} sends the result.
      *
      * @see #complete()
-     * @deprecated
+     * @deprecated This method is deprecated because it is not needed anymore, as the {@link #complete()} already sends
+     * positive result, indicating that the incoming message has been handled as expected.
      */
     @Deprecated
-    default void sendSuccessResult() {
+    default void sendAck() {
     }
 
     /**
-     * Used to send a failed result, indicating that the incoming message could not be handled as expected.
+     * Sends a negative acknowledgement, indicating that the incoming message could not be handled as expected. Unlike
+     * {@link #sendNack(ErrorMessage)}, no specific error details are provided.
      * If the incoming instruction has no instruction ID, this method does nothing.
-     * This method is deprecated because the {@link #completeWithError(ErrorMessage)} or
-     * {@link #completeWithError(ErrorCategory, String)}sends the failure result.
      *
      * @see #completeWithError(ErrorMessage)
      * @see #completeWithError(ErrorCategory, String)
-     * @deprecated
+     * @deprecated This method is deprecated because it is not needed anymore, as {@link #completeWithError(ErrorMessage)}
+     * or {@link #completeWithError(ErrorCategory, String)} sends a failed result, indicating that the incoming message
+     * could not be handled as expected.
      */
     @Deprecated
-    default void sendFailureResult() {
-        sendFailureResult(ErrorMessage.getDefaultInstance());
+    default void sendNack() {
+        sendNack(ErrorMessage.getDefaultInstance());
     }
 
     /**
-     * Used to send a failed result, indicating that the incoming message could not be handled as expected.
-     * If the incoming instruction has no instruction ID, this method does nothing.
-     * This method is deprecated because the {@link #completeWithError(ErrorMessage)} or
-     * {@link #completeWithError(ErrorCategory, String)}sends the failure result.
+     * Sends a negative acknowledgement, indicating that the incoming message could not be handled as expected, using
+     * given {@code errorMessage} to describe the reason. The given {@code errorMessage} should provide sufficient
+     * information about the error. If the incoming instruction has no instruction ID, this method does nothing.
      *
      * @see #completeWithError(ErrorMessage)
      * @see #completeWithError(ErrorCategory, String)
-     * @deprecated
+     * @deprecated This method is deprecated because it is not needed anymore, as {@link #completeWithError(ErrorMessage)}
+     * or {@link #completeWithError(ErrorCategory, String)} already sends a failed result, indicating that the incoming
+     * message could not be handled as expected.
      */
     @Deprecated
-    default void sendFailureResult(ErrorMessage errorMessage) {
+    default void sendNack(ErrorMessage errorMessage) {
     }
 
     /**

@@ -27,8 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 /**
- * A {@link ReplyChannel} implementation which forwards {@link #send(Object)}, {@link #ackSuccess()} and {@link
- * #ackFailure(ErrorMessage)} operations through to a {@link StreamObserver}.
+ * A {@link ReplyChannel} implementation which forwards the result of operations through to a {@link StreamObserver}.
  *
  * @param <T> the message type forwarded by this {@link ReplyChannel} to the given {@link StreamObserver}
  */
@@ -51,7 +50,7 @@ public class ForwardingReplyChannel<T> implements ReplyChannel<T> {
      *                      #completeWithError(ErrorCategory, String)} invocation
      * @param stream        the {@link StreamObserver} to forward replies of this {@link ReplyChannel} on
      * @param resultBuilder the builder function used to construct the {@link InstructionResult} message,
-     *                      used for both a {@link #ackSuccess()} and {@link #ackFailure(ErrorMessage)}
+     *                      used for both acknowledge the success or the failure of the operation
      * @param onComplete    operation to perform when this {@link ReplyChannel} is completed, both successfully and
      *                      exceptionally
      */
@@ -74,7 +73,6 @@ public class ForwardingReplyChannel<T> implements ReplyChannel<T> {
 
     /**
      * Sends a confirmation that the instruction has been executed with success.
-     * If not explicitly sent, it will be sent once the {@link #complete()} method is invoked.
      * <p>
      * If the incoming instruction has no instruction ID, this method does nothing.
      */
@@ -102,9 +100,8 @@ public class ForwardingReplyChannel<T> implements ReplyChannel<T> {
 
     /**
      * Sends a failed result, indicating that the incoming message could not be handled as expected, using
-     * given {@code errorMessage} to describe the reason. If not explicitly sent, it will be sent once the {@link
-     * #completeWithError(ErrorMessage)} or {@link #completeWithError(ErrorCategory, String)} methods are invoked. The
-     * given {@code errorMessage} should provide sufficient information about the error.
+     * given {@code errorMessage} to describe the reason. The given {@code errorMessage} should provide sufficient
+     * information about the error.
      * <p>
      * If the incoming instruction has no instruction ID, this method does nothing.
      */

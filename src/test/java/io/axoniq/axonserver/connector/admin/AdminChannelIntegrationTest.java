@@ -243,7 +243,6 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
 
     @Test
-//    @Disabled("To reactivate after the release of AS 4.6.0")
     void testStartEventProcessorTimeout() throws Exception {
         AdminChannel adminChannel = connection.adminChannel();
         registerEventProcessor();
