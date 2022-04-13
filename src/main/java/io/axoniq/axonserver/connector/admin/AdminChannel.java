@@ -108,7 +108,7 @@ public interface AdminChannel {
      * @param tokenStoreIdentifier   the token store identifier of the processor to move
      * @param segmentId              the identifier of the segment to move
      * @param targetClientIdentifier the desired destination for the segment
-     * @return a {@link CompletableFuture} that completes when all the other clients released the segment.
+     * @return a {@link CompletableFuture} that completes when all the other clients released the segment or disregard the segment for claiming.
      * There is no guarantee that the target client has already claimed the segment when the result completes.
      */
     CompletableFuture<Void> moveEventProcessorSegment(String eventProcessorName,
