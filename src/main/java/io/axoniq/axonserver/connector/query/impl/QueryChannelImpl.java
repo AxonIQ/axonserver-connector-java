@@ -34,7 +34,6 @@ import io.axoniq.axonserver.connector.query.SubscriptionQueryResult;
 import io.axoniq.axonserver.grpc.ErrorMessage;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.InstructionAck;
-import io.axoniq.axonserver.grpc.InstructionResult;
 import io.axoniq.axonserver.grpc.SerializedObject;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
 import io.axoniq.axonserver.grpc.query.QueryComplete;
@@ -56,7 +55,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -641,11 +639,6 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         @Override
         protected QueryProviderOutbound buildAckMessage(InstructionAck ack) {
             return QueryProviderOutbound.newBuilder().setAck(ack).build();
-        }
-
-        @Override
-        protected Optional<QueryProviderOutbound> buildResultMessage(InstructionResult result) {
-            return Optional.empty();
         }
 
         @Override

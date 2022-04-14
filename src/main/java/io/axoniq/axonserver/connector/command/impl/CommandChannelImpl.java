@@ -30,7 +30,6 @@ import io.axoniq.axonserver.connector.impl.ObjectUtils;
 import io.axoniq.axonserver.grpc.ErrorMessage;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.InstructionAck;
-import io.axoniq.axonserver.grpc.InstructionResult;
 import io.axoniq.axonserver.grpc.MetaDataValue;
 import io.axoniq.axonserver.grpc.ProcessingInstruction;
 import io.axoniq.axonserver.grpc.ProcessingKey;
@@ -48,7 +47,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -448,11 +446,6 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
         @Override
         protected CommandProviderOutbound buildAckMessage(InstructionAck ack) {
             return CommandProviderOutbound.newBuilder().setAck(ack).build();
-        }
-
-        @Override
-        protected Optional<CommandProviderOutbound> buildResultMessage(InstructionResult result) {
-            return Optional.empty();
         }
 
         @Override
