@@ -52,14 +52,15 @@ import io.axoniq.axonserver.grpc.admin.LoadBalancingStrategy;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupAdminServiceGrpc;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupOverview;
 import io.axoniq.axonserver.grpc.admin.Token;
+import io.axoniq.axonserver.grpc.admin.UpdateContextPropertiesRequest;
 import io.axoniq.axonserver.grpc.admin.UserAdminServiceGrpc;
 import io.axoniq.axonserver.grpc.admin.UserOverview;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
 
+import javax.annotation.Nonnull;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
-import javax.annotation.Nonnull;
 
 /**
  * {@link AdminChannel} GRPC implementation to allow a client application sending and receiving administration related
@@ -277,6 +278,14 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     public CompletableFuture<Void> createContext(CreateContextRequest request) {
         FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
         contextServiceStub.createContext(request, responseObserver);
+        return responseObserver.thenAccept(empty -> {
+        });
+    }
+
+    @Override
+    public CompletableFuture<Void> updateContextProperties(UpdateContextPropertiesRequest request) {
+        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
+        contextServiceStub.updateContextProperties(request, responseObserver);
         return responseObserver.thenAccept(empty -> {
         });
     }
