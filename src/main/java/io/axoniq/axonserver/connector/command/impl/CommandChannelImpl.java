@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021. AxonIQ
+ * Copyright (c) 2020-2022. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -111,10 +111,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
     private void handleIncomingCommand(CommandProviderInbound message, ReplyChannel<CommandProviderOutbound> outbound) {
         Command command = message.getCommand();
         CommandHandler handler = commandHandlers.get(command.getName());
-        if (handler != null) {
-            outbound.sendAck();
-        } else {
-            outbound.sendNack();
+        if (handler == null) {
             handler = noCommandHandler;
         }
 

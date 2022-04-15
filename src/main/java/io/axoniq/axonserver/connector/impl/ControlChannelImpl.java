@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021. AxonIQ
+ * Copyright (c) 2020-2022. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import io.axoniq.axonserver.connector.control.ControlChannel;
 import io.axoniq.axonserver.connector.control.ProcessorInstructionHandler;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.InstructionAck;
+import io.axoniq.axonserver.grpc.InstructionResult;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo;
 import io.axoniq.axonserver.grpc.control.Heartbeat;
@@ -38,6 +39,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Collection;
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -55,7 +57,8 @@ import static io.axoniq.axonserver.connector.impl.ObjectUtils.silently;
  * {@link ControlChannel} implementation, serving as the overall control and instruction connection between AxonServer
  * and a client application.
  */
-public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboundInstruction> implements ControlChannel {
+public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboundInstruction>
+        implements ControlChannel {
 
     private static final Logger logger = LoggerFactory.getLogger(ControlChannelImpl.class);
 
@@ -122,7 +125,8 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
         platformServiceStub = PlatformServiceGrpc.newStub(channel);
     }
 
-    private void handleAck(PlatformOutboundInstruction instruction, ReplyChannel<PlatformInboundInstruction> replyChannel) {
+    private void handleAck(PlatformOutboundInstruction instruction,
+                           ReplyChannel<PlatformInboundInstruction> replyChannel) {
         processAck(instruction.getAck());
         replyChannel.complete();
     }
@@ -143,7 +147,6 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
     void handleReconnectRequest(PlatformOutboundInstruction platformOutboundInstruction,
                                 ReplyChannel<PlatformInboundInstruction> replyChannel) {
         logger.info("AxonServer requested reconnect for context '{}'", context);
-        replyChannel.sendAck();
         reconnectHandler.run();
     }
 
@@ -291,6 +294,13 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
         }
 
         @Override
+        protected Optional<PlatformInboundInstruction> buildResultMessage(InstructionResult result) {
+            return Optional.of(PlatformInboundInstruction.newBuilder()
+                                                         .setResult(result)
+                                                         .build());
+        }
+
+        @Override
         protected String getInstructionId(PlatformOutboundInstruction instruction) {
             return instruction.getInstructionId();
         }
@@ -313,5 +323,4 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
             return null;
         }
     }
-
 }

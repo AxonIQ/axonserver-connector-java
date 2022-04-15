@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021. AxonIQ
+ * Copyright (c) 2020-2022. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -506,7 +506,6 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                                                                                    queryInProgress::cancel);
         Set<QueryHandler> handlers = queryHandlers.getOrDefault(query.getQuery(), Collections.emptySet());
         if (handlers.isEmpty()) {
-            responseHandler.sendNack();
             responseHandler.sendLast(QueryResponse.newBuilder()
                                                   .setRequestIdentifier(query.getMessageIdentifier())
                                                   .setErrorCode(ErrorCategory.NO_HANDLER_FOR_QUERY.errorCode())
@@ -515,8 +514,6 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                                                                                .build())
                                                   .build());
         }
-
-        responseHandler.sendAck();
 
         List<DisposableReadonlyBuffer<QueryResponse>> buffers =
                 handlers.stream()
@@ -602,15 +599,6 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                 result.completeWithError(errorCategory, message);
             }
 
-            @Override
-            public void sendNack(ErrorMessage errorMessage) {
-                result.sendNack(errorMessage);
-            }
-
-            @Override
-            public void sendAck() {
-                result.sendAck();
-            }
         });
     }
 
@@ -646,16 +634,6 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                     @Override
                     public void completeWithError(ErrorCategory errorCategory, String message) {
                         result.completeWithError(errorCategory, message);
-                    }
-
-                    @Override
-                    public void sendNack(ErrorMessage errorMessage) {
-                        result.sendNack(errorMessage);
-                    }
-
-                    @Override
-                    public void sendAck() {
-                        result.sendAck();
                     }
                 }
         );

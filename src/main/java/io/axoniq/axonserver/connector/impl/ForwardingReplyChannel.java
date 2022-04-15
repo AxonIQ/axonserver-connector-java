@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2020-2022. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,50 +19,50 @@ package io.axoniq.axonserver.connector.impl;
 import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.ReplyChannel;
 import io.axoniq.axonserver.grpc.ErrorMessage;
-import io.axoniq.axonserver.grpc.InstructionAck;
+import io.axoniq.axonserver.grpc.InstructionResult;
 import io.grpc.stub.StreamObserver;
 
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 /**
- * A {@link ReplyChannel} implementation which forwards {@link #send(Object)}, {@link #sendAck()} and {@link
- * #sendNack(ErrorMessage)} operations through to a {@link StreamObserver}.
+ * A {@link ReplyChannel} implementation which forwards the result of operations through to a {@link StreamObserver}.
  *
  * @param <T> the message type forwarded by this {@link ReplyChannel} to the given {@link StreamObserver}
  */
 public class ForwardingReplyChannel<T> implements ReplyChannel<T> {
 
-    private final AtomicBoolean ackSent = new AtomicBoolean(false);
+    private final AtomicBoolean resultSent = new AtomicBoolean(false);
     private final String instructionId;
     private final String clientId;
     private final StreamObserver<T> stream;
-    private final Function<InstructionAck, T> ackBuilder;
+    private final Function<InstructionResult, Optional<T>> resultBuilder;
     private final Runnable onConsumed;
     private final AtomicBoolean completed = new AtomicBoolean();
 
     /**
      * Construct a {@link ForwardingReplyChannel} to forward replies to the given {@code stream}.
      *
-     * @param instructionId the instruction identifier used to send ACK or NACK messages. If the given instruction
-     *                      identifier is {@code null} or empty, no ACK/NACK will be send
+     * @param instructionId the instruction identifier used to send Result Messages. If the given instruction
+     *                      identifier is {@code null} or empty, no result will be sent
      * @param clientId      the client identifier used to define the error location upon a {@link
      *                      #completeWithError(ErrorCategory, String)} invocation
      * @param stream        the {@link StreamObserver} to forward replies of this {@link ReplyChannel} on
-     * @param ackBuilder    the builder function used to construct the {@link InstructionAck} message, used for both a
-     *                      {@link #sendAck()} and {@link #sendNack()}
-     * @param onComplete    operation to perform when this this {@link ReplyChannel} is completed, both successfully and
+     * @param resultBuilder the builder function used to construct the {@link InstructionResult} message,
+     *                      used for both acknowledge the success or the failure of the operation
+     * @param onComplete    operation to perform when this {@link ReplyChannel} is completed, both successfully and
      *                      exceptionally
      */
     public ForwardingReplyChannel(String instructionId,
                                   String clientId,
                                   StreamObserver<T> stream,
-                                  Function<InstructionAck, T> ackBuilder,
+                                  Function<InstructionResult, Optional<T>> resultBuilder,
                                   Runnable onComplete) {
         this.instructionId = instructionId;
         this.clientId = clientId;
         this.stream = stream;
-        this.ackBuilder = ackBuilder;
+        this.resultBuilder = resultBuilder;
         this.onConsumed = onComplete;
     }
 
@@ -71,43 +71,54 @@ public class ForwardingReplyChannel<T> implements ReplyChannel<T> {
         stream.onNext(outboundMessage);
     }
 
-    @Override
-    public void sendAck() {
-        if (instructionId != null && !instructionId.isEmpty() && ackSent.compareAndSet(false, true)) {
-            stream.onNext(ackBuilder.apply(InstructionAck.newBuilder()
-                                                         .setInstructionId(instructionId)
-                                                         .setSuccess(true)
-                                                         .build()));
+    /**
+     * Sends a confirmation that the instruction has been executed with success.
+     * <p>
+     * If the incoming instruction has no instruction ID, this method does nothing.
+     */
+    private void ackSuccess() {
+        if (instructionId != null && !instructionId.isEmpty() && resultSent.compareAndSet(false, true)) {
+            resultBuilder.apply(InstructionResult.newBuilder()
+                                                 .setInstructionId(instructionId)
+                                                 .setSuccess(true)
+                                                 .build())
+                         .ifPresent(stream::onNext);
         }
     }
 
     @Override
     public void complete() {
-        sendAck();
+        ackSuccess();
         markConsumed();
     }
 
     @Override
     public void completeWithError(ErrorMessage errorMessage) {
-        if (errorMessage.getLocation().isEmpty()) {
-            errorMessage = errorMessage.toBuilder()
-                                       .setLocation(clientId)
-                                       .build();
-        }
-        sendNack(errorMessage);
+        ackFailure(errorMessage);
         markConsumed();
     }
 
-    @Override
-    public void sendNack(ErrorMessage errorMessage) {
-        if (instructionId != null && !instructionId.isEmpty() && ackSent.compareAndSet(false, true)) {
-            InstructionAck nack =
-                    InstructionAck.newBuilder()
-                                  .setInstructionId(instructionId)
-                                  .setError(errorMessage == null ? ErrorMessage.getDefaultInstance() : errorMessage)
-                                  .setSuccess(false)
-                                  .build();
-            stream.onNext(ackBuilder.apply(nack));
+    /**
+     * Sends a failed result, indicating that the incoming message could not be handled as expected, using
+     * given {@code errorMessage} to describe the reason. The given {@code errorMessage} should provide sufficient
+     * information about the error.
+     * <p>
+     * If the incoming instruction has no instruction ID, this method does nothing.
+     */
+    private void ackFailure(ErrorMessage errorMessage) {
+        if (instructionId != null && !instructionId.isEmpty() && resultSent.compareAndSet(false, true)) {
+            if (errorMessage.getLocation().isEmpty()) {
+                errorMessage = errorMessage.toBuilder()
+                                           .setLocation(clientId)
+                                           .build();
+            }
+            InstructionResult failure =
+                    InstructionResult.newBuilder()
+                                     .setInstructionId(instructionId)
+                                     .setError(errorMessage == null ? ErrorMessage.getDefaultInstance() : errorMessage)
+                                     .setSuccess(false)
+                                     .build();
+            resultBuilder.apply(failure).ifPresent(stream::onNext);
         }
     }
 

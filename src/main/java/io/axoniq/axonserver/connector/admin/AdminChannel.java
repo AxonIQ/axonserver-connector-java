@@ -62,50 +62,42 @@ public interface AdminChannel {
     ResultStream<EventProcessor> eventProcessorsByComponent(String component);
 
     /**
-     * Request to pause a specific event processor.
-     * Returns a {@link CompletableFuture} that completes when the request has been received by AxonServer.
-     * This doesn't imply that the event processor has been paused already, but only that the request has been properly
-     * delivered.
+     * Request to pause a specific event processor. Returns a {@link CompletableFuture} that completes when the pause
+     * has been performed
      *
      * @param eventProcessorName   the name of the event processor to pause
      * @param tokenStoreIdentifier the token store identifier of the processor to pause
-     * @return a {@link CompletableFuture} that completes when the request has been delivered to AxonServer
+     * @return a {@link CompletableFuture} that completes when the pause has been performed
      */
     CompletableFuture<Void> pauseEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
 
     /**
-     * Request to start a specific event processor.
-     * Returns a {@link CompletableFuture} that completes when the request has been received by AxonServer.
-     * This doesn't imply that the event processor has been started already, but only that the request has been properly
-     * delivered.
+     * Request to start a specific event processor. Returns a {@link CompletableFuture} that completes when the start
+     * has been performed
      *
      * @param eventProcessorName   the name of the event processor to start
      * @param tokenStoreIdentifier the token store identifier of the processor to start
-     * @return a {@link CompletableFuture} that completes when the request has been delivered to AxonServer
+     * @return a {@link CompletableFuture} that completes when the start has been performed
      */
     CompletableFuture<Void> startEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
 
     /**
-     * Request to split the biggest segment of a specific event processor.
-     * Returns a {@link CompletableFuture} that completes when the request has been received by AxonServer.
-     * This doesn't imply that the segment has been split already, but only that the request has been properly
-     * delivered.
+     * Request to split the biggest segment of a specific event processor. Returns a {@link CompletableFuture} that
+     * completes when the split has been performed
      *
      * @param eventProcessorName   the name of the event processor to split
      * @param tokenStoreIdentifier the token store identifier of the processor to split
-     * @return a {@link CompletableFuture} that completes when the request has been delivered to AxonServer
+     * @return a {@link CompletableFuture} that completes when the split has been performed
      */
     CompletableFuture<Void> splitEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
 
     /**
-     * Request to merge the two smallest segments of a specific event processor.
-     * Returns a {@link CompletableFuture} that completes when the request has been received by AxonServer.
-     * This doesn't imply that the segments has been merged already, but only that the request has been properly
-     * delivered.
+     * Request to merge the two smallest segments of a specific event processor. Returns a {@link CompletableFuture}
+     * that completes when the merge has been performed
      *
      * @param eventProcessorName   the name of the event processor to merge
      * @param tokenStoreIdentifier the token store identifier of the processor to merge
-     * @return a {@link CompletableFuture} that completes when the request has been delivered to AxonServer
+     * @return a {@link CompletableFuture} that completes when the merge has been performed
      */
     CompletableFuture<Void> mergeEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
 
@@ -144,10 +136,28 @@ public interface AdminChannel {
     CompletableFuture<List<LoadBalancingStrategy>> getBalancingStrategies();
 
     /**
-     * Request to create an Axon Server user, or update it if it's already present.
-     * Returns a {@link CompletableFuture} that completes when the request has been processed by AxonServer.
+     * Requests to move a specific event processor segment to a certain client. Returns a {@link CompletableFuture} that
+     * completes when all clients other than the {@code targetClientIdentifier} release or disregard the segment for claiming. There is no guarantee that the target client has
+     * already claimed the segment when the result completes.
      *
-     * @param request {@link CreateOrUpdateUserRequest} to create the user, containing the username, password and user roles
+     * @param eventProcessorName     the name of the event processor to move
+     * @param tokenStoreIdentifier   the token store identifier of the processor to move
+     * @param segmentId              the identifier of the segment to move
+     * @param targetClientIdentifier the desired destination for the segment
+     * @return a {@link CompletableFuture} that completes when all the other clients released the segment or disregard the segment for claiming.
+     * There is no guarantee that the target client has already claimed the segment when the result completes.
+     */
+    CompletableFuture<Void> moveEventProcessorSegment(String eventProcessorName,
+                                                      String tokenStoreIdentifier,
+                                                      int segmentId,
+                                                      String targetClientIdentifier);
+
+    /**
+     * Request to create an Axon Server user, or update it if it's already present. Returns a {@link CompletableFuture}
+     * that completes when the request has been processed by AxonServer.
+     *
+     * @param request {@link CreateOrUpdateUserRequest} to create the user, containing the username, password and user
+     *                roles
      * @return a {@link CompletableFuture} that completes when the request has been processed by Axon Server
      */
     CompletableFuture<Void> createOrUpdateUser(CreateOrUpdateUserRequest request);
@@ -262,7 +272,7 @@ public interface AdminChannel {
      * Returns a {@link CompletableFuture} that completes when the request has been processed by Axon Server.
      *
      * @param request {@link CreateReplicationGroupRequest} to create replication group,
-     * containing the replication group name, the node name, role...
+     *                containing the replication group name, the node name, role...
      * @return a {@link CompletableFuture} that completes when the request has been processed to AxonServer
      */
     CompletableFuture<Void> createReplicationGroup(CreateReplicationGroupRequest request);
@@ -271,7 +281,7 @@ public interface AdminChannel {
      * Request to delete a replication group in Axon Server.
      *
      * @param request {@link DeleteReplicationGroupRequest} to delete the replication group,
-     * containing the replication group name and option to preserve event store.
+     *                containing the replication group name and option to preserve event store.
      * @return a {@link CompletableFuture} that completes when the replication group has been deleted
      */
     CompletableFuture<Void> deleteReplicationGroup(DeleteReplicationGroupRequest request);
@@ -280,7 +290,8 @@ public interface AdminChannel {
      * Request to retrieve replication group overview in Axon Server.
      *
      * @param replicationGroup is the name of the replication group to retrieve
-     * @return a {@link CompletableFuture} containing {@link ReplicationGroupOverview} data such as members, contexts roles, etc.
+     * @return a {@link CompletableFuture} containing {@link ReplicationGroupOverview} data such as members, contexts
+     * roles, etc.
      */
     CompletableFuture<ReplicationGroupOverview> getReplicationGroup(String replicationGroup);
 
@@ -296,7 +307,7 @@ public interface AdminChannel {
      * Returns a {@link CompletableFuture} that completes when the request has been processed by AxonServer.
      *
      * @param request {@link JoinReplicationGroup} to add a node to replication group,
-     * containing the replication group name, the node name, role...
+     *                containing the replication group name, the node name, role...
      * @return a {@link CompletableFuture} that completes when the request has been processed to AxonServer
      */
     CompletableFuture<Void> addNodeToReplicationGroup(JoinReplicationGroup request);
@@ -309,6 +320,4 @@ public interface AdminChannel {
      * @return a {@link CompletableFuture} that completes when the request has been processed by Axon Server
      */
     CompletableFuture<Void> removeNodeFromReplicationGroup(LeaveReplicationGroup request);
-
-
 }

@@ -17,7 +17,6 @@
 package io.axoniq.axonserver.connector.impl;
 
 import io.axoniq.axonserver.connector.ResultStream;
-import io.grpc.stub.StreamObserver;
 
 import java.util.Optional;
 import java.util.Queue;
@@ -124,7 +123,7 @@ public abstract class AbstractBufferedStream<T, R> extends FlowControlledBuffer<
     public void close() {
         if (!clientClosed.getAndSet(true)) {
             super.close();
-            doIfNotNull(outboundStream(), StreamObserver::onCompleted);
+            doIfNotNull(outboundStream(), s -> s.cancel("Cancelling Stream", null));
         }
     }
 
