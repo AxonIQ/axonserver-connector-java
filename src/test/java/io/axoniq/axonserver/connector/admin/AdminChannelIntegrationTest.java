@@ -30,6 +30,11 @@ import io.axoniq.axonserver.grpc.control.EventProcessorInfo.SegmentStatus;
 import io.grpc.Status;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
@@ -45,8 +50,10 @@ import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertFor;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 /**
  * Integration tests for {@link io.axoniq.axonserver.connector.admin.impl.AdminChannelImpl}.
@@ -55,7 +62,7 @@ import static org.mockito.Mockito.*;
  * @since 4.6.0
  */
 @Disabled("To reactivate after the release of AS 4.6.0")
-class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
+class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
 
     private final String processorName = "eventProcessor";
     private final String tokenStoreIdentifier = "myTokenStore";
@@ -434,6 +441,34 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
             throws InterruptedException, ExecutionException, TimeoutException {
         assertFor(Duration.ofMillis(500), Duration.ofMillis(100), () -> assertFalse(accepted.isDone()));
         processorInstructionHandler.performSuccessfully();
+        accepted.get(1, SECONDS);
+        Assertions.assertTrue(accepted.isDone());
+    }
+
+
+    @Test
+    @Disabled("To reactivate after the release of AS 4.6.0")
+    void loadBalance() throws Exception {
+        Supplier<EventProcessorInfo> eventProcessorInfoSupplier = this::eventProcessorInfo;
+        ProcessorInstructionHandler handler = mock(ProcessorInstructionHandler.class);
+        connection.controlChannel().registerEventProcessor(processorName, eventProcessorInfoSupplier, handler);
+        AdminChannel adminChannel = connection.adminChannel();
+        CompletableFuture<Void> accepted = adminChannel.getBalancingStrategies()
+                .thenCompose(balancingStrategies -> adminChannel.loadBalanceEventProcessor("processor", "tokenStore", balancingStrategies.get(0).getStrategy()));
+
+        accepted.get(1, SECONDS);
+        Assertions.assertTrue(accepted.isDone());
+    }
+
+    @Test
+    @Disabled("To reactivate after the release of AS 4.6.0")
+    void autoLoadBalance() throws Exception {
+        Supplier<EventProcessorInfo> eventProcessorInfoSupplier = this::eventProcessorInfo;
+        ProcessorInstructionHandler handler = mock(ProcessorInstructionHandler.class);
+        connection.controlChannel().registerEventProcessor(processorName, eventProcessorInfoSupplier, handler);
+        AdminChannel adminChannel = connection.adminChannel();
+        CompletableFuture<Void> accepted = adminChannel.getBalancingStrategies()
+                                                       .thenCompose(balancingStrategies -> adminChannel.setAutoLoadBalanceStrategy("processor", "tokenStore", balancingStrategies.get(1).getStrategy()));
         accepted.get(1, SECONDS);
         Assertions.assertTrue(accepted.isDone());
     }

@@ -107,6 +107,11 @@ public class ForwardingReplyChannel<T> implements ReplyChannel<T> {
      */
     private void ackFailure(ErrorMessage errorMessage) {
         if (instructionId != null && !instructionId.isEmpty() && resultSent.compareAndSet(false, true)) {
+            if (errorMessage.getLocation().isEmpty()) {
+                errorMessage = errorMessage.toBuilder()
+                                           .setLocation(clientId)
+                                           .build();
+            }
             InstructionResult failure =
                     InstructionResult.newBuilder()
                                      .setInstructionId(instructionId)
