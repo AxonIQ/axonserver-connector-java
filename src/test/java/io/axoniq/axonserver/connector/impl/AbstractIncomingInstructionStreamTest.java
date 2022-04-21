@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022. AxonIQ
+ * Copyright (c) 2020-2022. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,12 +19,10 @@ package io.axoniq.axonserver.connector.impl;
 import io.axoniq.axonserver.connector.InstructionHandler;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.InstructionAck;
-import io.axoniq.axonserver.grpc.InstructionResult;
 import io.grpc.stub.CallStreamObserver;
 import io.grpc.stub.ClientCallStreamObserver;
 import org.junit.jupiter.api.*;
 
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -79,11 +77,6 @@ class AbstractIncomingInstructionStreamTest {
         @Override
         protected Object buildAckMessage(InstructionAck ack) {
             return null;
-        }
-
-        @Override
-        protected Optional<Object> buildResultMessage(InstructionResult result) {
-            return Optional.empty();
         }
 
         @Override

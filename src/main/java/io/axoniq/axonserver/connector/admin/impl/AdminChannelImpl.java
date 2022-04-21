@@ -49,10 +49,13 @@ import io.axoniq.axonserver.grpc.admin.GetReplicationGroupRequest;
 import io.axoniq.axonserver.grpc.admin.JoinReplicationGroup;
 import io.axoniq.axonserver.grpc.admin.LeaveReplicationGroup;
 import io.axoniq.axonserver.grpc.admin.MoveSegment;
+import io.axoniq.axonserver.grpc.admin.LoadBalanceRequest;
+import io.axoniq.axonserver.grpc.admin.LoadBalancingStrategy;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupAdminServiceGrpc;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupOverview;
 import io.axoniq.axonserver.grpc.admin.Result;
 import io.axoniq.axonserver.grpc.admin.Token;
+import io.axoniq.axonserver.grpc.admin.UpdateContextPropertiesRequest;
 import io.axoniq.axonserver.grpc.admin.UserAdminServiceGrpc;
 import io.axoniq.axonserver.grpc.admin.UserOverview;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
@@ -181,6 +184,39 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
         return responseObserver.thenApply(AdminActionResult::getResult);
     }
 
+    @Override
+    public CompletableFuture<Void> loadBalanceEventProcessor(String eventProcessorName, String tokenStoreIdentifier,
+                                                             String strategy) {
+        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
+        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
+        eventProcessorServiceStub.loadBalanceProcessor(LoadBalanceRequest.newBuilder().setProcessor(
+                                                                                 eventProcessorIdentifier)
+                                                                         .setStrategy(strategy)
+                                                                         .build(), responseObserver);
+        return responseObserver.thenRun(() -> {
+        });
+    }
+
+    @Override
+    public CompletableFuture<Void> setAutoLoadBalanceStrategy(String eventProcessorName, String tokenStoreIdentifier,
+                                                              String strategy) {
+        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
+        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
+        eventProcessorServiceStub.setAutoLoadBalanceStrategy(LoadBalanceRequest.newBuilder().setProcessor(
+                                                                                       eventProcessorIdentifier)
+                                                                               .setStrategy(strategy)
+                                                                               .build(), responseObserver);
+        return responseObserver.thenRun(() -> {
+        });
+    }
+
+    @Override
+    public CompletableFuture<List<LoadBalancingStrategy>> getBalancingStrategies() {
+        FutureListStreamObserver<LoadBalancingStrategy> responseObserver = new FutureListStreamObserver<>();
+        eventProcessorServiceStub.getBalancingStrategies(Empty.newBuilder().build(), responseObserver);
+        return responseObserver;
+    }
+
     @Nonnull
     private EventProcessorIdentifier eventProcessorId(String eventProcessorName, String tokenStoreIdentifier) {
         return EventProcessorIdentifier.newBuilder()
@@ -255,6 +291,14 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     public CompletableFuture<Void> createContext(CreateContextRequest request) {
         FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
         contextServiceStub.createContext(request, responseObserver);
+        return responseObserver.thenAccept(empty -> {
+        });
+    }
+
+    @Override
+    public CompletableFuture<Void> updateContextProperties(UpdateContextPropertiesRequest request) {
+        FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
+        contextServiceStub.updateContextProperties(request, responseObserver);
         return responseObserver.thenAccept(empty -> {
         });
     }

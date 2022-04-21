@@ -50,10 +50,10 @@ import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertFor;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.fail;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
 
 /**
@@ -63,7 +63,7 @@ import static org.mockito.Mockito.mock;
  * @since 4.6.0
  */
 @Disabled("To reactivate after the release of AS 4.6.0")
-class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
+class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
 
     private final String processorName = "eventProcessor";
     private final String tokenStoreIdentifier = "myTokenStore";
@@ -251,7 +251,6 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
 
     @Test
-//    @Disabled("To reactivate after the release of AS 4.6.0")
     void testStartEventProcessorTimeout() throws Exception {
         AdminChannel adminChannel = connection.adminChannel();
         registerEventProcessor();
@@ -443,6 +442,34 @@ class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
             throws InterruptedException, ExecutionException, TimeoutException {
         assertFor(Duration.ofMillis(500), Duration.ofMillis(100), () -> assertFalse(accepted.isDone()));
         processorInstructionHandler.performSuccessfully();
+        accepted.get(1, SECONDS);
+        Assertions.assertTrue(accepted.isDone());
+    }
+
+
+    @Test
+    @Disabled("To reactivate after the release of AS 4.6.0")
+    void loadBalance() throws Exception {
+        Supplier<EventProcessorInfo> eventProcessorInfoSupplier = this::eventProcessorInfo;
+        ProcessorInstructionHandler handler = mock(ProcessorInstructionHandler.class);
+        connection.controlChannel().registerEventProcessor(processorName, eventProcessorInfoSupplier, handler);
+        AdminChannel adminChannel = connection.adminChannel();
+        CompletableFuture<Void> accepted = adminChannel.getBalancingStrategies()
+                .thenCompose(balancingStrategies -> adminChannel.loadBalanceEventProcessor("processor", "tokenStore", balancingStrategies.get(0).getStrategy()));
+
+        accepted.get(1, SECONDS);
+        Assertions.assertTrue(accepted.isDone());
+    }
+
+    @Test
+    @Disabled("To reactivate after the release of AS 4.6.0")
+    void autoLoadBalance() throws Exception {
+        Supplier<EventProcessorInfo> eventProcessorInfoSupplier = this::eventProcessorInfo;
+        ProcessorInstructionHandler handler = mock(ProcessorInstructionHandler.class);
+        connection.controlChannel().registerEventProcessor(processorName, eventProcessorInfoSupplier, handler);
+        AdminChannel adminChannel = connection.adminChannel();
+        CompletableFuture<Void> accepted = adminChannel.getBalancingStrategies()
+                                                       .thenCompose(balancingStrategies -> adminChannel.setAutoLoadBalanceStrategy("processor", "tokenStore", balancingStrategies.get(1).getStrategy()));
         accepted.get(1, SECONDS);
         Assertions.assertTrue(accepted.isDone());
     }

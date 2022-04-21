@@ -53,6 +53,49 @@ public interface ReplyChannel<T> {
     }
 
     /**
+     * Sends a receipt acknowledgement if one hasn't been sent yet for this instruction.
+     * If the incoming instruction has no instruction ID, this method does nothing.
+     *
+     * @see #complete()
+     * @deprecated This method is deprecated because it is not needed anymore, as the {@link #complete()} already sends
+     * positive result, indicating that the incoming message has been handled as expected.
+     */
+    @Deprecated
+    default void sendAck() {
+    }
+
+    /**
+     * Sends a negative acknowledgement, indicating that the incoming message could not be handled as expected. Unlike
+     * {@link #sendNack(ErrorMessage)}, no specific error details are provided.
+     * If the incoming instruction has no instruction ID, this method does nothing.
+     *
+     * @see #completeWithError(ErrorMessage)
+     * @see #completeWithError(ErrorCategory, String)
+     * @deprecated This method is deprecated because it is not needed anymore, as {@link #completeWithError(ErrorMessage)}
+     * or {@link #completeWithError(ErrorCategory, String)} sends a failed result, indicating that the incoming message
+     * could not be handled as expected.
+     */
+    @Deprecated
+    default void sendNack() {
+        sendNack(ErrorMessage.getDefaultInstance());
+    }
+
+    /**
+     * Sends a negative acknowledgement, indicating that the incoming message could not be handled as expected, using
+     * given {@code errorMessage} to describe the reason. The given {@code errorMessage} should provide sufficient
+     * information about the error. If the incoming instruction has no instruction ID, this method does nothing.
+     *
+     * @see #completeWithError(ErrorMessage)
+     * @see #completeWithError(ErrorCategory, String)
+     * @deprecated This method is deprecated because it is not needed anymore, as {@link #completeWithError(ErrorMessage)}
+     * or {@link #completeWithError(ErrorCategory, String)} already sends a failed result, indicating that the incoming
+     * message could not be handled as expected.
+     */
+    @Deprecated
+    default void sendNack(ErrorMessage errorMessage) {
+    }
+
+    /**
      * Marks the inbound instruction as completed.
      */
     void complete();

@@ -29,9 +29,11 @@ import io.axoniq.axonserver.grpc.admin.DeleteReplicationGroupRequest;
 import io.axoniq.axonserver.grpc.admin.EventProcessor;
 import io.axoniq.axonserver.grpc.admin.JoinReplicationGroup;
 import io.axoniq.axonserver.grpc.admin.LeaveReplicationGroup;
+import io.axoniq.axonserver.grpc.admin.LoadBalancingStrategy;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupOverview;
 import io.axoniq.axonserver.grpc.admin.Result;
 import io.axoniq.axonserver.grpc.admin.Token;
+import io.axoniq.axonserver.grpc.admin.UpdateContextPropertiesRequest;
 import io.axoniq.axonserver.grpc.admin.UserOverview;
 
 import java.util.List;
@@ -101,6 +103,40 @@ public interface AdminChannel {
     CompletableFuture<Result> mergeEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
 
     /**
+     * Request to balance the load for the given {@code eventProcessorName} within the connected client.
+     * Returns a {@link CompletableFuture} that completes when the request has been received by Axon Server.
+     * Note that this doesn't imply that the processor is balanced, but only that the request has been properly
+     * delivered.
+     *
+     * @param eventProcessorName   the name of the event processor to balance the load for
+     * @param tokenStoreIdentifier the token store identifier of the processor to balance the load for
+     * @param strategy             the balancing strategy to use
+     * @return a {@link CompletableFuture} that completes when the request is delivered to Axon Server
+     */
+    CompletableFuture<Void> loadBalanceEventProcessor(String eventProcessorName, String tokenStoreIdentifier, String strategy);
+
+    /**
+     *  Updates the autoloadbalance strategy for a {@code eventProcessorName} within the connected client.
+     * Returns a {@link CompletableFuture} that completes when the request has been received by Axon Server.
+     * Note that this doesn't imply that the processor is balanced, but only that the request has been properly
+     * delivered.
+     *
+     * @param eventProcessorName   the name of the event processor to balance the load for
+     * @param tokenStoreIdentifier the token store identifier of the processor to balance the load for
+     * @param strategy             the balancing strategy to use
+     * @return a {@link CompletableFuture} that completes when the request is delivered to Axon Server
+     */
+    CompletableFuture<Void> setAutoLoadBalanceStrategy(String eventProcessorName, String tokenStoreIdentifier, String strategy);
+
+
+    /**
+     * Returns all available load balance strategies registered to AxonServer.
+     *
+     * @return the list of all available load balance strategies registered to AxonServer.
+     */
+    CompletableFuture<List<LoadBalancingStrategy>> getBalancingStrategies();
+
+    /**
      * Requests to move a specific event processor segment to a certain client. Returns a {@link CompletableFuture} that
      * completes when all clients other than the {@code targetClientIdentifier} release or disregard the segment for claiming. There is no guarantee that the target client has
      * already claimed the segment when the result completes.
@@ -109,7 +145,7 @@ public interface AdminChannel {
      * @param tokenStoreIdentifier   the token store identifier of the processor to move
      * @param segmentId              the identifier of the segment to move
      * @param targetClientIdentifier the desired destination for the segment
-     * @return a {@link CompletableFuture} that completes when all the other clients released the segment.
+     * @return a {@link CompletableFuture} that completes when all the other clients released the segment or disregard the segment for claiming.
      * There is no guarantee that the target client has already claimed the segment when the result completes.
      */
     CompletableFuture<Result> moveEventProcessorSegment(String eventProcessorName,
@@ -184,13 +220,22 @@ public interface AdminChannel {
     CompletableFuture<Void> deleteApplication(String applicationName);
 
     /**
-     * Request to create an Axon Server context.
-     * Returns a {@link CompletableFuture} that completes when the request has been processed by Axon Server.
+     * Request to create an Axon Server context. Returns a {@link CompletableFuture} that completes when the request has
+     * been processed by Axon Server.
      *
      * @param request {@link CreateContextRequest} to create the context
      * @return a {@link CompletableFuture} that completes when the request has been processed by Axon Server
      */
     CompletableFuture<Void> createContext(CreateContextRequest request);
+
+    /**
+     * Request to update the properties for an Axon Server context. Returns a {@link CompletableFuture} that completes
+     * when the request has been processed by Axon Server.
+     *
+     * @param request {@link UpdateContextPropertiesRequest} to update the context properties
+     * @return a {@link CompletableFuture} that completes when the request has been processed by Axon Server
+     */
+    CompletableFuture<Void> updateContextProperties(UpdateContextPropertiesRequest request);
 
     /**
      * Request to delete a context in Axon Server.
