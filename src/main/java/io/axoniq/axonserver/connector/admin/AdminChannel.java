@@ -64,7 +64,8 @@ public interface AdminChannel {
 
     /**
      * Request to pause a specific event processor. Returns a {@link CompletableFuture} that completes when the pause
-     * has been performed
+     * has been performed. The {@link CompletableFuture} completes with {@link Result} {@code ACCEPTED}, if the client
+     * application running the event processor is using a version of the connector prior to 4.6.0.
      *
      * @param eventProcessorName   the name of the event processor to pause
      * @param tokenStoreIdentifier the token store identifier of the processor to pause
@@ -75,6 +76,8 @@ public interface AdminChannel {
     /**
      * Request to start a specific event processor. Returns a {@link CompletableFuture} that completes when the start
      * has been performed
+     * The {@link CompletableFuture} completes with {@link Result} {@code ACCEPTED}, if the client application
+     * running the event processor is using a version of the connector prior to 4.6.0.
      *
      * @param eventProcessorName   the name of the event processor to start
      * @param tokenStoreIdentifier the token store identifier of the processor to start
@@ -85,6 +88,8 @@ public interface AdminChannel {
     /**
      * Request to split the biggest segment of a specific event processor. Returns a {@link CompletableFuture} that
      * completes when the split has been performed
+     * The {@link CompletableFuture} completes with {@link Result} {@code ACCEPTED}, if the client application
+     * running the event processor is using a version of the connector prior to 4.6.0.
      *
      * @param eventProcessorName   the name of the event processor to split
      * @param tokenStoreIdentifier the token store identifier of the processor to split
@@ -95,6 +100,8 @@ public interface AdminChannel {
     /**
      * Request to merge the two smallest segments of a specific event processor. Returns a {@link CompletableFuture}
      * that completes when the merge has been performed
+     * The {@link CompletableFuture} completes with {@link Result} {@code ACCEPTED}, if the client application
+     * running the event processor is using a version of the connector prior to 4.6.0.
      *
      * @param eventProcessorName   the name of the event processor to merge
      * @param tokenStoreIdentifier the token store identifier of the processor to merge
