@@ -61,14 +61,14 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
         eventTransformationService.startTransformation(StartTransformationRequest.newBuilder()
                                                                                  .setDescription(description).build(),
                                                        responseObserver);
-        return responseObserver.thenApply(ActiveEventTransformation::new);
+        return responseObserver.thenApply(DefaultEventTransformation::new);
     }
 
     @Override
     public CompletableFuture<List<EventTransformation>> transformations() {
         FutureListStreamObserver<Transformation> responseObserver = new FutureListStreamObserver<>();
         eventTransformationService.transformations(Empty.newBuilder().build(), responseObserver);
-        return responseObserver.thenApply(n -> n.stream().map(ActiveEventTransformation::new)
+        return responseObserver.thenApply(n -> n.stream().map(DefaultEventTransformation::new)
                                                 .collect(Collectors.toList()));
     }
 
@@ -105,7 +105,7 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
         return true;
     }
 
-    class ActiveEventTransformation implements EventTransformation {
+    class DefaultEventTransformation implements EventTransformation {
 
         private final TransformationId transformationId;
         private final ConcurrentHashMap<Long, CompletableFuture<Void>> transformationsInProgress = new ConcurrentHashMap<>();
@@ -115,17 +115,17 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
         private StreamObserver<TransformRequest> transformEventsRequestStreamObserver;
 
 
-        ActiveEventTransformation(io.axoniq.axonserver.grpc.event.TransformationId transformationId) {
+        DefaultEventTransformation(io.axoniq.axonserver.grpc.event.TransformationId transformationId) {
             this.transformationId = transformationId::getId;
             transformationState.set(TransformationState.ACTIVE);
             initializeConnection();
         }
 
-        ActiveEventTransformation(Transformation transformation) {
+        DefaultEventTransformation(Transformation transformation) {
             this.transformationId = () -> transformation.getTransformationId().getId();
             sequenceNumber.set(transformation.getSequence());
 
-            if (transformation.getError().isInitialized()) {
+            if (transformation.hasError()) {
                 transformationState.set(TransformationState.FATAL);
                 failure.set(new AxonServerException(transformation.getError()));
             } else {
@@ -146,7 +146,9 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
 
                 @Override
                 protected TransformRequestAck terminalMessage() {
-                    return null;
+                    return TransformRequestAck.newBuilder()
+                                              .setSequence(-42)
+                                              .build();
                 }
             };
 
@@ -253,12 +255,6 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
 
         @Override
         public CompletableFuture<EventTransformation> apply() {
-            return apply(true);
-        }
-
-        @Override
-        public CompletableFuture<EventTransformation> apply(
-                boolean keepBackup) {
             if (transformationState.get() == TransformationState.FATAL) {
                 throw new RuntimeException(failure.get());
             }
@@ -268,7 +264,6 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
                                                                                                                                       .setId(id().id())
                                                                                                                                       .build())
                                                                  .setLastSequence(sequenceNumber.get())
-                                                                 .setKeepOldVersions(keepBackup)
                                                                  .build())
                     .thenApply(confirmation -> {
                         transformationState.set(TransformationState.APPLIED);

@@ -13,7 +13,6 @@ public interface EventTransformation {
     CompletableFuture<EventTransformation> replaceEvent(long token, Event event);
     CompletableFuture<EventTransformation> deleteEvent(long token);
     CompletableFuture<EventTransformation> apply();
-    CompletableFuture<EventTransformation> apply(boolean keepBackup);
     CompletableFuture<Void> cancel();
     CompletableFuture<Void> rollback();
 
