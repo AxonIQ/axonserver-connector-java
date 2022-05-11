@@ -32,6 +32,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
+import static io.axoniq.axonserver.connector.event.EventTransformation.TransformationState.UNKNOWN;
+
 /**
  * @author Stefan Dragisic
  * @since 4.6.0
@@ -105,7 +107,7 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
 
         private final TransformationId transformationId;
         private final ConcurrentHashMap<Long, CompletableFuture<Void>> transformationsInProgress = new ConcurrentHashMap<>();
-        private final AtomicReference<TransformationState> transformationState = new AtomicReference<>();
+        private final AtomicReference<TransformationState> transformationState = new AtomicReference<>(UNKNOWN);
         private final AtomicReference<Throwable> failure = new AtomicReference<>();
         private final AtomicLong sequenceNumber = new AtomicLong(-1);
         private StreamObserver<TransformRequest> transformEventsRequestStreamObserver;
@@ -267,6 +269,11 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
         @Override
         public TransformationId id() {
             return transformationId;
+        }
+
+        @Override
+        public TransformationState state() {
+            return transformationState.get();
         }
 
         @Override

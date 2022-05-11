@@ -10,6 +10,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public interface EventTransformation {
     TransformationId id();
+    TransformationState state();
     CompletableFuture<EventTransformation> replaceEvent(long token, Event event);
     CompletableFuture<EventTransformation> deleteEvent(long token);
     CompletableFuture<EventTransformation> apply();
@@ -28,6 +29,7 @@ public interface EventTransformation {
         CANCELLED,
         APPLYING,
         APPLIED,
-        FATAL
+        FATAL,
+        UNKNOWN
     }
 }
