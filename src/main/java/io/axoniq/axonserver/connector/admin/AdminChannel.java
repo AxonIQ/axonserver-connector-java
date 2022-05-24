@@ -30,6 +30,7 @@ import io.axoniq.axonserver.grpc.admin.EventProcessor;
 import io.axoniq.axonserver.grpc.admin.JoinReplicationGroup;
 import io.axoniq.axonserver.grpc.admin.LeaveReplicationGroup;
 import io.axoniq.axonserver.grpc.admin.LoadBalancingStrategy;
+import io.axoniq.axonserver.grpc.admin.NodeOverview;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupOverview;
 import io.axoniq.axonserver.grpc.admin.Result;
 import io.axoniq.axonserver.grpc.admin.Token;
@@ -309,6 +310,13 @@ public interface AdminChannel {
      * @return a {@link CompletableFuture} that contains list of all {@link ReplicationGroupOverview} in Axon Server.
      */
     CompletableFuture<List<ReplicationGroupOverview>> getAllReplicationGroups();
+
+    /**
+     * Request to list all nodes in Axon Server.
+     *
+     * @return a {@link CompletableFuture} that contains list of all {@link NodeOverview} in Axon Server.
+     */
+    CompletableFuture<List<NodeOverview>> getAllNodes();
 
     /**
      * Request to add a node to a replication group.
