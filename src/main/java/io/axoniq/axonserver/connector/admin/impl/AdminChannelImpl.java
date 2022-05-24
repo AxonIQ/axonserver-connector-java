@@ -51,6 +51,7 @@ import io.axoniq.axonserver.grpc.admin.LeaveReplicationGroup;
 import io.axoniq.axonserver.grpc.admin.MoveSegment;
 import io.axoniq.axonserver.grpc.admin.LoadBalanceRequest;
 import io.axoniq.axonserver.grpc.admin.LoadBalancingStrategy;
+import io.axoniq.axonserver.grpc.admin.NodeOverview;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupAdminServiceGrpc;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupOverview;
 import io.axoniq.axonserver.grpc.admin.Result;
@@ -237,6 +238,12 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     public CompletableFuture<List<UserOverview>> getAllUsers() {
         FutureListStreamObserver<UserOverview> responseObserver = new FutureListStreamObserver<>();
         userServiceStub.getUsers(Empty.newBuilder().build(), responseObserver);
+        return responseObserver;
+    }
+    @Override
+    public CompletableFuture<List<NodeOverview>> getAllNodes() {
+        FutureListStreamObserver<NodeOverview> responseObserver = new FutureListStreamObserver<>();
+        replicationGroupServiceStub.getNodes(Empty.newBuilder().build(), responseObserver);
         return responseObserver;
     }
 
