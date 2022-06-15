@@ -187,11 +187,6 @@ public class HeartbeatMonitor {
      * @param reply the {@link ReplyChannel} to send a heartbeat reply message over
      */
     public void handleIncomingBeat(ReplyChannel<PlatformInboundInstruction> reply) {
-        long now = clock.millis();
-        long currentInterval = this.interval.get();
-        // receiving a heartbeat from Server is equivalent to receiving an acknowledgement
-        planNextBeat(now, currentInterval);
-        nextHeartbeatDeadline.updateAndGet(current -> Math.max(now + currentInterval, current));
         try {
             reply.send(HEARTBEAT_MESSAGE);
         } finally {
