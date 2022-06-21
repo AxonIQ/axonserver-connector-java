@@ -20,7 +20,7 @@
 
     <groupId>io.axoniq</groupId>
     <artifactId>axonserver-connector-java</artifactId>
-    <version>4.5.5-SNAPSHOT</version>
+    <version>4.5.5-hearbeat-SNAPSHOT</version>
 
     <name>AxonServer Connector</name>
     <description>

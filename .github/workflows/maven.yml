@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - connector-*.*.x
+      - fix/single-sided-heartbeats
   pull_request:
 
 jobs:
