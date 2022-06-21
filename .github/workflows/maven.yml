@@ -68,7 +68,7 @@ jobs:
         # The github.repository validation ensures this job is not invoked for forked branches, since those don't have access to the secrets.
         if: ${{ success() && matrix.deploy && github.event_name == 'push' }}
         run: |
-          mvn -B -U deploy -DskipTests=true -Possrh
+          mvn -B -U deploy -DskipTests=true -Possrh -DperformRelease=true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MAVEN_USERNAME: ${{ secrets.SONATYPE_TOKEN_ID }}
