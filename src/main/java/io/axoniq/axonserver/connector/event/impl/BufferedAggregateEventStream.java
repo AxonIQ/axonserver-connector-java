@@ -23,6 +23,8 @@ import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.GetAggregateEventsRequest;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * Buffering implementation of the {@link AggregateEventStream} used for Event Sourced Aggregates.
  */
@@ -69,7 +71,7 @@ public class BufferedAggregateEventStream
             return true;
         }
         try {
-            peeked = tryTake();
+            peeked = tryTake(20, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             cancel();
             Thread.currentThread().interrupt();
