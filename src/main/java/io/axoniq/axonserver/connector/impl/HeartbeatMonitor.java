@@ -101,13 +101,14 @@ public class HeartbeatMonitor {
     }
 
     private void checkAndReschedule(int task) {
+        if (task != taskId.get()) {
+            return;
+        }
         long delay = Math.min(interval.get(), 1000);
         try {
-            if (task == taskId.get()) {
-                // heartbeats should not be considered valid when a change was made
-                checkBeat();
-                logger.debug("Heartbeat status checked. Scheduling next heartbeat verification in {}ms", delay);
-            }
+            // heartbeats should not be considered valid when a change was made
+            checkBeat();
+            logger.debug("Heartbeat status checked. Scheduling next heartbeat verification in {}ms", delay);
         } catch (Exception e) {
             logger.warn("Was unable to send heartbeat due to exception", e);
         } finally {
