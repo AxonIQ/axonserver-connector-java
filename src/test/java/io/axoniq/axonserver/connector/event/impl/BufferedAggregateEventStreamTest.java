@@ -90,7 +90,7 @@ class BufferedAggregateEventStreamTest {
      * final, so we have to work around the modifiers as well.
      */
     private void reduceTimeout() throws NoSuchFieldException, IllegalAccessException {
-        Field timeoutField = BufferedAggregateEventStream.class.getDeclaredField("TIMEOUT_MILLIS");
+        Field timeoutField = BufferedAggregateEventStream.class.getDeclaredField("TAKE_TIMEOUT_MILLIS");
         timeoutField.setAccessible(true);
 
         Field modifiersField = Field.class.getDeclaredField("modifiers");

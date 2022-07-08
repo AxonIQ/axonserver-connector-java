@@ -20,10 +20,10 @@ import io.axoniq.axonserver.connector.AxonServerException;
 import io.axoniq.axonserver.connector.ErrorCategory;
 import io.grpc.stub.ClientCallStreamObserver;
 
+import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -46,9 +46,6 @@ public abstract class FlowControlledBuffer<T, R> extends FlowControlledStream<T,
      */
     public FlowControlledBuffer(String clientId, int bufferSize, int refillBatch) {
         super(clientId, bufferSize, refillBatch);
-        if (terminalMessage() == null) {
-            throw new IllegalStateException("Terminal message is not allowed to be null");
-        }
     }
 
     /**
@@ -60,22 +57,27 @@ public abstract class FlowControlledBuffer<T, R> extends FlowControlledStream<T,
 
     @Override
     public void onNext(T value) {
-        if (value == null) {
-            throw new NullPointerException("Next value of buffer is not allowed to be null");
-        }
+        Objects.requireNonNull(value, "Next value of buffer is not allowed to be null");
         buffer.offer(value);
     }
 
     @Override
     public void onError(Throwable t) {
         errorResult.set(t);
-        buffer.offer(terminalMessage());
+        buffer.offer(getAndValidateTerminalMessage());
     }
 
     @Override
     public void onCompleted() {
-        buffer.offer(terminalMessage());
+        buffer.offer(getAndValidateTerminalMessage());
     }
+
+    private T getAndValidateTerminalMessage() {
+        T message = terminalMessage();
+        Objects.requireNonNull(message, "Result of terminalMessage is not allowed to be null");
+        return message;
+    }
+
 
     public void close() {
         errorResult.set(new AxonServerException(ErrorCategory.OTHER, "Stream closed on client request", ""));
@@ -123,11 +125,7 @@ public abstract class FlowControlledBuffer<T, R> extends FlowControlledStream<T,
      * @throws InterruptedException while waiting for an entry to be taken
      */
     protected T tryTake(long timeout, TimeUnit timeUnit) throws InterruptedException {
-        try {
             return tryTake(timeout, timeUnit, false);
-        } catch (TimeoutException e) {
-            return null;
-        }
     }
 
     /**
@@ -138,14 +136,13 @@ public abstract class FlowControlledBuffer<T, R> extends FlowControlledStream<T,
      * @param timeUnit           the {@link TimeUnit} used to specify the duration together with the {@code timeout}
      * @param exceptionOnTimeout Whether a {@code TimeoutException} should be thrown when the operation times out
      * @return an entry of type {@code T} from this buffer if present, otherwise {@code null}
-     * @throws InterruptedException while waiting for an entry to be taken
-     * @throws TimeoutException     If there is no message available after waiting the allotted period
+     * @throws InterruptedException   while waiting for an entry to be taken
+     * @throws StreamTimeoutException If there is no message available after waiting the allotted period
      */
-    protected T tryTake(long timeout, TimeUnit timeUnit, boolean exceptionOnTimeout)
-            throws InterruptedException, TimeoutException {
+    protected T tryTake(long timeout, TimeUnit timeUnit, boolean exceptionOnTimeout) throws InterruptedException {
         T poll = buffer.poll(timeout, timeUnit);
         if (poll == null && exceptionOnTimeout) {
-            throw new TimeoutException("Timeout while trying to peek next event from the stream");
+            throw new StreamTimeoutException("Timeout while trying to peek next event from the stream");
         }
         T taken = validate(poll, true);
         if (taken != null) {
@@ -194,7 +191,7 @@ public abstract class FlowControlledBuffer<T, R> extends FlowControlledStream<T,
         if (terminalMessage().equals(peek)) {
             if (buffer.isEmpty()) {
                 // just to make sure there is always a TERMINAL entry left in a terminated buffer
-                buffer.offer(terminalMessage());
+                buffer.offer(getAndValidateTerminalMessage());
             }
             if (nullOnTerminal) {
                 return null;
