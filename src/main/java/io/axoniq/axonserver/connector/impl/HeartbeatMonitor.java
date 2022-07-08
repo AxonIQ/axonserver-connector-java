@@ -179,7 +179,7 @@ public class HeartbeatMonitor {
     private void handleHeartbeatCallResult(Throwable e) {
         boolean success = e == null || isUnsupportedInstructionError(e);
         if (!success) {
-            logger.debug("Heartbeat call resulted in an error.");
+            logger.debug("Heartbeat call resulted in an error.", e);
             onConnectionCorrupted.run();
             return;
         }
