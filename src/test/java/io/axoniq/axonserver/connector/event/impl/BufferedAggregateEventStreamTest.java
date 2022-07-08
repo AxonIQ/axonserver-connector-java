@@ -20,13 +20,10 @@ import io.axoniq.axonserver.connector.impl.StreamClosedException;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.GetAggregateEventsRequest;
 import io.grpc.stub.ClientCallStreamObserver;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 /**
  * Test class validationg the {@link BufferedAggregateEventStream}.
@@ -66,4 +63,24 @@ class BufferedAggregateEventStreamTest {
         assertThrows(StreamClosedException.class, () -> testSubject.hasNext());
     }
 
+    @Test
+    void throwsExceptionOnTimeoutWhileRetrievingEvents() throws InterruptedException {
+        testSubject.onNext(Event.newBuilder().setAggregateSequenceNumber(1).build());
+        testSubject.hasNext();
+        testSubject.next();
+        testSubject.onNext(Event.newBuilder().setAggregateSequenceNumber(2).build());
+        testSubject.hasNext();
+        testSubject.next();
+        testSubject.onNext(Event.newBuilder().setAggregateSequenceNumber(3).build());
+        testSubject.hasNext();
+        testSubject.next();
+        testSubject.onNext(Event.newBuilder().setAggregateSequenceNumber(4).build());
+        testSubject.hasNext();
+        testSubject.next();
+
+        // Now, wait while there is no message
+        assertThrows(RuntimeException.class,
+                     () -> testSubject.hasNext(),
+                     "Was unable to load aggregate due to timeout while waiting for events. Last sequence number received: 4");
+    }
 }

@@ -109,6 +109,14 @@ public abstract class FlowControlledStream<IN, OUT> implements ClientResponseObs
         return clientId;
     }
 
+    protected int permits() {
+        return permits;
+    }
+
+    protected int permitsConsumed() {
+        return permitsConsumed.get();
+    }
+
     /**
      * Notifier when an entry has been consumed from this stream. Keeps track of the number of permits which has been
      * consumed and will automatically ask for new permits if the {@code permitsBatch} size has been reached.

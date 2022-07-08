@@ -22,6 +22,12 @@ import io.axoniq.axonserver.connector.impl.StreamClosedException;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.GetAggregateEventsRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.lang.invoke.MethodHandles;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Buffering implementation of the {@link AggregateEventStream} used for Event Sourced Aggregates.
@@ -30,13 +36,17 @@ public class BufferedAggregateEventStream
         extends FlowControlledBuffer<Event, GetAggregateEventsRequest>
         implements AggregateEventStream {
 
+    private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
     private static final Event TERMINAL_MESSAGE = Event.newBuilder().setAggregateSequenceNumber(-1729).build();
+    private static final int TIMEOUT_MILLIS = Integer.parseInt(System.getProperty("AGGREGATE_TAKE_EVENT_TIMEOUT_MILLIS",
+                                                                                  "10000"));
 
     private Event peeked;
+    private long lastSequenceNumber = -1;
 
     /**
-     * Constructs a {@link BufferedAggregateEventStream} with a buffer size of {@code 512} and a {@code refillBatch}
-     * of 16.
+     * Constructs a {@link BufferedAggregateEventStream} with a buffer size of {@code 512} and a {@code refillBatch} of
+     * 16.
      */
     public BufferedAggregateEventStream() {
         this(512, 16);
@@ -60,6 +70,9 @@ public class BufferedAggregateEventStream
         } else {
             taken = take();
         }
+        if (taken != null) {
+            lastSequenceNumber = taken.getAggregateSequenceNumber();
+        }
         return taken;
     }
 
@@ -69,11 +82,21 @@ public class BufferedAggregateEventStream
             return true;
         }
         try {
-            peeked = tryTake();
+            peeked = tryTake(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS, true);
         } catch (InterruptedException e) {
             cancel();
             Thread.currentThread().interrupt();
             return false;
+        } catch (TimeoutException e) {
+            logger.debug(String.format(
+                    "Was unable to load aggregate due to timeout while waiting for events. Last sequence number received: %d. Permits: %d/%d",
+                    lastSequenceNumber,
+                    permitsConsumed(),
+                    permits()));
+            throw new RuntimeException(
+                    String.format(
+                            "Was unable to load aggregate due to timeout while waiting for events. Last sequence number received: %d",
+                            lastSequenceNumber));
         }
         if (peeked == null) {
             Throwable errorResult = getErrorResult();
