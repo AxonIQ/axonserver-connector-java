@@ -119,7 +119,7 @@ public abstract class FlowControlledBuffer<T, R> extends FlowControlledStream<T,
      * @param timeout  the duration to wait for an entry to become available in the buffer
      * @param timeUnit the {@link TimeUnit} used to specify the duration together with the {@code timeout}
      * @return an entry of type {@code T} from this buffer if present, otherwise {@code null}. Timeouts will result in
-     * null as well
+     * null as well.
      * @throws InterruptedException while waiting for an entry to be taken
      */
     protected T tryTake(long timeout, TimeUnit timeUnit) throws InterruptedException {
