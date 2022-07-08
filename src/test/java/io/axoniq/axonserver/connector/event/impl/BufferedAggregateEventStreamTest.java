@@ -22,6 +22,9 @@ import io.axoniq.axonserver.grpc.event.GetAggregateEventsRequest;
 import io.grpc.stub.ClientCallStreamObserver;
 import org.junit.jupiter.api.*;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -64,23 +67,36 @@ class BufferedAggregateEventStreamTest {
     }
 
     @Test
-    void throwsExceptionOnTimeoutWhileRetrievingEvents() throws InterruptedException {
-        testSubject.onNext(Event.newBuilder().setAggregateSequenceNumber(1).build());
-        testSubject.hasNext();
-        testSubject.next();
-        testSubject.onNext(Event.newBuilder().setAggregateSequenceNumber(2).build());
-        testSubject.hasNext();
-        testSubject.next();
-        testSubject.onNext(Event.newBuilder().setAggregateSequenceNumber(3).build());
-        testSubject.hasNext();
-        testSubject.next();
-        testSubject.onNext(Event.newBuilder().setAggregateSequenceNumber(4).build());
-        testSubject.hasNext();
-        testSubject.next();
+    void throwsExceptionOnTimeoutWhileRetrievingEvents() throws Exception {
+        reduceTimeout();
+
+        // Push messages
+        for (int i = 0; i < 20; i++) {
+            testSubject.onNext(Event.newBuilder().setAggregateSequenceNumber(i).build());
+            testSubject.hasNext();
+            testSubject.next();
+        }
 
         // Now, wait while there is no message
-        assertThrows(RuntimeException.class,
-                     () -> testSubject.hasNext(),
-                     "Was unable to load aggregate due to timeout while waiting for events. Last sequence number received: 4");
+        RuntimeException exception = assertThrows(RuntimeException.class,
+                                                  () -> testSubject.hasNext());
+        assertEquals(
+                "Was unable to load aggregate due to timeout while waiting for events. Last sequence number received: 19",
+                exception.getMessage());
+    }
+
+    /**
+     * Modify timeout to lower value. Otherwise, test will hang for 10 seconds waiting for the timeout. It's private and
+     * final, so we have to work around the modifiers as well.
+     */
+    private void reduceTimeout() throws NoSuchFieldException, IllegalAccessException {
+        Field timeoutField = BufferedAggregateEventStream.class.getDeclaredField("TIMEOUT_MILLIS");
+        timeoutField.setAccessible(true);
+
+        Field modifiersField = Field.class.getDeclaredField("modifiers");
+        modifiersField.setAccessible(true);
+        modifiersField.setInt(timeoutField, timeoutField.getModifiers() & ~Modifier.FINAL);
+
+        timeoutField.setInt(testSubject, 100);
     }
 }
