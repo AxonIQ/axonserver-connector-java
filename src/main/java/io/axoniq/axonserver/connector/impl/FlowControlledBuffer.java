@@ -46,6 +46,9 @@ public abstract class FlowControlledBuffer<T, R> extends FlowControlledStream<T,
      */
     public FlowControlledBuffer(String clientId, int bufferSize, int refillBatch) {
         super(clientId, bufferSize, refillBatch);
+        if (terminalMessage() == null) {
+            throw new IllegalStateException("Terminal message is not allowed to be null");
+        }
     }
 
     /**
@@ -57,6 +60,9 @@ public abstract class FlowControlledBuffer<T, R> extends FlowControlledStream<T,
 
     @Override
     public void onNext(T value) {
+        if (value == null) {
+            throw new NullPointerException("Next value of buffer is not allowed to be null");
+        }
         buffer.offer(value);
     }
 
