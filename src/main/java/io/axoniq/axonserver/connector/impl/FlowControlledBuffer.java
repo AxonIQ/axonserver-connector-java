@@ -20,6 +20,7 @@ import io.axoniq.axonserver.connector.AxonServerException;
 import io.axoniq.axonserver.connector.ErrorCategory;
 import io.grpc.stub.ClientCallStreamObserver;
 
+import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -56,19 +57,27 @@ public abstract class FlowControlledBuffer<T, R> extends FlowControlledStream<T,
 
     @Override
     public void onNext(T value) {
+        Objects.requireNonNull(value, "Next value of buffer is not allowed to be null");
         buffer.offer(value);
     }
 
     @Override
     public void onError(Throwable t) {
         errorResult.set(t);
-        buffer.offer(terminalMessage());
+        buffer.offer(getAndValidateTerminalMessage());
     }
 
     @Override
     public void onCompleted() {
-        buffer.offer(terminalMessage());
+        buffer.offer(getAndValidateTerminalMessage());
     }
+
+    private T getAndValidateTerminalMessage() {
+        T message = terminalMessage();
+        Objects.requireNonNull(message, "Result of terminalMessage is not allowed to be null");
+        return message;
+    }
+
 
     public void close() {
         errorResult.set(new AxonServerException(ErrorCategory.OTHER, "Stream closed on client request", ""));
@@ -111,11 +120,31 @@ public abstract class FlowControlledBuffer<T, R> extends FlowControlledStream<T,
      *
      * @param timeout  the duration to wait for an entry to become available in the buffer
      * @param timeUnit the {@link TimeUnit} used to specify the duration together with the {@code timeout}
-     * @return an entry of type {@code T} from this buffer if present, otherwise {@code null}
+     * @return an entry of type {@code T} from this buffer if present, otherwise {@code null}. Timeouts will result in
+     * null as well.
      * @throws InterruptedException while waiting for an entry to be taken
      */
     protected T tryTake(long timeout, TimeUnit timeUnit) throws InterruptedException {
-        T taken = validate(buffer.poll(timeout, timeUnit), true);
+            return tryTake(timeout, timeUnit, false);
+    }
+
+    /**
+     * Try to retrieve an entry of type {@code T} from the buffer, waiting for the duration of {@code timeout} in the
+     * given {@code timeUnit}. If none is present, {@code null} will be returned.
+     *
+     * @param timeout            the duration to wait for an entry to become available in the buffer
+     * @param timeUnit           the {@link TimeUnit} used to specify the duration together with the {@code timeout}
+     * @param exceptionOnTimeout Whether a {@code TimeoutException} should be thrown when the operation times out
+     * @return an entry of type {@code T} from this buffer if present, otherwise {@code null}
+     * @throws InterruptedException   while waiting for an entry to be taken
+     * @throws StreamTimeoutException If there is no message available after waiting the allotted period
+     */
+    protected T tryTake(long timeout, TimeUnit timeUnit, boolean exceptionOnTimeout) throws InterruptedException {
+        T poll = buffer.poll(timeout, timeUnit);
+        if (poll == null && exceptionOnTimeout) {
+            throw new StreamTimeoutException("Timeout while trying to peek next event from the stream");
+        }
+        T taken = validate(poll, true);
         if (taken != null) {
             markConsumed();
         }
@@ -162,7 +191,7 @@ public abstract class FlowControlledBuffer<T, R> extends FlowControlledStream<T,
         if (terminalMessage().equals(peek)) {
             if (buffer.isEmpty()) {
                 // just to make sure there is always a TERMINAL entry left in a terminated buffer
-                buffer.offer(terminalMessage());
+                buffer.offer(getAndValidateTerminalMessage());
             }
             if (nullOnTerminal) {
                 return null;
