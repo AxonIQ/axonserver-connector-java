@@ -105,16 +105,13 @@ public class HeartbeatMonitor {
             // heartbeats should not be considered valid when a change was made
             return;
         }
+
+        checkBeatDeadline();
+        sendBeatIfTimeElapsed();
+
         long delay = Math.min(interval.get(), 1000);
-        try {
-            checkBeatDeadline();
-            sendBeatIfTimeElapsed();
-            logger.debug("Heartbeat status checked. Scheduling next heartbeat verification in {}ms", delay);
-        } catch (Exception e) {
-            logger.warn("Was unable to send heartbeat due to exception", e);
-        } finally {
-            executor.schedule(() -> checkAndReschedule(task), delay, TimeUnit.MILLISECONDS);
-        }
+        debug("Scheduling next heartbeat verification in {}ms", delay);
+        executor.schedule(() -> checkAndReschedule(task), delay, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -143,16 +140,23 @@ public class HeartbeatMonitor {
      * Send a heartbeat if the next time a heartbeat should be sent has passed.
      */
     private void sendBeatIfTimeElapsed() {
-        if (shouldSendBeat()) {
-            if (logger.isDebugEnabled()) {
-                logger.debug("Sending heartbeat due to elapsed next beat interval.");
-            }
+        if (!shouldSendBeat()) {
+            return;
+        }
+        debug("Sending heartbeat due to elapsed next beat interval.");
+        try {
             sender.sendHeartbeat().whenComplete((r, e) -> handleHeartbeatCallResult(e));
 
             Instant newNextHeartbeatTime = extendNextHeartbeatTime();
-            if (logger.isDebugEnabled()) {
-                logger.debug("Next heartbeat has been planned for {} due to sent heartbeat", newNextHeartbeatTime);
-            }
+            debug("Next heartbeat has been planned for {} due to sent heartbeat", newNextHeartbeatTime);
+        } catch (Exception e) {
+            logger.warn("Was unable to send heartbeat due to exception", e);
+        }
+    }
+
+    private void debug(String message, Object... args) {
+        if (logger.isDebugEnabled()) {
+            logger.debug(message, args);
         }
     }
 
@@ -179,22 +183,18 @@ public class HeartbeatMonitor {
     private void handleHeartbeatCallResult(Throwable e) {
         boolean success = e == null || isUnsupportedInstructionError(e);
         if (!success) {
-            logger.debug("Heartbeat call resulted in an error.", e);
+            debug("Heartbeat call resulted in an error.", e);
             onConnectionCorrupted.run();
             return;
         }
         boolean heartbeatsDisabled = interval.get() == Long.MAX_VALUE;
         if (heartbeatsDisabled) {
-            if (logger.isDebugEnabled()) {
-                logger.debug("Heartbeat Acknowledgment received but heartbeats were disabled.");
-            }
+            debug("Heartbeat Acknowledgment received but heartbeats were disabled.");
             return;
         }
 
         Instant extendedDeadline = extendHeartbeatDeadline();
-        if (logger.isDebugEnabled()) {
-            logger.debug("Heartbeat call succeeded and extended deadline to {}", extendedDeadline);
-        }
+        debug("Heartbeat call succeeded and extended deadline to {}", extendedDeadline);
     }
 
     /**
@@ -249,12 +249,10 @@ public class HeartbeatMonitor {
         Instant newHeartbeatTime = extendNextHeartbeatTime();
         Instant extendedDeadline = extendHeartbeatDeadline();
 
-        if (logger.isDebugEnabled()) {
-            logger.debug(
-                    "Received heartbeat call from server, extending deadline to {} and planned next heartbeat for {}",
-                    extendedDeadline,
-                    newHeartbeatTime);
-        }
+        debug("Received heartbeat call from server, extending deadline to {} and planned next heartbeat for {}",
+              extendedDeadline,
+              newHeartbeatTime);
+
 
         try {
             reply.send(HEARTBEAT_MESSAGE);
