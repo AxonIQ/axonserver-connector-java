@@ -42,7 +42,7 @@
     </issueManagement>
 
     <properties>
-        <axonserver.api.version>4.6.0-SNAPSHOT</axonserver.api.version>
+        <axonserver.api.version>4.6.0</axonserver.api.version>
 
         <!-- For compatibility between grpc and tcnative, check https://github.com/grpc/grpc-java/blob/master/SECURITY.md#netty -->
         <grpc.version>1.44.1</grpc.version>
