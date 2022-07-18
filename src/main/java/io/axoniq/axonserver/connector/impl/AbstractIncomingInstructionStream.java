@@ -111,10 +111,9 @@ public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowCon
     protected abstract OUT buildAckMessage(InstructionAck ack);
 
     /**
-     * Builds a stream specific result message of type {@code OUT} based on the given {@code result}.
-     * If the {@link Optional<OUT>} is empty, no instruction result will be sent.
-     * By default, this method returns an empty {@link Optional<OUT>}.
-     * If the concrete class supports the {@link InstructionResult} it should override this method.
+     * Builds a stream specific result message of type {@code OUT} based on the given {@code result}. If the
+     * {@link Optional} is empty, no instruction result will be sent. By default, this method returns an empty
+     * {@link Optional}. If the concrete class supports the {@link InstructionResult} it should override this method.
      *
      * @param result the {@link InstructionResult} to base the stream specific acknowledgement on
      * @return a stream specific acknowledgment message of type {@code OUT} based on the given {@code result}
