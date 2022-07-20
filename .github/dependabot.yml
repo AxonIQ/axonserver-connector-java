@@ -15,7 +15,7 @@ updates:
     - "MGathier"
     - "saratry"
     - "smcvb"
-  milestone: 11
+  milestone: 21
 - package-ecosystem: maven
   directory: "/"
   schedule:
@@ -31,4 +31,4 @@ updates:
     - "MGathier"
     - "saratry"
     - "smcvb"
-  milestone: 11
+  milestone: 21
