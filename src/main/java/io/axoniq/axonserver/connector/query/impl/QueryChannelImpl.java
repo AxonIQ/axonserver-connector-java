@@ -254,6 +254,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                         .reduce(CompletableFuture::allOf)
                         .map(cf -> cf.exceptionally(e -> {
                             logger.warn("An error occurred while registering query handlers", e);
+                            subscriptionsCompleted.set(false);
                             return null;
                         }))
                         .orElse(CompletableFuture.completedFuture(null))
@@ -265,6 +266,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
 
     private void onConnectionError(Throwable error) {
         logger.info("Error on QueryChannel for context {}", context, error);
+        subscriptionsCompleted.set(false);
         scheduleReconnect(error);
     }
 
@@ -459,6 +461,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                                     .reduce(CompletableFuture::allOf)
                                     .orElseGet(() -> CompletableFuture.completedFuture(null));
         }).thenAccept(previousStream -> doIfNotNull(previousOutbound, StreamObserver::onCompleted));
+        subscriptionsCompleted.set(false);
     }
 
     @Override

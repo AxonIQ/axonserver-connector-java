@@ -176,6 +176,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
                        .reduce(CompletableFuture::allOf)
                        .map(cf -> cf.exceptionally(e -> {
                            logger.warn("An error occurred while registering command handlers", e);
+                           subscriptionsCompleted.set(false);
                            return null;
                        }))
                        .orElse(CompletableFuture.completedFuture(null))
@@ -208,7 +209,9 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
                                                                 .map(commandName -> sendUnsubscribe(commandName, previousOutbound))
                                                                 .reduce(CompletableFuture::allOf)
                                                                 .map(cf -> cf.exceptionally(e -> {
-                                                                    logger.warn("An error occurred while unregistering command handlers", e);
+                                                                    logger.warn(
+                                                                            "An error occurred while unregistering command handlers",
+                                                                            e);
                                                                     return null;
                                                                 }))
                                                                 .orElseGet(() -> CompletableFuture.completedFuture(null));
@@ -221,9 +224,11 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
                     return CompletableFuture.allOf(inProgressCommands.stream()
                                                                      .reduce(CompletableFuture::allOf)
                                                                      .map(cf -> cf.exceptionally(e -> null))
-                                                                     .orElseGet(() -> CompletableFuture.completedFuture(null)));
+                                                                     .orElseGet(() -> CompletableFuture.completedFuture(
+                                                                             null)));
                 })
                 .thenRun(() -> doIfNotNull(previousOutbound, StreamObserver::onCompleted));
+        subscriptionsCompleted.set(false);
     }
 
     @Override
