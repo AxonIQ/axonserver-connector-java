@@ -24,8 +24,7 @@ import eu.rekawek.toxiproxy.ToxiproxyClient;
 import eu.rekawek.toxiproxy.model.Toxic;
 import io.axoniq.axonserver.connector.impl.ServerAddress;
 import io.axoniq.axonserver.connector.testutils.AxonServerUtils;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.*;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.wait.strategy.Wait;
@@ -54,7 +53,7 @@ public abstract class AbstractAxonServerIntegrationTest {
 
     @Container
     public static GenericContainer<?> axonServerContainer =
-            new GenericContainer<>(System.getProperty("AXON_SERVER_IMAGE", "axoniq/axonserver"))
+            new GenericContainer<>(System.getProperty("AXON_SERVER_IMAGE", "axoniq/axonserver:4.5.14-jdk-11-dev"))
                     .withExposedPorts(8024, 8124)
                     .withEnv("AXONIQ_AXONSERVER_NAME", "axonserver")
                     .withEnv("AXONIQ_AXONSERVER_HOSTNAME", "localhost")
