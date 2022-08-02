@@ -204,8 +204,6 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
             return;
         }
 
-        this.subscriptionsCompleted.set(queryHandlers.isEmpty());
-
         IncomingQueryInstructionStream responseObserver = new IncomingQueryInstructionStream(
                 clientIdentification.getClientId(),
                 permits,
@@ -223,15 +221,16 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                                                          QueryProviderOutbound::getInstructionId,
                                                          newValue))
                         .reduce(CompletableFuture::allOf)
-                        .map(cf -> cf.exceptionally(e -> {
-                            logger.warn("An error occurred while registering query handlers", e);
-                            subscriptionsCompleted.set(false);
-                            return null;
-                        }))
                         .orElse(CompletableFuture.completedFuture(null))
-                        .thenRun(() -> subscriptionsCompleted.set(true));
+                        .whenComplete((unused, throwable) -> {
+                            if (throwable != null) {
+                                logger.warn("An error occurred while registering query handlers", throwable);
+                            } else {
+                                logger.info("QueryChannel for context '{}' connected, {} registrations resubscribed", context, queryHandlers.size());
+                            }
+                            subscriptionsCompleted.set(throwable == null);
+                        });
 
-        logger.info("QueryChannel for context '{}' connected, {} registrations resubscribed", context, queryHandlers.size());
         responseObserver.enableFlowControl();
     }
 
