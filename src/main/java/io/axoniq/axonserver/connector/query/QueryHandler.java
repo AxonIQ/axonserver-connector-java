@@ -16,8 +16,10 @@
 
 package io.axoniq.axonserver.connector.query;
 
+import io.axoniq.axonserver.connector.FlowControl;
 import io.axoniq.axonserver.connector.Registration;
 import io.axoniq.axonserver.connector.ReplyChannel;
+import io.axoniq.axonserver.connector.impl.NoopFlowControl;
 import io.axoniq.axonserver.grpc.query.QueryRequest;
 import io.axoniq.axonserver.grpc.query.QueryResponse;
 import io.axoniq.axonserver.grpc.query.QueryUpdate;
@@ -39,6 +41,22 @@ public interface QueryHandler {
      * @param responseHandler to handler to send responses with
      */
     void handle(QueryRequest query, ReplyChannel<QueryResponse> responseHandler);
+
+    /**
+     * Handle the given {@code query}, using the given {@code responseHandler} to send the response(s). This operation
+     * is flow control aware, hence messages should be sent via {@code responseHandler} when requested.
+     * <p>
+     * Note that the query <em>must</em> be completed using {@link ReplyChannel#complete()} or {@link
+     * ReplyChannel#sendLast(Object)}.
+     *
+     * @param query           the message representing the query request
+     * @param responseHandler the handler to send responses with
+     * @return a {@link FlowControl} to request more responses and cancel sending responses
+     */
+    default FlowControl stream(QueryRequest query, ReplyChannel<QueryResponse> responseHandler) {
+        handle(query, responseHandler);
+        return NoopFlowControl.INSTANCE;
+    }
 
     /**
      * Registers an incoming subscription query request, represented by given {@code query}, using given {@code

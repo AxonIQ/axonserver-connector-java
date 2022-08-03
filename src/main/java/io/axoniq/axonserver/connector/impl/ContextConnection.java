@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021. AxonIQ
+ * Copyright (c) 2020-2022. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 package io.axoniq.axonserver.connector.impl;
 
 import io.axoniq.axonserver.connector.AxonServerConnection;
+import io.axoniq.axonserver.connector.admin.AdminChannel;
+import io.axoniq.axonserver.connector.admin.impl.AdminChannelImpl;
 import io.axoniq.axonserver.connector.command.CommandChannel;
 import io.axoniq.axonserver.connector.command.impl.CommandChannelImpl;
 import io.axoniq.axonserver.connector.control.ControlChannel;
@@ -34,6 +36,7 @@ import java.util.Optional;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
@@ -51,9 +54,13 @@ public class ContextConnection implements AxonServerConnection {
     private final AtomicReference<EventChannelImpl> eventChannel = new AtomicReference<>();
     private final AtomicReference<QueryChannelImpl> queryChannel = new AtomicReference<>();
     private final AtomicReference<EventTransformationChannelImpl> eventTransformerChannel = new AtomicReference<>();
+    private final AtomicReference<AdminChannelImpl> adminChannel = new AtomicReference<>();
     private final ScheduledExecutorService executorService;
     private final AxonServerManagedChannel connection;
+    private final int commandPermits;
+    private final int queryPermits;
     private final String context;
+    private final Consumer<ContextConnection> onShutdown;
 
     /**
      * Construct a {@link ContextConnection} carrying context information.
@@ -65,17 +72,27 @@ public class ContextConnection implements AxonServerConnection {
      * @param connection                   the {@link AxonServerManagedChannel} used to form the connections with
      *                                     AxonServer
      * @param processorInfoUpdateFrequency the update frequency in milliseconds of event processor information
+     * @param commandPermits               the number of permits for command streams
+     * @param queryPermits                 the number of permits for query streams
      * @param context                      the context this connection belongs to
+     * @param onShutdown                   a shutdown hook to invoke whenever this {@link ContextConnection}
+     *                                     disconnects
      */
     public ContextConnection(ClientIdentification clientIdentification,
                              ScheduledExecutorService executorService,
                              AxonServerManagedChannel connection,
                              long processorInfoUpdateFrequency,
-                             String context) {
+                             int commandPermits,
+                             int queryPermits,
+                             String context,
+                             Consumer<ContextConnection> onShutdown) {
         this.clientIdentification = clientIdentification;
         this.executorService = executorService;
         this.connection = connection;
+        this.commandPermits = commandPermits;
+        this.queryPermits = queryPermits;
         this.context = context;
+        this.onShutdown = onShutdown;
         this.controlChannel = new ControlChannelImpl(clientIdentification,
                                                      context,
                                                      executorService,
@@ -90,6 +107,8 @@ public class ContextConnection implements AxonServerConnection {
         doIfNotNull(queryChannel.get(), QueryChannelImpl::reconnect);
         doIfNotNull(controlChannel, ControlChannelImpl::reconnect);
         doIfNotNull(eventChannel.get(), EventChannelImpl::reconnect);
+        doIfNotNull(eventTransformerChannel.get(), EventTransformationChannelImpl::reconnect);
+        doIfNotNull(adminChannel.get(), AdminChannelImpl::reconnect);
     }
 
     @Override
@@ -103,6 +122,8 @@ public class ContextConnection implements AxonServerConnection {
                 && Optional.ofNullable(commandChannel.get()).map(CommandChannelImpl::isReady).orElse(true)
                 && Optional.ofNullable(queryChannel.get()).map(QueryChannelImpl::isReady).orElse(true)
                 && Optional.ofNullable(eventChannel.get()).map(EventChannelImpl::isReady).orElse(true)
+                && Optional.ofNullable(eventTransformerChannel.get()).map(EventTransformationChannelImpl::isReady).orElse(true)
+                && Optional.ofNullable(adminChannel.get()).map(AdminChannelImpl::isReady).orElse(true)
                 && controlChannel.isReady();
     }
 
@@ -117,7 +138,10 @@ public class ContextConnection implements AxonServerConnection {
         doIfNotNull(commandChannel.get(), CommandChannelImpl::disconnect);
         doIfNotNull(queryChannel.get(), QueryChannelImpl::disconnect);
         doIfNotNull(eventChannel.get(), EventChannelImpl::disconnect);
+        doIfNotNull(eventTransformerChannel.get(), EventTransformationChannelImpl::disconnect);
+        doIfNotNull(adminChannel.get(), AdminChannelImpl::disconnect);
         connection.shutdown();
+        onShutdown.accept(this);
         try {
             if (!connection.awaitTermination(5, TimeUnit.SECONDS)) {
                 connection.shutdownNow();
@@ -142,9 +166,14 @@ public class ContextConnection implements AxonServerConnection {
 
     @Override
     public CommandChannel commandChannel() {
-        CommandChannelImpl channel = this.commandChannel.updateAndGet(
-                createIfNull(() -> new CommandChannelImpl(clientIdentification, context, 5000, 2000, executorService, connection))
-        );
+        CommandChannelImpl channel = this.commandChannel.updateAndGet(createIfNull(
+                () -> new CommandChannelImpl(clientIdentification,
+                                             context,
+                                             commandPermits,
+                                             commandPermits / 4,
+                                             executorService,
+                                             connection)
+        ));
         return ensureConnected(channel);
     }
 
@@ -167,8 +196,22 @@ public class ContextConnection implements AxonServerConnection {
     @Override
     public QueryChannel queryChannel() {
         QueryChannelImpl channel = this.queryChannel.updateAndGet(
-                createIfNull(() -> new QueryChannelImpl(clientIdentification, context, 5000, 2000, executorService, connection))
+                createIfNull(() -> new QueryChannelImpl(clientIdentification,
+                                                        context,
+                                                        queryPermits,
+                                                        queryPermits / 4,
+                                                        executorService,
+                                                        connection))
         );
+        return ensureConnected(channel);
+    }
+
+    @Override
+    public AdminChannel adminChannel() {
+        AdminChannelImpl channel = this.adminChannel.updateAndGet(
+                createIfNull(() -> new AdminChannelImpl(clientIdentification, executorService,
+                                           connection)
+        ));
         return ensureConnected(channel);
     }
 

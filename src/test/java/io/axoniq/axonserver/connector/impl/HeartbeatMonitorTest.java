@@ -16,9 +16,11 @@
 
 package io.axoniq.axonserver.connector.impl;
 
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.core.config.Configurator;
+import org.junit.jupiter.api.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -30,20 +32,16 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyLong;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Matchers.*;
+import static org.mockito.Mockito.*;
 
 class HeartbeatMonitorTest {
 
+    private static final Logger logger = LoggerFactory.getLogger(HeartbeatMonitorTest.class);
+
     private ScheduledExecutorService executor;
-    private final List<CompletableFuture<?>> scheduledBeats = new CopyOnWriteArrayList<>();
+    private final List<CompletableFuture<?>> sentBeats = new CopyOnWriteArrayList<>();
     private Runnable nextCheckBeat;
     private long now;
     private AtomicBoolean trigger;
@@ -51,7 +49,7 @@ class HeartbeatMonitorTest {
 
     @BeforeEach
     void setUp() {
-        now = 0;
+        Configurator.setAllLevels("io.axoniq.axonserver.connector.impl.HeartbeatMonitor", Level.ALL);
         elapseTime(0);
         executor = mock(ScheduledExecutorService.class);
         doAnswer(inv -> {
@@ -61,7 +59,8 @@ class HeartbeatMonitorTest {
         doAnswer(inv -> nextCheckBeat = () -> {nextCheckBeat = null ; inv.getArgumentAt(0, Runnable.class).run();}).when(executor).execute(any(Runnable.class));
         HeartbeatSender mockSender = () -> {
             CompletableFuture<Void> newBeat = new CompletableFuture<>();
-            scheduledBeats.add(newBeat);
+            sentBeats.add(newBeat);
+            logger.info("Sent heartbeat at {}ms", now);
             return newBeat;
         };
 
@@ -72,6 +71,7 @@ class HeartbeatMonitorTest {
 
     private void elapseTime(long millis) {
         now += millis;
+        logger.info("Elapsed {}ms, now is at {}ms", millis, now);
         HeartbeatMonitor.clock = Clock.fixed(Instant.ofEpochMilli(now), ZoneOffset.UTC);
     }
 
@@ -85,18 +85,9 @@ class HeartbeatMonitorTest {
         testSubject.enableHeartbeat(1000, 500, TimeUnit.MILLISECONDS);
 
         assertNotNull(nextCheckBeat, "expected next beat & check to be scheduled");
-        nextCheckBeat.run();
-        assertEquals(1, this.scheduledBeats.size());
-
-        nextCheckBeat.run();
-        assertEquals(1, this.scheduledBeats.size());
-        // we didn't schedule a new beat, because the required 1000ms haven't elapsed yet
-        elapseTime(1000);
-        nextCheckBeat.run();
-
-        assertEquals(2, this.scheduledBeats.size());
-        // a second has passed, and we didn't confirm the first heartbeat
-        assertTrue(trigger.get());
+        elapseRunAndExpect(0, false, true);
+        elapseRunAndExpect(0, false, false);
+        elapseRunAndExpect(1000, true, true);
     }
 
     @Test
@@ -104,24 +95,14 @@ class HeartbeatMonitorTest {
         testSubject.enableHeartbeat(100, 500, TimeUnit.MILLISECONDS);
 
         for (int i = 0; i < 4; i++) {
-            elapseTime(100);
-            nextCheckBeat.run();
+            elapseRunAndExpect(100, false, true);
         }
 
-        assertEquals(4, scheduledBeats.size());
-        assertFalse(trigger.get());
-        // completing this beat should set the deadline at 600ms
-        scheduledBeats.get(3).complete(null);
-        elapseTime(100);
-        nextCheckBeat.run();
-        assertEquals(5, scheduledBeats.size());
-        assertFalse(trigger.get());
-        elapseTime(499);
-        nextCheckBeat.run();
-        assertFalse(trigger.get());
-        elapseTime(1);
-        nextCheckBeat.run();
-        assertTrue(trigger.get());
+        // completing this beat should set the deadline at 1000ms
+        sentBeats.get(3).complete(null);
+
+        elapseRunAndExpect(599, false, true);
+        elapseRunAndExpect(1, true, false);
     }
 
     @Test
@@ -170,31 +151,45 @@ class HeartbeatMonitorTest {
     void testHeartbeatTriggeredWhenDeadlineElapses() {
         testSubject.enableHeartbeat(1000, 500, TimeUnit.MILLISECONDS);
 
-        nextCheckBeat.run();
-        elapseTime(400);
-        nextCheckBeat.run();
-        assertFalse(trigger.get());
-        scheduledBeats.get(0).complete(null);
-        elapseTime(100);
-        nextCheckBeat.run();
-        assertFalse(trigger.get());
-        elapseTime(500);
-        assertEquals(1, scheduledBeats.size());
-        nextCheckBeat.run();
-        assertEquals(2, scheduledBeats.size());
-        elapseTime(499);
-        nextCheckBeat.run();
-        assertFalse(trigger.get());
-        elapseTime(1);
-        nextCheckBeat.run();
-        assertTrue(trigger.get());
+        elapseRunAndExpect(0, false, true);
+
+        elapseRunAndExpect(400, false, false);
+
+
+        // First hearbeat completes at 400ms
+        sentBeats.get(0).complete(null);
+
+        // Should not send anything, since the interval did not elapse (currently planned at 1400ms)
+        elapseRunAndExpect(100, false, false);
+
+        // Should send beat
+        elapseRunAndExpect(500, false, true);
+
+        // Should not trigger yet
+        elapseRunAndExpect(899, false, false);
+
+        // Should trigger now, since heartbeat came back at 400ms, adding 500ms + 1000ms of deadline. It's now 1900
+        elapseRunAndExpect(1, true, false);
     }
+
+    @Test
+    void testReceivingHeartbeatsExtendsDeadline() {
+        testSubject.enableHeartbeat(1000, 500, TimeUnit.MILLISECONDS);
+        elapseRunAndExpect(0, false, true);
+
+        elapseRunAndExpect(400, false, false);
+        testSubject.handleIncomingBeat(mock(ForwardingReplyChannel.class));
+
+        elapseRunAndExpect(999, false, false);
+        elapseRunAndExpect(1, false, true);
+    }
+
 
     @Test
     void testDisablingHeartbeatIgnoresPreviousDeadline() {
         testSubject.enableHeartbeat(100, 50, TimeUnit.MILLISECONDS);
         nextCheckBeat.run();
-        assertEquals(1, scheduledBeats.size());
+        assertEquals(1, sentBeats.size());
         testSubject.disableHeartbeat();
         elapseTime(50);
         nextCheckBeat.run();
@@ -206,7 +201,7 @@ class HeartbeatMonitorTest {
     void testReschedulingHeartbeatIgnoresPreviousDeadline() {
         testSubject.enableHeartbeat(100, 50, TimeUnit.MILLISECONDS);
         nextCheckBeat.run();
-        assertEquals(1, scheduledBeats.size());
+        assertEquals(1, sentBeats.size());
         testSubject.enableHeartbeat(1000, 500, TimeUnit.MILLISECONDS);
         elapseTime(50);
         nextCheckBeat.run();
@@ -217,5 +212,19 @@ class HeartbeatMonitorTest {
         elapseTime(1);
         nextCheckBeat.run();
         assertTrue(trigger.get());
+    }
+
+    private int previousBeatCount = 0;
+
+    private void elapseRunAndExpect(long ms, boolean triggered, boolean beatSent) {
+        elapseTime(ms);
+        nextCheckBeat.run();
+        assertEquals(triggered, trigger.get());
+        if (beatSent) {
+            assertEquals(previousBeatCount + 1, sentBeats.size());
+            previousBeatCount++;
+        } else {
+            assertEquals(previousBeatCount, sentBeats.size());
+        }
     }
 }

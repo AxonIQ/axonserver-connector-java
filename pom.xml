@@ -20,7 +20,7 @@
 
     <groupId>io.axoniq</groupId>
     <artifactId>axonserver-connector-java</artifactId>
-    <version>4.6.0-SNAPSHOT</version>
+    <version>4.7.0-SNAPSHOT</version>
 
     <name>AxonServer Connector</name>
     <description>
@@ -41,17 +41,23 @@
     </issueManagement>
 
     <properties>
-        <slf4j.version>1.7.30</slf4j.version>
-        <log4j.version>2.14.1</log4j.version>
+        <axonserver.api.version>4.6.0</axonserver.api.version>
 
         <!-- For compatibility between grpc and tcnative, check https://github.com/grpc/grpc-java/blob/master/SECURITY.md#netty -->
-        <grpc.version>1.38.0</grpc.version>
-        <netty.tcnative.version>2.0.34.Final</netty.tcnative.version>
-        <junit.jupiter.version>5.7.2</junit.jupiter.version>
+        <grpc.version>1.44.1</grpc.version>
+        <netty.tcnative.version>2.0.46.Final</netty.tcnative.version>
 
-        <axonserver.api.version>4.6.0-TRANSFORMATION-SNAPSHOT</axonserver.api.version>
+        <slf4j.version>1.7.36</slf4j.version>
+        <log4j.version>2.18.0</log4j.version>
 
-        <jacoco-maven-plugin.version>0.8.7</jacoco-maven-plugin.version>
+        <javax-annotation.version>1.3.2</javax-annotation.version>
+
+        <junit.jupiter.version>5.9.0</junit.jupiter.version>
+        <jacoco-maven-plugin.version>0.8.8</jacoco-maven-plugin.version>
+        <mockito.version>4.6.1</mockito.version>
+        <reactive.streams.version>1.0.4</reactive.streams.version>
+        <projectreactor.version>3.4.21</projectreactor.version>
+        <testng.version>7.5</testng.version>
     </properties>
 
     <dependencyManagement>
@@ -104,10 +110,53 @@
                 <artifactId>junit-jupiter-engine</artifactId>
                 <version>${junit.jupiter.version}</version>
             </dependency>
+            <dependency>
+                <groupId>org.reactivestreams</groupId>
+                <artifactId>reactive-streams</artifactId>
+                <version>${reactive.streams.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.projectreactor</groupId>
+                <artifactId>reactor-test</artifactId>
+                <version>${projectreactor.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.reactivestreams</groupId>
+                <artifactId>reactive-streams-tck</artifactId>
+                <version>${reactive.streams.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <!-- testNG is needed to re-use Reactive Stream Test toolkit -->
+            <dependency>
+                <groupId>org.testng</groupId>
+                <artifactId>testng</artifactId>
+                <version>${testng.version}</version>
+                <scope>test</scope>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
     <dependencies>
+        <dependency>
+            <groupId>org.reactivestreams</groupId>
+            <artifactId>reactive-streams</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.reactivestreams</groupId>
+            <artifactId>reactive-streams-tck</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-test</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
@@ -134,7 +183,7 @@
         <dependency>
             <groupId>javax.annotation</groupId>
             <artifactId>javax.annotation-api</artifactId>
-            <version>1.3.2</version>
+            <version>${javax-annotation.version}</version>
             <optional>true</optional>
         </dependency>
 
@@ -192,7 +241,7 @@
         <dependency>
             <groupId>eu.rekawek.toxiproxy</groupId>
             <artifactId>toxiproxy-java</artifactId>
-            <version>2.1.4</version>
+            <version>2.1.7</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -204,19 +253,19 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers</artifactId>
-            <version>1.15.3</version>
+            <version>1.16.3</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>junit-jupiter</artifactId>
-            <version>1.15.3</version>
+            <version>1.17.3</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>toxiproxy</artifactId>
-            <version>1.15.3</version>
+            <version>1.17.3</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -278,7 +327,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
-                <version>3.2.0</version>
+                <version>3.2.2</version>
                 <configuration>
                     <archive>
                         <manifest>
@@ -292,18 +341,18 @@
             </plugin>
             <plugin>
                 <artifactId>maven-resources-plugin</artifactId>
-                <version>3.2.0</version>
+                <version>3.3.0</version>
                 <configuration>
                     <encoding>UTF-8</encoding>
                 </configuration>
             </plugin>
             <plugin>
                 <artifactId>maven-deploy-plugin</artifactId>
-                <version>2.8.2</version>
+                <version>3.0.0</version>
             </plugin>
             <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.8.1</version>
+                <version>3.10.1</version>
                 <configuration>
                     <source>1.8</source>
                     <target>1.8</target>
@@ -315,7 +364,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-assembly-plugin</artifactId>
-                <version>3.3.0</version>
+                <version>3.4.2</version>
                 <configuration>
                     <descriptorSourceDirectory>assembly</descriptorSourceDirectory>
                     <archiverConfig>
@@ -347,7 +396,7 @@
             </plugin>
             <plugin>
                 <artifactId>maven-javadoc-plugin</artifactId>
-                <version>3.3.0</version>
+                <version>3.4.0</version>
                 <executions>
                     <execution>
                         <id>attach-javadoc</id>
@@ -395,7 +444,7 @@
                 <!-- just to make sure deployed artifacts are always built (and tested) using JDK 8+ -->
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>
-                <version>1.4.1</version>
+                <version>3.1.0</version>
                 <executions>
                     <execution>
                         <id>enforce-java</id>
@@ -504,21 +553,6 @@
         <url>https://github.com/AxonIQ/axonserver-connector-java</url>
         <tag>master</tag>
     </scm>
-
-    <repositories>
-        <repository>
-            <id>sonatype</id>
-            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
-            <snapshots>
-                <enabled>true</enabled>
-                <checksumPolicy>fail</checksumPolicy>
-                <updatePolicy>always</updatePolicy>
-            </snapshots>
-            <releases>
-                <enabled>false</enabled>
-            </releases>
-        </repository>
-    </repositories>
 
     <distributionManagement>
         <snapshotRepository>

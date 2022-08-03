@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2020-2021. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import io.axoniq.axonserver.connector.AxonServerException;
 import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.Registration;
 import io.axoniq.axonserver.connector.command.impl.CommandChannelImpl;
+import io.axoniq.axonserver.connector.impl.ContextConnection;
 import io.axoniq.axonserver.grpc.command.Command;
 import io.axoniq.axonserver.grpc.command.CommandResponse;
 import org.junit.jupiter.api.AfterEach;
@@ -33,11 +34,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.silently;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -134,6 +140,7 @@ class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         assertWithin(3, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
 
+        // an ACK is not a guarantee that the registration has also been fully processed...
         Thread.sleep(100);
 
         CompletableFuture<CommandResponse> result = connection2.commandChannel().sendCommand(Command.newBuilder().setName("testCommand").build());
@@ -143,7 +150,7 @@ class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     }
 
     @RepeatedTest(10)
-    void testCommandChannelConsideredConnectedWhenNoHandlersSubscribed() throws IOException, TimeoutException, InterruptedException {
+    void testCommandChannelConsideredReadyWhenNoHandlersSubscribed() throws IOException, TimeoutException, InterruptedException {
         CommandChannelImpl commandChannel = (CommandChannelImpl) connection1.commandChannel();
         // just to make sure that no attempt was made to connect, since there are no handlers
         assertTrue(commandChannel.isReady());
@@ -169,6 +176,92 @@ class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         assertWithin(2, TimeUnit.SECONDS, () -> assertTrue(commandChannel.isReady()));
     }
 
+    @Test
+    void testReconnectWaitsForCommandsInTransitToFinish() throws InterruptedException {
+
+        Queue<CompletableFuture<CommandResponse>> commandsInProgress = new ConcurrentLinkedQueue<>();
+        CommandChannel commandChannel = connection1.commandChannel();
+        commandChannel.registerCommandHandler(command -> {
+            CompletableFuture<CommandResponse> result = new CompletableFuture<>();
+            commandsInProgress.add(result);
+            return result;
+        }, 100, "testCommand");
+
+        CommandChannel commandChannel2 = connection2.commandChannel();
+
+        assertWithin(1, TimeUnit.SECONDS, () -> connection1.isReady());
+
+        // an ACK is not a guarantee that the registration has also been fully processed...
+        Thread.sleep(100);
+
+        List<CompletableFuture<CommandResponse>> actual = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            actual.add(commandChannel2.sendCommand(Command.newBuilder().setName("testCommand").build()));
+        }
+
+        assertWithin(1, TimeUnit.SECONDS, () -> assertEquals(10, commandsInProgress.size()));
+
+        ((ContextConnection) connection1).getManagedChannel().requestReconnect();
+        ((CommandChannelImpl) connection1.commandChannel()).reconnect();
+
+        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(connection1.isReady()));
+
+        while (!commandsInProgress.isEmpty()) {
+            doIfNotNull(commandsInProgress.poll(), r -> r.complete(CommandResponse.getDefaultInstance()));
+        }
+
+        assertWithin(1, TimeUnit.SECONDS, () -> actual.forEach(r -> assertTrue(r.isDone())));
+
+        long messagesInError = actual.stream().filter(r -> r.join().hasErrorMessage()).count();
+        actual.forEach(r -> {
+            assertFalse((r.isCompletedExceptionally()));
+            assertFalse(r.join().hasErrorMessage(), messagesInError + " Commands finished with  in error. In one instance: " + r.join().getErrorMessage().getMessage());
+        });
+
+    }
+
+    @Test
+    void testDisconnectFinishesCommandsInTransit() throws InterruptedException {
+
+        Queue<CompletableFuture<CommandResponse>> commandsInProgress = new ConcurrentLinkedQueue<>();
+        CommandChannel commandChannel = connection1.commandChannel();
+        commandChannel.registerCommandHandler(command -> {
+            CompletableFuture<CommandResponse> result = new CompletableFuture<>();
+            commandsInProgress.add(result);
+            return result;
+        }, 100, "testCommand");
+
+        CommandChannel commandChannel2 = connection2.commandChannel();
+
+        assertWithin(1, TimeUnit.SECONDS, () -> connection1.isReady());
+
+        // an ACK is not a guarantee that the registration has also been fully processed...
+        Thread.sleep(100);
+
+        List<CompletableFuture<CommandResponse>> actual = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            actual.add(commandChannel2.sendCommand(Command.newBuilder().setName("testCommand").build()));
+        }
+
+        assertWithin(1, TimeUnit.SECONDS, () -> assertEquals(10, commandsInProgress.size()));
+
+        // a call to disconnect waits for disconnection to be completed. That isn't compatible with our test here.
+        CompletableFuture.runAsync(() -> connection1.disconnect());
+
+        while (!commandsInProgress.isEmpty()) {
+            doIfNotNull(commandsInProgress.poll(), r -> r.complete(CommandResponse.getDefaultInstance()));
+        }
+
+        assertWithin(1, TimeUnit.SECONDS, () -> actual.forEach(r -> assertTrue(r.isDone())));
+
+        long messagesInError = actual.stream().filter(r -> r.join().hasErrorMessage()).count();
+        actual.forEach(r -> {
+            assertFalse((r.isCompletedExceptionally()));
+            assertFalse(r.join().hasErrorMessage(), messagesInError + " Commands finished with  in error. In one instance: " + r.join().getErrorMessage().getMessage());
+        });
+
+        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(((ContextConnection) connection1).getManagedChannel().isTerminated()));
+    }
 
     @Test
     void testDispatchCommandOnDisconnectReturnsError() throws Exception {

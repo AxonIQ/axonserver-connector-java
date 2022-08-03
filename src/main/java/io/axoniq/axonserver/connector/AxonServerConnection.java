@@ -16,6 +16,7 @@
 
 package io.axoniq.axonserver.connector;
 
+import io.axoniq.axonserver.connector.admin.AdminChannel;
 import io.axoniq.axonserver.connector.command.CommandChannel;
 import io.axoniq.axonserver.connector.control.ControlChannel;
 import io.axoniq.axonserver.connector.event.EventChannel;
@@ -92,4 +93,12 @@ public interface AxonServerConnection {
      * @return the channel for Event transformations
      */
     EventTransformationChannel eventTransformationChannel();
+
+
+    /**
+     * Returns the channel on which administration messages can be sent and received
+     *
+     * @return the channel for Admin messaging
+     */
+    AdminChannel adminChannel();
 }
