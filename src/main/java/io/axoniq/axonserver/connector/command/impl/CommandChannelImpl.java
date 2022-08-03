@@ -177,14 +177,16 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
         commandHandlers.entrySet().stream()
                        .map(e -> sendSubscribe(e.getKey(), e.getValue().getLoadFactor(), newValue))
                        .reduce(CompletableFuture::allOf)
-                       .map(cf -> cf.exceptionally(e -> {
-                           logger.warn("An error occurred while registering command handlers", e);
-                           return null;
-                       }))
                        .orElse(CompletableFuture.completedFuture(null))
-                       .thenRun(() -> subscriptionsCompleted.set(true));
+                       .whenComplete((unused, throwable) -> {
+                           if (throwable != null) {
+                               logger.warn("An error occurred while registering command handlers", throwable);
+                           } else {
+                               logger.info("CommandChannel for context '{}' connected, {} command handlers registered", context, commandHandlers.size());
+                           }
+                           subscriptionsCompleted.set(throwable == null);
+                       });
 
-        logger.info("CommandChannel for context '{}' connected, {} command handlers registered", context, commandHandlers.size());
 
         responseObserver.enableFlowControl();
     }
@@ -227,6 +229,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
                                                                      .orElseGet(() -> CompletableFuture.completedFuture(null)));
                 })
                 .thenRun(() -> doIfNotNull(previousOutbound, StreamObserver::onCompleted));
+        subscriptionsCompleted.set(false);
     }
 
     @Override
