@@ -101,15 +101,6 @@ public abstract class FlowControlledStream<IN, OUT> implements ClientResponseObs
     }
 
     /**
-     * Return the client identifier which has initiated this stream.
-     *
-     * @return the client identifier which has initiated this stream.
-     */
-    protected String clientId() {
-        return clientId;
-    }
-
-    /**
      * Notifier when an entry has been consumed from this stream. Keeps track of the number of permits which has been
      * consumed and will automatically ask for new permits if the {@code permitsBatch} size has been reached.
      */

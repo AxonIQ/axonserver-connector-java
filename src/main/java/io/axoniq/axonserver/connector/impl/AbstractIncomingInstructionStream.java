@@ -52,6 +52,7 @@ public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowCon
     private final Consumer<Throwable> disconnectHandler;
 
     private final Consumer<CallStreamObserver<OUT>> beforeStartHandler;
+    private final String clientId;
     private CallStreamObserver<OUT> instructionsForPlatform;
 
     /**
@@ -70,6 +71,7 @@ public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowCon
                                                 Consumer<Throwable> disconnectHandler,
                                                 Consumer<CallStreamObserver<OUT>> beforeStartHandler) {
         super(clientId, permits, permitsBatch);
+        this.clientId = clientId;
         this.disconnectHandler = disconnectHandler;
         this.beforeStartHandler = beforeStartHandler;
     }
@@ -86,7 +88,7 @@ public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowCon
             }
         } else {
             ForwardingReplyChannel<OUT> replyChannel = new ForwardingReplyChannel<>(getInstructionId(value),
-                                                                                    clientId(),
+                                                                                    clientId,
                                                                                     instructionsForPlatform,
                                                                                     this::buildAckMessage,
                                                                                     this::markConsumed);

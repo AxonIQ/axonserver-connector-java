@@ -19,6 +19,7 @@ package io.axoniq.axonserver.connector.event.impl;
 import io.axoniq.axonserver.connector.event.EventStream;
 import io.axoniq.axonserver.connector.impl.AbstractBufferedStream;
 import io.axoniq.axonserver.grpc.FlowControl;
+import io.axoniq.axonserver.grpc.control.ClientIdentification;
 import io.axoniq.axonserver.grpc.event.EventWithToken;
 import io.axoniq.axonserver.grpc.event.GetEventsRequest;
 import io.axoniq.axonserver.grpc.event.PayloadDescription;
@@ -38,6 +39,8 @@ public class BufferedEventStream
 
     private static final EventWithToken TERMINAL_MESSAGE = EventWithToken.newBuilder().setToken(-1729).build();
 
+    private final ClientIdentification clientId;
+
     private final long trackingToken;
     private final boolean forceReadFromLeader;
 
@@ -50,8 +53,9 @@ public class BufferedEventStream
      * @param refillBatch         the number of Events to consume prior refilling the buffer
      * @param forceReadFromLeader a {@code boolean} defining whether Events <b>must</b> be read from the leader
      */
-    public BufferedEventStream(long trackingToken, int bufferSize, int refillBatch, boolean forceReadFromLeader) {
-        super("unused", bufferSize, refillBatch);
+    public BufferedEventStream(ClientIdentification clientId, long trackingToken, int bufferSize, int refillBatch, boolean forceReadFromLeader) {
+        super(clientId.getClientId(), bufferSize, refillBatch);
+        this.clientId = clientId;
         this.trackingToken = trackingToken;
         this.forceReadFromLeader = forceReadFromLeader;
     }
@@ -66,6 +70,8 @@ public class BufferedEventStream
     @Override
     protected GetEventsRequest buildInitialFlowControlMessage(FlowControl flowControl) {
         GetEventsRequest eventsRequest = GetEventsRequest.newBuilder()
+                                                         .setClientId(clientId.getClientId())
+                                                         .setComponentName(clientId.getComponentName())
                                                          .setTrackingToken(trackingToken + 1)
                                                          .setForceReadFromLeader(forceReadFromLeader)
                                                          .setNumberOfPermits(flowControl.getPermits()).build();
