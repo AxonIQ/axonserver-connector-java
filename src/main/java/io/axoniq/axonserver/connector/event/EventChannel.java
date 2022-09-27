@@ -314,13 +314,21 @@ public interface EventChannel {
     CompletableFuture<Long> getFirstToken();
 
     /**
-     * Retrieves the Token referring to the first Event in the Event Store with a timestamp on or after given {@code
-     * instant}. Using this token to open a stream will yield all events with a timestamp starting at that instance, but
-     * may also yield events that were created before this {@code instant}, whose append transaction was completed after
-     * the {@code instant}.
+     * Retrieves the token referencing the first Event in the Event Store closest to the given {@code instant}.
+     * <p>
+     * The timestamp of the referenced Event may be on or after the given {@code instant} when the {@code instant}
+     * occurred within the Event Store's lifecycle. Will return the most recent token when the {@code instant} is placed
+     * into the future. Will return the earliest token if the {@code instant} is placed in the past (read: before the
+     * existence of this Event Store).
+     * <p>
+     * Using this token to open a stream will yield all events with a timestamp starting at that instance but may also
+     * yield events created before this {@code instant}, whose append transaction completed after the {@code instant}.
      *
-     * @return a completable future resolving the Token of the first (i.e. oldest) event with timestamp on or after
-     * given {@code instant}
+     * @param instant The point in time for which to retrieve a token referencing an event within the Event Store. If
+     *                the given {@code instant} resides outside the Event Store its existing time frame, the latest or
+     *                earliest token is returned for a future or past {@code instant} respectively.
+     * @return A completable future resolving the Token of the first (i.e. oldest) event with timestamp on or after
+     * given {@code instant}.
      */
     CompletableFuture<Long> getTokenAt(long instant);
 
