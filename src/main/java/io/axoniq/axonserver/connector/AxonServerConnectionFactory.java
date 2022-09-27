@@ -71,7 +71,7 @@ public class AxonServerConnectionFactory {
 
     private static final Logger logger = LoggerFactory.getLogger(AxonServerConnectionFactory.class);
 
-    private static final String CONNECTOR_VERSION = "4.4";
+    private static final String CONNECTOR_VERSION = "4.6";
 
     private final Map<String, String> tags = new HashMap<>();
     private final String componentName;
