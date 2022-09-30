@@ -16,6 +16,7 @@
 
 package io.axoniq.axonserver.connector.impl;
 
+import com.github.dockerjava.zerodep.shaded.org.apache.hc.client5.http.classic.methods.HttpPatch;
 import com.google.gson.JsonElement;
 import com.google.protobuf.ByteString;
 import eu.rekawek.toxiproxy.model.ToxicDirection;
@@ -44,12 +45,9 @@ import io.grpc.ForwardingClientCall;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.shaded.okhttp3.Request;
 
 import java.util.List;
 import java.util.Map;
@@ -65,12 +63,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
@@ -100,11 +94,13 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         long endCheck = System.currentTimeMillis() + 2000;
         while (endCheck > System.currentTimeMillis()) {
             assertTrue(connection1.isConnected());
+            //noinspection BusyWait
             Thread.sleep(100);
         }
 
         logger.info("Simulating bad connection");
-        Timeout connectionIssue = axonServerProxy.toxics().timeout("bad_connection", ToxicDirection.DOWNSTREAM, Long.MAX_VALUE);
+        Timeout connectionIssue = axonServerProxy.toxics()
+                                                 .timeout("bad_connection", ToxicDirection.DOWNSTREAM, Long.MAX_VALUE);
 
         logger.info("Waiting for connector to acknowledge broken connection");
         assertWithin(5, TimeUnit.SECONDS, () -> assertFalse(connection1.isConnected()));
@@ -148,16 +144,23 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         assertWithin(1, TimeUnit.SECONDS, () -> assertEquals(1, connectionCount.get()));
 
+        //noinspection resource
         EventStream buffer = connection1.eventChannel().openStream(0, 10);
 
         // simulate a request to reconnect from AxonServer
+        //noinspection unchecked
         ReplyChannel<PlatformInboundInstruction> mockReplyChannel = mock(ReplyChannel.class);
-        ((ControlChannelImpl) connection1.controlChannel()).handleReconnectRequest(PlatformOutboundInstruction.newBuilder().setRequestReconnect(RequestReconnect.getDefaultInstance()).build(), mockReplyChannel);
+        PlatformOutboundInstruction instruction =
+                PlatformOutboundInstruction.newBuilder()
+                                           .setRequestReconnect(RequestReconnect.getDefaultInstance())
+                                           .build();
+        ((ControlChannelImpl) connection1.controlChannel()).handleReconnectRequest(instruction, mockReplyChannel);
 
         assertWithin(5, TimeUnit.SECONDS, () -> assertEquals(2, connectionCount.get()));
-
-        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(buffer.isClosed(), "Expected Event Streams to be closed by reconnect request"));
-
+        assertWithin(
+                1, TimeUnit.SECONDS,
+                () -> assertTrue(buffer.isClosed(), "Expected Event Streams to be closed by reconnect request")
+        );
     }
 
     @Test
@@ -201,18 +204,21 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         ProcessorInstructionHandler instructionHandler = mock(ProcessorInstructionHandler.class);
         AtomicReference<EventProcessorInfo> processorInfo = new AtomicReference<>(buildEventProcessorInfo(true));
 
-        connection1.controlChannel().registerEventProcessor("testProcessor", processorInfo::get,
-                                                            instructionHandler);
+        connection1.controlChannel().registerEventProcessor("testProcessor", processorInfo::get, instructionHandler);
 
         assertWithin(1, TimeUnit.SECONDS, () -> {
-            sendToAxonServer(Request.Builder::patch, "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/pause?tokenStoreIdentifier=TokenStoreId&context=default");
+            String pausePath = "/v1/components/" + getClass().getSimpleName()
+                    + "/processors/testProcessor/pause?tokenStoreIdentifier=TokenStoreId&context=default";
+            sendToAxonServer(HttpPatch::new, pausePath);
             verify(instructionHandler).pauseProcessor();
         });
         processorInfo.set(buildEventProcessorInfo(false));
         // these status updates are sent once per 2 seconds
 
         assertWithin(3, TimeUnit.SECONDS, () -> {
-            sendToAxonServer(Request.Builder::patch, "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/start?tokenStoreIdentifier=TokenStoreId&context=default");
+            String startPath = "/v1/components/" + getClass().getSimpleName()
+                    + "/processors/testProcessor/start?tokenStoreIdentifier=TokenStoreId&context=default";
+            sendToAxonServer(HttpPatch::new, startPath);
             verify(instructionHandler).startProcessor();
         });
     }
@@ -228,21 +234,23 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         AtomicReference<EventProcessorInfo> processorInfo = new AtomicReference<>(buildEventProcessorInfo(true));
 
         connection1.controlChannel()
-                   .registerEventProcessor("testProcessor", processorInfo::get,
-                                                            instructionHandler)
+                   .registerEventProcessor("testProcessor", processorInfo::get, instructionHandler)
                    .awaitAck(1, TimeUnit.SECONDS);
 
-        assertWithin(2, TimeUnit.SECONDS, () -> sendToAxonServer(Request.Builder::patch, "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/segments/merge?tokenStoreIdentifier=TokenStoreId&context=default"));
+        String splitPath = "/v1/components/" + getClass().getSimpleName()
+                + "/processors/testProcessor/segments/merge?tokenStoreIdentifier=TokenStoreId&context=default";
+        assertWithin(2, TimeUnit.SECONDS, () -> sendToAxonServer(HttpPatch::new, splitPath));
         assertWithin(1, TimeUnit.SECONDS, () -> verify(instructionHandler).mergeSegment(0));
 
-        assertWithin(2, TimeUnit.SECONDS, () -> sendToAxonServer(Request.Builder::patch, "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/segments/split?tokenStoreIdentifier=TokenStoreId&context=default"));
+        String mergePath = "/v1/components/" + getClass().getSimpleName()
+                + "/processors/testProcessor/segments/split?tokenStoreIdentifier=TokenStoreId&context=default";
+        assertWithin(2, TimeUnit.SECONDS, () -> sendToAxonServer(HttpPatch::new, mergePath));
         assertWithin(1, TimeUnit.SECONDS, () -> verify(instructionHandler).splitSegment(0));
     }
 
     @Test
     void testMoveSegmentInstructionIsPickedUpByHandler() throws Exception {
-        client = AxonServerConnectionFactory.forClient(getClass().getSimpleName())
-                                            .routingServers(axonServerAddress)
+        client = AxonServerConnectionFactory.forClient(getClass().getSimpleName()).routingServers(axonServerAddress)
                                             .build();
         AxonServerConnection connection1 = client.connect("default");
         StubProcessorInstructionHandler instructionHandler = new StubProcessorInstructionHandler();
@@ -250,22 +258,20 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         CountDownLatch cdl = new CountDownLatch(1);
 
-        connection1.controlChannel()
-                   .registerEventProcessor("testProcessor", () -> {
-                                               cdl.countDown();
-                                               return processorInfo.get();
-                                           },
-                                           instructionHandler)
-                   .awaitAck(1, TimeUnit.SECONDS);
+        connection1.controlChannel().registerEventProcessor("testProcessor", () -> {
+            cdl.countDown();
+            return processorInfo.get();
+        }, instructionHandler).awaitAck(1, TimeUnit.SECONDS);
 
 
         // we wait for AxonServer to request data, which is an acknowledgement that the processor was registered.
         assertTrue(cdl.await(3, TimeUnit.SECONDS));
 
-        sendToAxonServer(Request.Builder::patch, "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/segments/0/move?tokenStoreIdentifier=TokenStoreId&context=default&target=foo");
+        String segmentsPath = "/v1/components/" + getClass().getSimpleName()
+                + "/processors/testProcessor/segments/0/move?tokenStoreIdentifier=TokenStoreId&context=default&target=foo";
+        sendToAxonServer(HttpPatch::new, segmentsPath);
 
-        assertWithin(1, TimeUnit.SECONDS, () ->
-                assertTrue(instructionHandler.instructions.contains("release0")));
+        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(instructionHandler.instructions.contains("release0")));
     }
 
     /*
@@ -274,7 +280,7 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
       but is rejecting requests due to an unavailable backend.
      */
     @Test
-    void connectionForcefullyRecreatedAfterFailureOnInstructionChannelAndLiveChannel() throws InterruptedException {
+    void connectionForcefullyRecreatedAfterFailureOnInstructionChannelAndLiveChannel() {
         AtomicInteger connectCounter = new AtomicInteger();
         CallCancellingInterceptor cancellingInterceptor = new CallCancellingInterceptor();
         client = AxonServerConnectionFactory.forClient("handler")
