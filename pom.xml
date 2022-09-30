@@ -274,6 +274,12 @@
 
         <!-- Test networking -->
         <dependency>
+            <groupId>org.apache.httpcomponents.client5</groupId>
+            <artifactId>httpclient5</artifactId>
+            <version>${httpclient5.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>eu.rekawek.toxiproxy</groupId>
             <artifactId>toxiproxy-java</artifactId>
             <version>${toxiproxy.version}</version>

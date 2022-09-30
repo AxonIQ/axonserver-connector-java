@@ -16,7 +16,6 @@
 
 package io.axoniq.axonserver.connector.impl;
 
-import com.github.dockerjava.zerodep.shaded.org.apache.hc.client5.http.classic.methods.HttpPatch;
 import com.google.gson.JsonElement;
 import com.google.protobuf.ByteString;
 import eu.rekawek.toxiproxy.model.ToxicDirection;
@@ -45,6 +44,7 @@ import io.grpc.ForwardingClientCall;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
+import org.apache.hc.client5.http.classic.methods.HttpPatch;
 import org.junit.jupiter.api.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
