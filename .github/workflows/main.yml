@@ -36,7 +36,7 @@ jobs:
       - name: Maven operation with Sonar
         if: matrix.sonar-enabled
         run: |
-          mvn -B -U -Possrh -Pcoverage \
+          mvn -B -U -Dstyle.color=always -Possrh -Pcoverage \
           clean verify \
           sonar:sonar \
           -Dsonar.projectKey=AxonIQ_axonserver-connector-java \
@@ -49,14 +49,14 @@ jobs:
       - name: Maven operation without Sonar
         if: matrix.sonar-enabled != true
         run: |
-          mvn -B -U -Possrh clean verify
+          mvn -B -U -Dstyle.color=always -Possrh clean verify
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Deploy to Sonatype
         if: success()
         run: |
-          mvn -B -U deploy -DskipTests=true
+          mvn -B -U -Dstyle.color=always deploy -DskipTests=true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MAVEN_USERNAME: ${{ secrets.SONATYPE_TOKEN_ID }}
