@@ -45,15 +45,20 @@ public class BufferedEventStream
     private final boolean forceReadFromLeader;
 
     /**
-     * Construct a {@link BufferedEventStream}, starting a position {@code trackingToken} with the given {@code
-     * bufferSize}.
+     * Construct a {@link BufferedEventStream}, starting a position {@code trackingToken} with the given
+     * {@code bufferSize}.
      *
-     * @param trackingToken       the position to start this {@link BufferedEventStream} at
-     * @param bufferSize          the buffer size of this event stream
-     * @param refillBatch         the number of Events to consume prior refilling the buffer
-     * @param forceReadFromLeader a {@code boolean} defining whether Events <b>must</b> be read from the leader
+     * @param clientId            The client identifier starting this stream.
+     * @param trackingToken       The position to start this {@link BufferedEventStream} at.
+     * @param bufferSize          The buffer size of this event stream.
+     * @param refillBatch         The number of Events to consume prior refilling the buffer.
+     * @param forceReadFromLeader A {@code boolean} defining whether Events <b>must</b> be read from the leader.
      */
-    public BufferedEventStream(ClientIdentification clientId, long trackingToken, int bufferSize, int refillBatch, boolean forceReadFromLeader) {
+    public BufferedEventStream(ClientIdentification clientId,
+                               long trackingToken,
+                               int bufferSize,
+                               int refillBatch,
+                               boolean forceReadFromLeader) {
         super(clientId.getClientId(), bufferSize, refillBatch);
         this.clientId = clientId;
         this.trackingToken = trackingToken;
