@@ -44,6 +44,7 @@ public class SubscriptionQueryStream extends FlowControlledStream<SubscriptionQu
     private final String subscriptionQueryId;
     private final CompletableFuture<QueryResponse> initialResultFuture;
     private final AbstractBufferedStream<QueryUpdate, SubscriptionQueryRequest> updateBuffer;
+    private final String clientId;
 
     /**
      * Instantiates a {@link SubscriptionQueryStream} to stream {@link SubscriptionQuery} results.
@@ -60,6 +61,7 @@ public class SubscriptionQueryStream extends FlowControlledStream<SubscriptionQu
                                    int bufferSize,
                                    int fetchSize) {
         super(clientId, bufferSize, fetchSize);
+        this.clientId = clientId;
         this.subscriptionQueryId = subscriptionQueryId;
         this.initialResultFuture = initialResultFuture;
         this.updateBuffer = new SubscriptionQueryUpdateBuffer(clientId, subscriptionQueryId, bufferSize, fetchSize);
@@ -135,7 +137,7 @@ public class SubscriptionQueryStream extends FlowControlledStream<SubscriptionQu
     public void onCompleted() {
         updateBuffer.onCompleted();
         if (!initialResultFuture.isDone()) {
-            initialResultFuture.completeExceptionally(new AxonServerException(ErrorCategory.QUERY_DISPATCH_ERROR, "Subscription query has already been completed", clientId()));
+            initialResultFuture.completeExceptionally(new AxonServerException(ErrorCategory.QUERY_DISPATCH_ERROR, "Subscription query has already been completed", clientId));
         }
     }
 
