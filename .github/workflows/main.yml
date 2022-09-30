@@ -11,6 +11,8 @@ jobs:
   build:
     name: Test and Build on JDK ${{ matrix.java-version }}
     runs-on: ubuntu-latest
+    continue-on-error: true
+
     strategy:
       matrix:
         include:
