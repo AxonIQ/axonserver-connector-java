@@ -16,6 +16,13 @@
 
 package io.axoniq.axonserver.connector;
 
+import com.github.dockerjava.zerodep.shaded.org.apache.hc.client5.http.classic.methods.HttpGet;
+import com.github.dockerjava.zerodep.shaded.org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import com.github.dockerjava.zerodep.shaded.org.apache.hc.client5.http.impl.classic.CloseableHttpResponse;
+import com.github.dockerjava.zerodep.shaded.org.apache.hc.client5.http.impl.classic.HttpClients;
+import com.github.dockerjava.zerodep.shaded.org.apache.hc.core5.http.ClassicHttpRequest;
+import com.github.dockerjava.zerodep.shaded.org.apache.hc.core5.http.ParseException;
+import com.github.dockerjava.zerodep.shaded.org.apache.hc.core5.http.io.entity.EntityUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -31,19 +38,13 @@ import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.images.PullPolicy;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.shaded.okhttp3.Call;
-import org.testcontainers.shaded.okhttp3.OkHttpClient;
-import org.testcontainers.shaded.okhttp3.Request;
-import org.testcontainers.shaded.okhttp3.RequestBody;
-import org.testcontainers.shaded.okhttp3.Response;
-import org.testcontainers.shaded.okhttp3.internal.Util;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.time.Duration;
-import java.util.function.BiFunction;
+import java.util.function.Function;
 
 @Testcontainers
 public abstract class AbstractAxonServerIntegrationTest {
@@ -51,6 +52,7 @@ public abstract class AbstractAxonServerIntegrationTest {
     private static final Gson GSON = new Gson();
     public static Network network = Network.newNetwork();
 
+    @SuppressWarnings("resource")
     @Container
     public static GenericContainer<?> axonServerContainer =
             new GenericContainer<>(System.getProperty("AXON_SERVER_IMAGE", "axoniq/axonserver"))
@@ -64,6 +66,7 @@ public abstract class AbstractAxonServerIntegrationTest {
                     .withNetworkAliases("axonserver")
                     .waitingFor(Wait.forHttp("/actuator/health").forPort(8024));
 
+    @SuppressWarnings("resource")
     @Container
     public static GenericContainer<?> toxiProxyContainer =
             new GenericContainer<>("shopify/toxiproxy")
@@ -77,21 +80,20 @@ public abstract class AbstractAxonServerIntegrationTest {
     protected static ServerAddress axonServerAddress;
     private static ServerAddress axonServerHttpPort;
     protected String axonServerVersion;
-    private static OkHttpClient client;
 
     @BeforeAll
     static void initialize() throws IOException {
-        client = new OkHttpClient();
-        axonServerAddress = new ServerAddress(toxiProxyContainer.getContainerIpAddress(), toxiProxyContainer.getMappedPort(8124));
-        axonServerHttpPort = new ServerAddress(axonServerContainer.getContainerIpAddress(), axonServerContainer.getMappedPort(8024));
-        ToxiproxyClient client = new ToxiproxyClient(toxiProxyContainer.getContainerIpAddress(), toxiProxyContainer.getMappedPort(8474));
+        axonServerAddress = new ServerAddress(toxiProxyContainer.getHost(), toxiProxyContainer.getMappedPort(8124));
+        axonServerHttpPort = new ServerAddress(axonServerContainer.getHost(), axonServerContainer.getMappedPort(8024));
+        ToxiproxyClient client = new ToxiproxyClient(
+                toxiProxyContainer.getHost(), toxiProxyContainer.getMappedPort(8474)
+        );
         axonServerProxy = getOrCreateProxy(client, "axonserver", "0.0.0.0:8124", "axonserver:8124");
-
     }
 
     @BeforeEach
     void prepareInstance() throws IOException {
-        JsonElement info = sendToAxonServer((r, b) -> r.get(), "/actuator/info");
+        JsonElement info = sendToAxonServer(HttpGet::new, "/actuator/info");
         axonServerVersion = info.getAsJsonObject().getAsJsonObject("app").get("version").getAsString();
 
         for (Toxic toxic : axonServerProxy.toxics().getAll()) {
@@ -101,7 +103,10 @@ public abstract class AbstractAxonServerIntegrationTest {
         AxonServerUtils.purgeEventsFromAxonServer(axonServerHttpPort.getHostName(), axonServerHttpPort.getGrpcPort());
     }
 
-    public static Proxy getOrCreateProxy(ToxiproxyClient client, String proxyName, String listen, String upstream) throws IOException {
+    public static Proxy getOrCreateProxy(ToxiproxyClient client,
+                                         String proxyName,
+                                         String listen,
+                                         String upstream) throws IOException {
         Proxy proxy = client.getProxyOrNull(proxyName);
         if (proxy == null) {
             proxy = client.createProxy(proxyName, listen, upstream);
@@ -109,22 +114,27 @@ public abstract class AbstractAxonServerIntegrationTest {
         return proxy;
     }
 
-    protected JsonElement sendToAxonServer(BiFunction<Request.Builder, RequestBody, Request.Builder> method, String path) throws IOException {
-        Call call = client.newCall(method.apply(new Request.Builder()
-                                                        .url("http://" + axonServerContainer.getContainerIpAddress() + ":" + axonServerContainer.getMappedPort(8024) + path),
-                                                Util.EMPTY_REQUEST)
-                                         .build());
-        Response result = call.execute();
-        JsonElement read = new JsonObject();
-        if (result.code() != 200) {
-            throw new IOException("Got error code " + result.code() + (result.body() == null ? "" : " - " + result.body().string()));
-        } else if (result.body() == null) {
-            return read;
-        } else {
-            read = GSON.fromJson(new InputStreamReader(result.body().byteStream()), JsonElement.class);
+    protected JsonElement sendToAxonServer(Function<String, ClassicHttpRequest> method, String path)
+            throws IOException {
+        String uri = "https://" + axonServerContainer.getHost() + ":" + axonServerContainer.getMappedPort(8024) + path;
+        ClassicHttpRequest request = method.apply(uri);
+
+        try (CloseableHttpClient httpclient = HttpClients.createDefault()) {
+            try (CloseableHttpResponse response = httpclient.execute(request)) {
+
+                int code = response.getCode();
+                String content = EntityUtils.toString(response.getEntity());
+                if (code != 200) {
+                    throw new IOException("Got error code " + code + (content == null ? "" : " - " + content));
+                } else if (content == null) {
+                    return new JsonObject();
+                } else {
+                    return GSON.fromJson(content, JsonElement.class);
+                }
+            }
+        } catch (ParseException e) {
+            throw new IOException(e);
         }
-        result.close();
-        return read;
     }
 
     protected JsonElement getFromAxonServer(String path) throws IOException {
@@ -141,7 +151,10 @@ public abstract class AbstractAxonServerIntegrationTest {
     }
 
     private HttpURLConnection getConnection(String path) throws IOException {
-        final URL url = new URL(String.format("http://%s:%d%s", axonServerContainer.getContainerIpAddress(), axonServerContainer.getMappedPort(8024), path));
+        final URL url = new URL(String.format("https://%s:%d%s",
+                                              axonServerContainer.getHost(),
+                                              axonServerContainer.getMappedPort(8024),
+                                              path));
         return (HttpURLConnection) url.openConnection();
     }
 }
