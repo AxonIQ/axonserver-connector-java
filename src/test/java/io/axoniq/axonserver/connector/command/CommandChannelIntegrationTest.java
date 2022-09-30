@@ -26,10 +26,7 @@ import io.axoniq.axonserver.connector.command.impl.CommandChannelImpl;
 import io.axoniq.axonserver.connector.impl.ContextConnection;
 import io.axoniq.axonserver.grpc.command.Command;
 import io.axoniq.axonserver.grpc.command.CommandResponse;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.RepeatedTest;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,11 +43,7 @@ import java.util.concurrent.TimeoutException;
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.silently;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
@@ -149,8 +142,8 @@ class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         assertEquals("", commandResponse.getErrorMessage().getMessage());
     }
 
-    @RepeatedTest(10)
-    void testCommandChannelConsideredReadyWhenNoHandlersSubscribed() throws IOException, TimeoutException, InterruptedException {
+    @Test
+    void commandChannelConsideredReadyWhenNoHandlersSubscribed() throws IOException {
         CommandChannelImpl commandChannel = (CommandChannelImpl) connection1.commandChannel();
         // just to make sure that no attempt was made to connect, since there are no handlers
         assertTrue(commandChannel.isReady());
@@ -162,9 +155,10 @@ class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         assertTrue(commandChannel.isReady());
         assertFalse(connection1.isConnected());
 
-        Registration registration = commandChannel.registerCommandHandler(c -> CompletableFuture.completedFuture(null),
-                                                                          100, "TestCommand");
-        AxonServerException exception = assertThrows(AxonServerException.class, () -> registration.awaitAck(1, TimeUnit.SECONDS));
+        Registration registration =
+                commandChannel.registerCommandHandler(c -> CompletableFuture.completedFuture(null), 100, "TestCommand");
+        AxonServerException exception =
+                assertThrows(AxonServerException.class, () -> registration.awaitAck(1, TimeUnit.SECONDS));
         assertEquals(ErrorCategory.INSTRUCTION_ACK_ERROR, exception.getErrorCategory());
 
         // because of the attempt to set up a connection, it may need a few milliseconds to discover that's not possible

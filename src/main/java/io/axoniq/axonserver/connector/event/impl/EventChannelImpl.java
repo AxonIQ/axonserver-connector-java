@@ -78,6 +78,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     private final EventStoreGrpc.EventStoreStub eventStore;
     private final EventSchedulerGrpc.EventSchedulerStub eventScheduler;
     private final Set<BufferedEventStream> buffers = ConcurrentHashMap.newKeySet();
+    private final ClientIdentification clientId;
     // guarded by -this-
 
     /**
@@ -88,6 +89,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
      */
     public EventChannelImpl(ClientIdentification clientIdentification, ScheduledExecutorService executor, AxonServerManagedChannel channel) {
         super(clientIdentification, executor, channel);
+        clientId = clientIdentification;
         eventStore = EventStoreGrpc.newStub(channel);
         eventScheduler = EventSchedulerGrpc.newStub(channel);
     }
@@ -181,7 +183,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
 
     @Override
     public EventStream openStream(long token, int bufferSize, int refillBatch, boolean forceReadFromLeader) {
-        BufferedEventStream buffer = new BufferedEventStream(token,
+        BufferedEventStream buffer = new BufferedEventStream(clientId, token,
                                                              Math.max(64, bufferSize),
                                                              Math.max(16, Math.min(bufferSize, refillBatch)),
                                                              forceReadFromLeader);

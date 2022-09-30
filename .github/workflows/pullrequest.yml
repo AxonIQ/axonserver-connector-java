@@ -14,6 +14,7 @@ jobs:
             sonar-enabled: false
           - java-version: 11
             sonar-enabled: true
+      fail-fast: false # run both to the end
 
     steps:
       - name: Checkout code
@@ -32,7 +33,7 @@ jobs:
       - name: Maven operation with Sonar
         if: matrix.sonar-enabled
         run: |
-          mvn -B -U -Possrh -Pcoverage \
+          mvn -B -U -Dstyle.color=always -Possrh -Pcoverage \
           clean verify \
           sonar:sonar \
           -Dsonar.projectKey=AxonIQ_axonserver-connector-java \
@@ -45,6 +46,6 @@ jobs:
       - name: Maven operation without Sonar
         if: matrix.sonar-enabled != true
         run: |
-          mvn -B -U -Possrh clean verify
+          mvn -B -U -Dstyle.color=always -Possrh clean verify
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
