@@ -220,6 +220,10 @@ public interface AdminChannel {
     CompletableFuture<Token> refreshToken(String applicationName);
 
     /**
+     * TODO
+     */
+    CompletableFuture<ApplicationOverview> inspectApplicationToken(String token);
+    /**
      * Request to delete application in Axon Server.
      *
      * @param applicationName is the name of the application to delete

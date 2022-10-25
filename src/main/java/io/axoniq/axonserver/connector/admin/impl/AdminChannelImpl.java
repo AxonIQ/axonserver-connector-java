@@ -284,7 +284,13 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
                                             responseObserver);
         return responseObserver;
     }
-
+    @Override
+    public CompletableFuture<ApplicationOverview> inspectApplicationToken(String token) {
+        FutureStreamObserver<ApplicationOverview> responseObserver = new FutureStreamObserver<>(null);
+        applicationServiceStub.inspectApplicationToken(Token.newBuilder().setToken(token).build(),
+                                            responseObserver);
+        return responseObserver;
+    }
     @Override
     public CompletableFuture<Void> deleteApplication(String applicationName) {
         FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
