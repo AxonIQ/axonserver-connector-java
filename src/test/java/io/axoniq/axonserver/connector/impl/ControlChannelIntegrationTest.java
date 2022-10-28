@@ -54,7 +54,6 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -66,7 +65,14 @@ import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+/**
+ * Integration test class validating the behavior of the {@link ControlChannel}.
+ */
 class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
+
+    private static final boolean RUNNING_PROCESSOR = true;
+    private static final boolean PAUSED_PROCESSOR = false;
+    private static final boolean WITHOUT_SEGMENTS = false;
 
     private AxonServerConnectionFactory client;
     private static final Logger logger = LoggerFactory.getLogger(ControlChannelIntegrationTest.class);
@@ -119,9 +125,8 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                                             .build();
         AxonServerConnection connection1 = client.connect("default");
         ProcessorInstructionHandler instructionHandler = mock(ProcessorInstructionHandler.class);
-        AtomicReference<EventProcessorInfo> processorInfo = new AtomicReference<>(buildEventProcessorInfo(true));
-        connection1.controlChannel().registerEventProcessor("testProcessor", processorInfo::get,
-                                                            instructionHandler);
+        EventProcessorInfo processorInfo = buildEventProcessorInfo(RUNNING_PROCESSOR);
+        connection1.controlChannel().registerEventProcessor("testProcessor", () -> processorInfo, instructionHandler);
 
         assertWithin(1, TimeUnit.SECONDS, () -> {
             JsonElement response = getFromAxonServer("/v1/components/" + getClass().getSimpleName() + "/processors?context=default");
@@ -195,83 +200,90 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
-    void testPauseAndStartInstructionIsPickedUpByHandler() {
+    void pauseAndStartInstructionsArePickedUpByHandler() throws InterruptedException, TimeoutException {
         client = AxonServerConnectionFactory.forClient(getClass().getSimpleName())
                                             .processorInfoUpdateFrequency(500, TimeUnit.MILLISECONDS)
                                             .routingServers(axonServerAddress)
                                             .build();
-        AxonServerConnection connection1 = client.connect("default");
-        ProcessorInstructionHandler instructionHandler = mock(ProcessorInstructionHandler.class);
-        AtomicReference<EventProcessorInfo> processorInfo = new AtomicReference<>(buildEventProcessorInfo(true));
+        AxonServerConnection connection = client.connect("default");
+        StubProcessorInstructionHandler instructionHandler = new StubProcessorInstructionHandler();
+        AtomicReference<EventProcessorInfo> processorInfo =
+                new AtomicReference<>(buildEventProcessorInfo(RUNNING_PROCESSOR));
 
-        connection1.controlChannel().registerEventProcessor("testProcessor", processorInfo::get, instructionHandler);
+        connection.controlChannel()
+                  .registerEventProcessor("testProcessor", processorInfo::get, instructionHandler)
+                  .awaitAck(1, TimeUnit.SECONDS);
 
-        assertWithin(1, TimeUnit.SECONDS, () -> {
-            String pausePath = "/v1/components/" + getClass().getSimpleName()
-                    + "/processors/testProcessor/pause?tokenStoreIdentifier=TokenStoreId&context=default";
-            sendToAxonServer(HttpPatch::new, pausePath);
-            verify(instructionHandler).pauseProcessor();
-        });
-        processorInfo.set(buildEventProcessorInfo(false));
-        // these status updates are sent once per 2 seconds
+        String pausePath = "/v1/components/" + getClass().getSimpleName()
+                + "/processors/testProcessor/pause?tokenStoreIdentifier=TokenStoreId&context=default";
+        assertWithin(1, TimeUnit.SECONDS, () -> sendToAxonServer(HttpPatch::new, pausePath));
+        assertWithin(2, TimeUnit.SECONDS, () -> assertTrue(instructionHandler.instructions.contains("pause")));
+        processorInfo.set(buildEventProcessorInfo(PAUSED_PROCESSOR));
 
-        assertWithin(3, TimeUnit.SECONDS, () -> {
-            String startPath = "/v1/components/" + getClass().getSimpleName()
-                    + "/processors/testProcessor/start?tokenStoreIdentifier=TokenStoreId&context=default";
-            sendToAxonServer(HttpPatch::new, startPath);
-            verify(instructionHandler).startProcessor();
-        });
+        String startPath = "/v1/components/" + getClass().getSimpleName()
+                + "/processors/testProcessor/start?tokenStoreIdentifier=TokenStoreId&context=default";
+        assertWithin(1, TimeUnit.SECONDS, () -> sendToAxonServer(HttpPatch::new, startPath));
+        assertWithin(2, TimeUnit.SECONDS, () -> assertTrue(instructionHandler.instructions.contains("start")));
     }
 
     @Test
-    void testSplitAndMergeInstructionIsPickedUpByHandler() throws TimeoutException, InterruptedException {
+    void splitAndMergeInstructionsArePickedUpByHandler() throws TimeoutException, InterruptedException {
         client = AxonServerConnectionFactory.forClient(getClass().getSimpleName())
                                             .processorInfoUpdateFrequency(500, TimeUnit.MILLISECONDS)
                                             .routingServers(axonServerAddress)
                                             .build();
-        AxonServerConnection connection1 = client.connect("default");
-        ProcessorInstructionHandler instructionHandler = mock(ProcessorInstructionHandler.class);
-        AtomicReference<EventProcessorInfo> processorInfo = new AtomicReference<>(buildEventProcessorInfo(true));
+        AxonServerConnection connection = client.connect("default");
+        StubProcessorInstructionHandler instructionHandler = new StubProcessorInstructionHandler();
+        EventProcessorInfo processorInfo = buildEventProcessorInfo(RUNNING_PROCESSOR);
 
-        connection1.controlChannel()
-                   .registerEventProcessor("testProcessor", processorInfo::get, instructionHandler)
+        connection.controlChannel()
+                   .registerEventProcessor("testProcessor", () -> processorInfo, instructionHandler)
                    .awaitAck(1, TimeUnit.SECONDS);
 
         String splitPath = "/v1/components/" + getClass().getSimpleName()
-                + "/processors/testProcessor/segments/merge?tokenStoreIdentifier=TokenStoreId&context=default";
-        assertWithin(2, TimeUnit.SECONDS, () -> sendToAxonServer(HttpPatch::new, splitPath));
-        assertWithin(1, TimeUnit.SECONDS, () -> verify(instructionHandler).mergeSegment(0));
+                + "/processors/testProcessor/segments/split?tokenStoreIdentifier=TokenStoreId&context=default";
+        assertWithin(1, TimeUnit.SECONDS, () -> sendToAxonServer(HttpPatch::new, splitPath));
+        // The stored instruction will split segment 1 based on the used EventProcessorInfo.
+        assertTrue(instructionHandler.instructions.contains("split1"));
 
         String mergePath = "/v1/components/" + getClass().getSimpleName()
-                + "/processors/testProcessor/segments/split?tokenStoreIdentifier=TokenStoreId&context=default";
-        assertWithin(2, TimeUnit.SECONDS, () -> sendToAxonServer(HttpPatch::new, mergePath));
-        assertWithin(1, TimeUnit.SECONDS, () -> verify(instructionHandler).splitSegment(0));
+                + "/processors/testProcessor/segments/merge?tokenStoreIdentifier=TokenStoreId&context=default";
+        assertWithin(1, TimeUnit.SECONDS, () -> sendToAxonServer(HttpPatch::new, mergePath));
+        // The stored instruction will merge segment 1 based on the used EventProcessorInfo.
+        assertTrue(instructionHandler.instructions.contains("merge1"));
     }
 
     @Test
-    void testMoveSegmentInstructionIsPickedUpByHandler() throws Exception {
-        client = AxonServerConnectionFactory.forClient(getClass().getSimpleName()).routingServers(axonServerAddress)
+    void moveSegmentInstructionIsPickedUpByHandler() throws Exception {
+        client = AxonServerConnectionFactory.forClient(getClass().getSimpleName())
+                                            .processorInfoUpdateFrequency(500, TimeUnit.MILLISECONDS)
+                                            .routingServers(axonServerAddress)
                                             .build();
-        AxonServerConnection connection1 = client.connect("default");
+        AxonServerConnection connection = client.connect("default");
+        AxonServerConnectionFactory clientToMoveTo = AxonServerConnectionFactory.forClient("foo", "foo")
+                                                                                .routingServers(axonServerAddress)
+                                                                                .build();
+        AxonServerConnection connectionToMoveTo = clientToMoveTo.connect("default");
+
         StubProcessorInstructionHandler instructionHandler = new StubProcessorInstructionHandler();
-        AtomicReference<EventProcessorInfo> processorInfo = new AtomicReference<>(buildEventProcessorInfo(true));
 
-        CountDownLatch cdl = new CountDownLatch(1);
+        connection.controlChannel()
+                  .registerEventProcessor("testProcessor",
+                                          () -> buildEventProcessorInfo(RUNNING_PROCESSOR),
+                                          instructionHandler)
+                  .awaitAck(1, TimeUnit.SECONDS);
+        connectionToMoveTo.controlChannel()
+                          .registerEventProcessor("testProcessor",
+                                                  () -> buildEventProcessorInfo(RUNNING_PROCESSOR, WITHOUT_SEGMENTS),
+                                                  instructionHandler)
+                          .awaitAck(1, TimeUnit.SECONDS);
 
-        connection1.controlChannel().registerEventProcessor("testProcessor", () -> {
-            cdl.countDown();
-            return processorInfo.get();
-        }, instructionHandler).awaitAck(1, TimeUnit.SECONDS);
-
-
-        // we wait for AxonServer to request data, which is an acknowledgement that the processor was registered.
-        assertTrue(cdl.await(3, TimeUnit.SECONDS));
-
-        String segmentsPath = "/v1/components/" + getClass().getSimpleName()
-                + "/processors/testProcessor/segments/0/move?tokenStoreIdentifier=TokenStoreId&context=default&target=foo";
-        sendToAxonServer(HttpPatch::new, segmentsPath);
-
-        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(instructionHandler.instructions.contains("release0")));
+        String segmentToMove = "0";
+        String segmentsPath = "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/segments/" +
+                segmentToMove + "/move?tokenStoreIdentifier=TokenStoreId&context=default&target=foo";
+        assertWithin(1, TimeUnit.SECONDS, () -> sendToAxonServer(HttpPatch::new, segmentsPath));
+        assertWithin(1, TimeUnit.SECONDS,
+                     () -> assertTrue(instructionHandler.instructions.contains("release" + segmentToMove)));
     }
 
     /*
@@ -374,31 +386,39 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     }
 
     private EventProcessorInfo buildEventProcessorInfo(boolean running) {
-        return EventProcessorInfo.newBuilder()
-                                 .setActiveThreads(1)
-                                 .setAvailableThreads(4)
-                                 .setRunning(running)
-                                 .setMode("Tracking")
-                                 .setProcessorName("testProcessor")
-                                 .setTokenStoreIdentifier("TokenStoreId")
-                                 .addSegmentStatus(
-                                         EventProcessorInfo.SegmentStatus.newBuilder()
-                                                                         .setCaughtUp(false)
-                                                                         .setOnePartOf(2)
-                                                                         .setSegmentId(0)
-                                                                         .setTokenPosition(ThreadLocalRandom.current().nextInt(1, 10000))
-                                                                         .setReplaying(true)
-                                                                         .build())
-                                 .addSegmentStatus(
-                                         EventProcessorInfo.SegmentStatus.newBuilder()
-                                                                         .setCaughtUp(false)
-                                                                         .setOnePartOf(2)
-                                                                         .setSegmentId(1)
-                                                                         .setTokenPosition(ThreadLocalRandom.current().nextInt(1, 10000))
-                                                                         .setReplaying(true)
-                                                                         .build())
-                                 .build();
+        return buildEventProcessorInfo(running, true);
+    }
 
+    private EventProcessorInfo buildEventProcessorInfo(boolean running, boolean withSegments) {
+        EventProcessorInfo.Builder processorInfoBuilder = EventProcessorInfo.newBuilder()
+                                                                            .setActiveThreads(1)
+                                                                            .setAvailableThreads(4)
+                                                                            .setRunning(running)
+                                                                            .setMode("Tracking")
+                                                                            .setProcessorName("testProcessor")
+                                                                            .setTokenStoreIdentifier("TokenStoreId")
+                                                                            .setIsStreamingProcessor(RUNNING_PROCESSOR);
+        if (withSegments) {
+            EventProcessorInfo.SegmentStatus segmentZero =
+                    EventProcessorInfo.SegmentStatus.newBuilder()
+                                                    .setCaughtUp(WITHOUT_SEGMENTS)
+                                                    .setOnePartOf(2)
+                                                    .setSegmentId(0)
+                                                    .setTokenPosition(ThreadLocalRandom.current().nextInt(1, 10000))
+                                                    .setReplaying(RUNNING_PROCESSOR)
+                                                    .build();
+            EventProcessorInfo.SegmentStatus segmentOne =
+                    EventProcessorInfo.SegmentStatus.newBuilder()
+                                                    .setCaughtUp(WITHOUT_SEGMENTS)
+                                                    .setOnePartOf(2)
+                                                    .setSegmentId(1)
+                                                    .setTokenPosition(ThreadLocalRandom.current().nextInt(1, 10000))
+                                                    .setReplaying(RUNNING_PROCESSOR)
+                                                    .build();
+            processorInfoBuilder.addSegmentStatus(segmentZero)
+                                .addSegmentStatus(segmentOne);
+        }
+        return processorInfoBuilder.build();
     }
 
     private static class StubProcessorInstructionHandler implements ProcessorInstructionHandler {
