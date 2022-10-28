@@ -179,12 +179,12 @@ public abstract class AbstractIncomingInstructionStream<IN, OUT> extends FlowCon
     }
 
     /**
-     * Unregisters this stream's outbound stream, granted that it matches the given {@code expected} {@link
+     * Deregisters this stream's outbound stream, granted that it matches the given {@code expected} {@link
      * StreamObserver}. Will return {@code true} if they matched and {@code false} otherwise.
      *
-     * @param expected the expected {@link StreamObserver} to be unregistered
+     * @param expected the expected {@link StreamObserver} to be deregistered
      *
-     * @return {@code true} if the outbound stream was successfully unregistered, {@code false} otherwise
+     * @return {@code true} if the outbound stream was successfully deregistered, {@code false} otherwise
      */
     protected abstract boolean unregisterOutboundStream(CallStreamObserver<OUT> expected);
 }

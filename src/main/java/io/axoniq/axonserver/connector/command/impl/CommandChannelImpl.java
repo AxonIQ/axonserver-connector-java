@@ -210,7 +210,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
                                                                 .map(commandName -> sendUnsubscribe(commandName, previousOutbound))
                                                                 .reduce(CompletableFuture::allOf)
                                                                 .map(cf -> cf.exceptionally(e -> {
-                                                                    logger.warn("An error occurred while unregistering command handlers", e);
+                                                                    logger.warn("An error occurred while deregistering command handlers", e);
                                                                     return null;
                                                                 }))
                                                                 .orElseGet(() -> CompletableFuture.completedFuture(null));
@@ -273,7 +273,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
         CompletableFuture<Void> future = CompletableFuture.completedFuture(null);
         for (String commandName : commandNames) {
             if (commandHandlers.get(commandName) == handler) {
-                logger.info("Unregistered handler for command '{}' in context '{}'", commandName, context);
+                logger.info("Deregistered handler for command '{}' in context '{}'", commandName, context);
                 CompletableFuture<Void> result = sendUnsubscribe(commandName, outboundCommandStream.get())
                         .thenRun(() -> commandHandlers.remove(commandName, handler));
                 future = CompletableFuture.allOf(future, result);
