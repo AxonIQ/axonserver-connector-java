@@ -226,7 +226,7 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                 + "/processors/testProcessor/start?tokenStoreIdentifier=TokenStoreId&context=default";
         assertWithin(5, TimeUnit.SECONDS, () -> {
             sendToAxonServer(HttpPatch::new, startPath);
-            assertTrue(instructionHandler.instructions.contains("start"))
+            assertTrue(instructionHandler.instructions.contains("start"));
         });
     }
 
