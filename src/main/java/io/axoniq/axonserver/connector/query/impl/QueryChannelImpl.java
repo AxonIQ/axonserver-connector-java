@@ -223,13 +223,14 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
     @Override
     public void connect() {
         if (!queryHandlers.isEmpty()) {
+            logger.debug("QueryChannel for context '{}' will attempt to connect.", context);
             doConnectQueryStream();
         }
     }
 
     private synchronized void doConnectQueryStream() {
         if (outboundQueryStream.get() != null) {
-            logger.debug("QueryChannel for context '{}' is already connected", context);
+            logger.debug("QueryChannel for context '{}' is already connected.", context);
             return;
         }
 
@@ -241,8 +242,15 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                 this::registerOutboundStream
         );
 
-        //noinspection ResultOfMethodCallIgnored
-        queryServiceStub.openStream(responseObserver);
+        try {
+            //noinspection ResultOfMethodCallIgnored
+            queryServiceStub.openStream(responseObserver);
+        } catch (Exception e) {
+            logger.warn("Failed trying to open stream for QueryChannel in context [{}]. "
+                                + "Cleaning up for following attempt...", context, e);
+            outboundQueryStream.set(null);
+            throw e;
+        }
         CallStreamObserver<QueryProviderOutbound> newValue = responseObserver.getInstructionsForPlatform();
 
         supportedQueries.keySet().stream()
@@ -353,6 +361,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
 
     @Override
     public ResultStream<QueryResponse> query(QueryRequest query) {
+        logger.trace("Sending query over QueryChannel for context '{}'.", context);
         if (query.getMessageIdentifier().isEmpty()) {
             query = query.toBuilder().setMessageIdentifier(UUID.randomUUID().toString()).build();
         }
@@ -388,6 +397,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                                                      SerializedObject updateResponseType,
                                                      int bufferSize,
                                                      int fetchSize) {
+        logger.trace("Sending subscription query over QueryChannel for context '{}'.", context);
         QueryRequest finalQuery;
         if (query.getMessageIdentifier().isEmpty()) {
             finalQuery = query.toBuilder().setMessageIdentifier(UUID.randomUUID().toString()).build();
@@ -435,6 +445,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
 
     @Override
     public synchronized void disconnect() {
+        logger.debug("Disconnecting QueryChannel for context '{}'.", context);
         CallStreamObserver<QueryProviderOutbound> previousOutbound = outboundQueryStream.getAndSet(null);
 
         CompletableFuture<Void> unsubscribed = previousOutbound == null
@@ -465,12 +476,14 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
 
     @Override
     public void reconnect() {
+        logger.debug("Reconnecting QueryChannel for context '{}'.", context);
         disconnect();
         scheduleImmediateReconnect();
     }
 
     @Override
     public CompletableFuture<Void> prepareDisconnect() {
+        logger.debug("Preparing disconnect on QueryChannel for context '{}'.", context);
         CallStreamObserver<QueryProviderOutbound> outboundStream = outboundQueryStream.get();
         CompletableFuture<Void> future = supportedQueries.keySet()
                                                          .stream()
