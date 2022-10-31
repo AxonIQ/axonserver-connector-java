@@ -327,7 +327,7 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         assertWithin(1, TimeUnit.SECONDS, () -> {
             assertNull(subscriptionQuery.updates().nextIfAvailable());
             assertTrue(subscriptionQuery.updates().isClosed(), "Client side update stream should have been closed");
-            assertNull(updateHandlerRef.get(), "Expected updateHandler to have been unregistered");
+            assertNull(updateHandlerRef.get(), "Expected updateHandler to have been deregistered");
         });
     }
 
@@ -373,8 +373,8 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         assertNull(updates.nextIfAvailable());
 
         assertWithin(1, TimeUnit.SECONDS, () -> {
-            assertTrue(updates.isClosed(), "Expected client side to be unregistered");
-            assertNull(updateHandlerRef.get(), "Expected UpdateHandler to be unregistered");
+            assertTrue(updates.isClosed(), "Expected client side to be deregistered");
+            assertNull(updateHandlerRef.get(), "Expected UpdateHandler to be deregistered");
         });
     }
 

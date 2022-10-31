@@ -321,7 +321,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                     if (refs != null && refs.remove(handler) && refs.isEmpty()) {
                         queryHandlers.remove(def.getQueryName());
                         result = CompletableFuture.allOf(result, sendUnsubscribe(def, outboundQueryStream.get()));
-                        logger.debug("Unregistered handlers for query '{}' in context '{}'", def, context);
+                        logger.debug("Deregistered handlers for query '{}' in context '{}'", def, context);
                     }
                     supportedQueries.computeIfPresent(def, (qd, counter) -> counter.decrementAndGet() == 0 ? null : counter);
                 }
@@ -444,7 +444,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                                                                  .map(queryDefinition -> sendUnsubscribe(queryDefinition, previousOutbound))
                                                                  .reduce(CompletableFuture::allOf)
                                                                  .map(cf -> cf.exceptionally(e -> {
-                                                                     logger.warn("An error occurred while unregistering query handlers", e);
+                                                                     logger.warn("An error occurred while deregistering query handlers", e);
                                                                      return null;
                                                                  }))
                                                                  .orElseGet(() -> CompletableFuture.completedFuture(null));

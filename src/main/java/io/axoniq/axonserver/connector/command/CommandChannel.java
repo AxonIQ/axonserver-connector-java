@@ -36,7 +36,7 @@ public interface CommandChannel {
      * @param handler      the handler to handle incoming commands with
      * @param loadFactor   the relative load factor for this handler
      * @param commandNames the names of the commands to register the handler for
-     * @return a registration which allows the command handler to be unregistered
+     * @return a registration which allows the command handler to be deregistered
      */
     Registration registerCommandHandler(Function<Command, CompletableFuture<CommandResponse>> handler,
                                         int loadFactor,
