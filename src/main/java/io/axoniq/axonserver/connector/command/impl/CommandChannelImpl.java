@@ -171,10 +171,10 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
             //noinspection ResultOfMethodCallIgnored
             commandServiceStub.openStream(responseObserver);
         } catch (Exception e) {
-            logger.warn("Failed trying to open stream for CommandChannel in context [{}]. "
-                                + "Cleaning up for following attempt...", context, e);
-            outboundCommandStream.set(null);
-            throw e;
+            // apparently, some exceptions are thrown instead of reported through the response observer.
+            // to be consistent, we report any thrown exceptions to the responseObserver ourselves to handle errors
+            responseObserver.onError(e);
+            return;
         }
 
         StreamObserver<CommandProviderOutbound> newValue = responseObserver.getInstructionsForPlatform();
@@ -198,7 +198,9 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
 
     private void registerOutboundStream(CallStreamObserver<CommandProviderOutbound> upstream) {
         StreamObserver<CommandProviderOutbound> previous = outboundCommandStream.getAndSet(upstream);
-        ObjectUtils.silently(previous, StreamObserver::onCompleted);
+        if (previous != upstream) {
+            ObjectUtils.silently(previous, StreamObserver::onCompleted);
+        }
     }
 
     @Override

@@ -246,10 +246,10 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
             //noinspection ResultOfMethodCallIgnored
             queryServiceStub.openStream(responseObserver);
         } catch (Exception e) {
-            logger.warn("Failed trying to open stream for QueryChannel in context [{}]. "
-                                + "Cleaning up for following attempt...", context, e);
-            outboundQueryStream.set(null);
-            throw e;
+            // apparently, some exceptions are thrown instead of reported through the response observer.
+            // to be consistent, we report any thrown exceptions to the responseObserver ourselves to handle errors
+            responseObserver.onError(e);
+            return;
         }
         CallStreamObserver<QueryProviderOutbound> newValue = responseObserver.getInstructionsForPlatform();
 
@@ -279,7 +279,9 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
 
     private void registerOutboundStream(CallStreamObserver<QueryProviderOutbound> upstream) {
         StreamObserver<QueryProviderOutbound> previous = outboundQueryStream.getAndSet(upstream);
-        ObjectUtils.silently(previous, StreamObserver::onCompleted);
+        if (previous != upstream) {
+            ObjectUtils.silently(previous, StreamObserver::onCompleted);
+        }
     }
 
     private QueryProviderOutbound buildSubscribeMessage(String queryName, String resultName, String instructionId) {
