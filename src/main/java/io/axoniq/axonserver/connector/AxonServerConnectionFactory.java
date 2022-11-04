@@ -402,13 +402,13 @@ public class AxonServerConnectionFactory {
         }
 
         /**
-         * Indicates whether the connector should always reconnect via the Routing Servers. When {@code true}, the
-         * connector will contact the Routing Servers for a new destination each time a connection is dropped. When
-         * {@code false} (default), the connector will first attempt to re-establish a connection to the node is was
+         * Indicates whether the connector should always reconnect via the Routing Servers. When {@code true} (default),
+         * the connector will contact the Routing Servers for a new destination each time a connection is dropped. When
+         * {@code false}, the connector will first attempt to re-establish a connection to the node is was
          * previously connected to. When that fails, only then will it contact the Routing Servers.
          * <p>
-         * Default to {@code false}, causing the connector to first reattempt connecting to the previously connected
-         * AxonServer instance.
+         * Default to {@code true}, forcing the failed connection to be abandoned and a new one to be requested via the
+         * routing servers.
          *
          * @param forceReconnectViaRoutingServers whether to force a reconnect to the Cluster via the RoutingServers.
          *

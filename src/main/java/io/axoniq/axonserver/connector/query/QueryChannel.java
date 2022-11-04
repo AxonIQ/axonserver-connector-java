@@ -35,7 +35,7 @@ public interface QueryChannel {
      *
      * @param handler    the handler to handle incoming queries with
      * @param queryTypes the {@link QueryDefinition}s to register the handler for
-     * @return a registration which allows the query handler to be unregistered
+     * @return a registration which allows the query handler to be deregistered
      */
     Registration registerQueryHandler(QueryHandler handler, QueryDefinition... queryTypes);
 

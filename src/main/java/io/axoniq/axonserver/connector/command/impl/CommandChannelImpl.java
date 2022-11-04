@@ -148,13 +148,14 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
     @Override
     public void connect() {
         if (!commandHandlers.isEmpty()) {
+            logger.debug("CommandChannel for context '{}' will attempt to connect.", context);
             doCreateCommandStream();
         }
     }
 
     private synchronized void doCreateCommandStream() {
         if (outboundCommandStream.get() != null) {
-            logger.debug("CommandChannel for context '{}' is already connected", context);
+            logger.debug("CommandChannel for context '{}' is already connected.", context);
             return;
         }
 
@@ -166,8 +167,15 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
                 this::registerOutboundStream
         );
 
-        //noinspection ResultOfMethodCallIgnored
-        commandServiceStub.openStream(responseObserver);
+        try {
+            //noinspection ResultOfMethodCallIgnored
+            commandServiceStub.openStream(responseObserver);
+        } catch (Exception e) {
+            // apparently, some exceptions are thrown instead of reported through the response observer.
+            // to be consistent, we report any thrown exceptions to the responseObserver ourselves to handle errors
+            responseObserver.onError(e);
+            return;
+        }
 
         StreamObserver<CommandProviderOutbound> newValue = responseObserver.getInstructionsForPlatform();
 
@@ -190,17 +198,21 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
 
     private void registerOutboundStream(CallStreamObserver<CommandProviderOutbound> upstream) {
         StreamObserver<CommandProviderOutbound> previous = outboundCommandStream.getAndSet(upstream);
-        ObjectUtils.silently(previous, StreamObserver::onCompleted);
+        if (previous != upstream) {
+            ObjectUtils.silently(previous, StreamObserver::onCompleted);
+        }
     }
 
     @Override
     public void reconnect() {
+        logger.debug("Reconnecting CommandChannel for context '{}'.", context);
         disconnect();
         scheduleImmediateReconnect();
     }
 
     @Override
     public void disconnect() {
+        logger.debug("Disconnecting CommandChannel for context '{}'.", context);
         StreamObserver<CommandProviderOutbound> previousOutbound = outboundCommandStream.getAndSet(null);
 
         CompletableFuture<Void> unsubscribed = previousOutbound == null
@@ -210,7 +222,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
                                                                 .map(commandName -> sendUnsubscribe(commandName, previousOutbound))
                                                                 .reduce(CompletableFuture::allOf)
                                                                 .map(cf -> cf.exceptionally(e -> {
-                                                                    logger.warn("An error occurred while unregistering command handlers", e);
+                                                                    logger.warn("An error occurred while deregistering command handlers", e);
                                                                     return null;
                                                                 }))
                                                                 .orElseGet(() -> CompletableFuture.completedFuture(null));
@@ -273,7 +285,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
         CompletableFuture<Void> future = CompletableFuture.completedFuture(null);
         for (String commandName : commandNames) {
             if (commandHandlers.get(commandName) == handler) {
-                logger.info("Unregistered handler for command '{}' in context '{}'", commandName, context);
+                logger.info("Deregistered handler for command '{}' in context '{}'", commandName, context);
                 CompletableFuture<Void> result = sendUnsubscribe(commandName, outboundCommandStream.get())
                         .thenRun(() -> commandHandlers.remove(commandName, handler));
                 future = CompletableFuture.allOf(future, result);
@@ -301,6 +313,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
 
     @Override
     public CompletableFuture<CommandResponse> sendCommand(Command command) {
+        logger.trace("Sending command over CommandChannel for context '{}'.", context);
         boolean hasRoutingKey = command.getProcessingInstructionsList()
                                        .stream()
                                        .anyMatch(pi -> pi.getKey() == ProcessingKey.ROUTING_KEY);
@@ -349,6 +362,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
 
     @Override
     public CompletableFuture<Void> prepareDisconnect() {
+        logger.debug("Preparing disconnect on CommandChannel for context '{}'.", context);
         return this.commandHandlers.keySet()
                                    .stream()
                                    .map(commandName -> sendUnsubscribe(commandName, outboundCommandStream.get()))

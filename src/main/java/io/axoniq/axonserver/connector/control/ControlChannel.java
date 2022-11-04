@@ -43,7 +43,7 @@ public interface ControlChannel {
      *
      * @param type    the type of instructions to handle
      * @param handler the handler to invoke for incoming instructions
-     * @return a handle to unregister this instruction handler
+     * @return a handle to deregister this instruction handler
      */
     Registration registerInstructionHandler(PlatformOutboundInstruction.RequestCase type,
                                             InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> handler);
