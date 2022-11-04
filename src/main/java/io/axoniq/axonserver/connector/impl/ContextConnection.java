@@ -160,52 +160,63 @@ public class ContextConnection implements AxonServerConnection {
 
     @Override
     public CommandChannel commandChannel() {
-        CommandChannelImpl channel = this.commandChannel.updateAndGet(createIfNull(
-                () -> new CommandChannelImpl(clientIdentification,
-                                             context,
-                                             commandPermits,
-                                             commandPermits / 4,
-                                             executorService,
-                                             connection)
-        ));
-        return ensureConnected(channel);
+        return createIfAbsentAndInitialize(commandChannel,
+                                           () -> new CommandChannelImpl(clientIdentification,
+                                                                        context,
+                                                                        commandPermits,
+                                                                        commandPermits / 4,
+                                                                        executorService,
+                                                                        connection),
+                                           this::ensureConnected);
     }
 
     @Override
     public EventChannel eventChannel() {
-        EventChannelImpl channel = this.eventChannel.updateAndGet(
-                createIfNull(() -> new EventChannelImpl(clientIdentification, executorService, connection))
+        return createIfAbsentAndInitialize(eventChannel,
+                                           () -> new EventChannelImpl(clientIdentification,
+                                                                      executorService,
+                                                                      connection),
+                                           this::ensureConnected
         );
-        return ensureConnected(channel);
     }
 
     @Override
     public QueryChannel queryChannel() {
-        QueryChannelImpl channel = this.queryChannel.updateAndGet(
-                createIfNull(() -> new QueryChannelImpl(clientIdentification,
-                                                        context,
-                                                        queryPermits,
-                                                        queryPermits / 4,
-                                                        executorService,
-                                                        connection))
+        return createIfAbsentAndInitialize(queryChannel,
+                                           () -> new QueryChannelImpl(clientIdentification,
+                                                                      context,
+                                                                      queryPermits,
+                                                                      queryPermits / 4,
+                                                                      executorService,
+                                                                      connection),
+                                           this::ensureConnected
         );
-        return ensureConnected(channel);
     }
 
     @Override
     public AdminChannel adminChannel() {
-        AdminChannelImpl channel = this.adminChannel.updateAndGet(
-                createIfNull(() -> new AdminChannelImpl(clientIdentification, executorService,
-                                           connection)
-        ));
-        return ensureConnected(channel);
+        return createIfAbsentAndInitialize(adminChannel,
+                                           () -> new AdminChannelImpl(clientIdentification,
+                                                                      executorService,
+                                                                      connection),
+                                           this::ensureConnected
+        );
     }
 
-    private <T> UnaryOperator<T> createIfNull(Supplier<T> factory) {
-        return existing -> existing == null ? factory.get() : existing;
+    private <T extends AbstractAxonServerChannel<?>> T createIfAbsentAndInitialize(AtomicReference<T> reference,
+                                                                                   Supplier<T> ifAbsent,
+                                                                                   UnaryOperator<T> initializer) {
+        T current = reference.get();
+        if (current != null) {
+            return current;
+        }
+        // this approach isn't 100% single-init-proof, but it does prevent excessive initialization attempts,
+        // which for the purpose of initializing connections is good enough.
+        T newInstance = reference.updateAndGet(existing -> existing == null ? ifAbsent.get() : existing);
+        return initializer.apply(newInstance);
     }
 
-    private <T extends AbstractAxonServerChannel> T ensureConnected(T channel) {
+    private <T extends AbstractAxonServerChannel<?>> T ensureConnected(T channel) {
         if (!channel.isReady()) {
             ConnectivityState state = connection.getState(true);
             if (state != ConnectivityState.SHUTDOWN && state != ConnectivityState.TRANSIENT_FAILURE) {

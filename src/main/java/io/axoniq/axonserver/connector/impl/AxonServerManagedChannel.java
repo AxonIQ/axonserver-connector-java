@@ -202,11 +202,11 @@ public class AxonServerManagedChannel extends ManagedChannel {
     public <REQ, RESP> ClientCall<REQ, RESP> newCall(MethodDescriptor<REQ, RESP> methodDescriptor,
                                                      CallOptions callOptions) {
         ManagedChannel current = activeChannel.get();
-        if (current == null || current.getState(false) != ConnectivityState.READY) {
+        if (current == null || current.isShutdown() || current.getState(false) != ConnectivityState.READY) {
             ensureConnected();
             current = activeChannel.get();
         }
-        if (current == null) {
+        if (current == null || current.isShutdown()) {
             return new FailingCall<>();
         }
         return current.newCall(methodDescriptor, callOptions);
@@ -227,7 +227,7 @@ public class AxonServerManagedChannel extends ManagedChannel {
             ensureConnected();
         }
         ManagedChannel current = activeChannel.get();
-        if (current == null) {
+        if (current == null || current.isShutdown()) {
             if (lastConnectException.get() == null) {
                 return ConnectivityState.IDLE;
             } else {
