@@ -273,7 +273,7 @@ public class AxonServerManagedChannel extends ManagedChannel {
         doIfNotNull(activeChannel.get(), ManagedChannel::enterIdle);
     }
 
-    private synchronized void ensureConnected() {
+    private void ensureConnected() {
         if (shutdown.get()) {
             return;
         }
