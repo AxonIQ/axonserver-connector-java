@@ -114,9 +114,10 @@ public abstract class AbstractAxonServerIntegrationTest {
         return proxy;
     }
 
-    protected JsonElement sendToAxonServer(Function<String, ClassicHttpRequest> method, String path)
-            throws IOException {
-        String uri = "https://" + axonServerContainer.getHost() + ":" + axonServerContainer.getMappedPort(8024) + path;
+    protected JsonElement sendToAxonServer(Function<String, ClassicHttpRequest> method,
+                                           String path) throws IOException {
+        //noinspection HttpUrlsUsage
+        String uri = "http://" + axonServerContainer.getHost() + ":" + axonServerContainer.getMappedPort(8024) + path;
         ClassicHttpRequest request = method.apply(uri);
 
         try (CloseableHttpClient httpclient = HttpClients.createDefault()) {
@@ -151,7 +152,8 @@ public abstract class AbstractAxonServerIntegrationTest {
     }
 
     private HttpURLConnection getConnection(String path) throws IOException {
-        final URL url = new URL(String.format("https://%s:%d%s",
+        //noinspection HttpUrlsUsage
+        final URL url = new URL(String.format("http://%s:%d%s",
                                               axonServerContainer.getHost(),
                                               axonServerContainer.getMappedPort(8024),
                                               path));
