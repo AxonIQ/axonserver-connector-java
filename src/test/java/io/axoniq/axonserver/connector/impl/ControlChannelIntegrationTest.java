@@ -128,7 +128,7 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         EventProcessorInfo processorInfo = buildEventProcessorInfo(RUNNING_PROCESSOR);
         connection1.controlChannel().registerEventProcessor("testProcessor", () -> processorInfo, instructionHandler);
 
-        assertWithin(1, TimeUnit.SECONDS, () -> {
+        assertWithin(5, TimeUnit.SECONDS, () -> {
             JsonElement response = getFromAxonServer("/v1/components/" + getClass().getSimpleName() + "/processors?context=default");
             Assertions.assertEquals("testProcessor", response.getAsJsonArray().get(0).getAsJsonObject().get("name").getAsString());
         });
