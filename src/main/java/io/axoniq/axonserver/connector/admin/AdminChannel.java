@@ -19,6 +19,8 @@ package io.axoniq.axonserver.connector.admin;
 import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.grpc.admin.ApplicationOverview;
 import io.axoniq.axonserver.grpc.admin.ApplicationRequest;
+import io.axoniq.axonserver.grpc.admin.ConnectedApplicationOverview;
+import io.axoniq.axonserver.grpc.admin.ContextId;
 import io.axoniq.axonserver.grpc.admin.ContextOverview;
 import io.axoniq.axonserver.grpc.admin.ContextUpdate;
 import io.axoniq.axonserver.grpc.admin.CreateContextRequest;
@@ -226,6 +228,13 @@ public interface AdminChannel {
      * @return a {@link CompletableFuture} that completes when application has been deleted
      */
     CompletableFuture<Void> deleteApplication(String applicationName);
+
+    /**
+     * Request to list all connected applications in Axon Server.
+     *
+     * @return a {@link CompletableFuture} that contains {@link ConnectedApplicationOverview} in Axon Server.
+     */
+    CompletableFuture<ConnectedApplicationOverview> getAllConnectedApplications(String contextName);
 
     /**
      * Request to create an Axon Server context. Returns a {@link CompletableFuture} that completes when the request has

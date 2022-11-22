@@ -31,7 +31,9 @@ import io.axoniq.axonserver.grpc.admin.ApplicationAdminServiceGrpc;
 import io.axoniq.axonserver.grpc.admin.ApplicationId;
 import io.axoniq.axonserver.grpc.admin.ApplicationOverview;
 import io.axoniq.axonserver.grpc.admin.ApplicationRequest;
+import io.axoniq.axonserver.grpc.admin.ConnectedApplicationOverview;
 import io.axoniq.axonserver.grpc.admin.ContextAdminServiceGrpc;
+import io.axoniq.axonserver.grpc.admin.ContextId;
 import io.axoniq.axonserver.grpc.admin.ContextOverview;
 import io.axoniq.axonserver.grpc.admin.ContextUpdate;
 import io.axoniq.axonserver.grpc.admin.CreateContextRequest;
@@ -48,9 +50,9 @@ import io.axoniq.axonserver.grpc.admin.GetContextRequest;
 import io.axoniq.axonserver.grpc.admin.GetReplicationGroupRequest;
 import io.axoniq.axonserver.grpc.admin.JoinReplicationGroup;
 import io.axoniq.axonserver.grpc.admin.LeaveReplicationGroup;
-import io.axoniq.axonserver.grpc.admin.MoveSegment;
 import io.axoniq.axonserver.grpc.admin.LoadBalanceRequest;
 import io.axoniq.axonserver.grpc.admin.LoadBalancingStrategy;
+import io.axoniq.axonserver.grpc.admin.MoveSegment;
 import io.axoniq.axonserver.grpc.admin.NodeOverview;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupAdminServiceGrpc;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupOverview;
@@ -61,10 +63,10 @@ import io.axoniq.axonserver.grpc.admin.UserAdminServiceGrpc;
 import io.axoniq.axonserver.grpc.admin.UserOverview;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
 
-import javax.annotation.Nonnull;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
+import javax.annotation.Nonnull;
 
 /**
  * {@link AdminChannel} GRPC implementation to allow a client application sending and receiving administration related
@@ -294,6 +296,14 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
         });
     }
 
+    public CompletableFuture<ConnectedApplicationOverview> getAllConnectedApplications(String contextName) {
+        FutureStreamObserver<ConnectedApplicationOverview> responseObserver = new FutureStreamObserver<>(null);
+        applicationServiceStub.getConnectedApplicationsByContext(ContextId.newBuilder().setContextName(contextName)
+                                                                          .build(),
+                                                                 responseObserver);
+        return responseObserver;
+    }
+
     @Override
     public CompletableFuture<Void> createContext(CreateContextRequest request) {
         FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
@@ -331,7 +341,6 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
         contextServiceStub.getContexts(Empty.newBuilder().build(), responseObserver);
         return responseObserver;
     }
-
 
     @Override
     public ResultStream<ContextUpdate> subscribeToContextUpdates() {
