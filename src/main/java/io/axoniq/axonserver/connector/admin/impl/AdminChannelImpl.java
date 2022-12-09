@@ -142,24 +142,43 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
 
     @Override
     public CompletableFuture<Result> pauseEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
-        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
+        return pauseEventProcessor(eventProcessorName, tokenStoreIdentifier, "");
+    }
+
+    @Override
+    public CompletableFuture<Result> pauseEventProcessor(String eventProcessorName, String tokenStoreIdentifier,
+                                                         String contextName) {
+        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier,
+                                                                             contextName);
         FutureStreamObserver<AdminActionResult> responseObserver = new FutureStreamObserver<>(null);
         eventProcessorServiceStub.pauseEventProcessor(eventProcessorIdentifier, responseObserver);
         return responseObserver.thenApply(AdminActionResult::getResult);
     }
 
-    @Override
     public CompletableFuture<Result> startEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
-        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
+        return startEventProcessor(eventProcessorName, tokenStoreIdentifier, "");
+    }
+
+    @Override
+    public CompletableFuture<Result> startEventProcessor(String eventProcessorName, String tokenStoreIdentifier,
+                                                         String contextName) {
+        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier,
+                                                                             contextName);
         FutureStreamObserver<AdminActionResult> responseObserver = new FutureStreamObserver<>(null);
         eventProcessorServiceStub.startEventProcessor(eventProcessorIdentifier, responseObserver);
         return responseObserver.thenApply(AdminActionResult::getResult);
     }
 
-
     @Override
     public CompletableFuture<Result> splitEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
-        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
+        return splitEventProcessor(eventProcessorName, tokenStoreIdentifier, "");
+    }
+
+    @Override
+    public CompletableFuture<Result> splitEventProcessor(String eventProcessorName, String tokenStoreIdentifier,
+                                                         String context) {
+        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier,
+                                                                             context);
         FutureStreamObserver<AdminActionResult> responseObserver = new FutureStreamObserver<>(null);
         eventProcessorServiceStub.splitEventProcessor(eventProcessorIdentifier, responseObserver);
         return responseObserver.thenApply(AdminActionResult::getResult);
@@ -167,7 +186,14 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
 
     @Override
     public CompletableFuture<Result> mergeEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
-        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
+        return mergeEventProcessor(eventProcessorName, tokenStoreIdentifier, "");
+    }
+
+    @Override
+    public CompletableFuture<Result> mergeEventProcessor(String eventProcessorName, String tokenStoreIdentifier,
+                                                         String context) {
+        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier,
+                                                                             context);
         FutureStreamObserver<AdminActionResult> responseObserver = new FutureStreamObserver<>(null);
         eventProcessorServiceStub.mergeEventProcessor(eventProcessorIdentifier, responseObserver);
         return responseObserver.thenApply(AdminActionResult::getResult);
@@ -225,6 +251,16 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
         return EventProcessorIdentifier.newBuilder()
                                        .setProcessorName(eventProcessorName)
                                        .setTokenStoreIdentifier(tokenStoreIdentifier)
+                                       .build();
+    }
+
+    @Nonnull
+    private EventProcessorIdentifier eventProcessorId(String eventProcessorName, String tokenStoreIdentifier,
+                                                      String context) {
+        return EventProcessorIdentifier.newBuilder()
+                                       .setProcessorName(eventProcessorName)
+                                       .setTokenStoreIdentifier(tokenStoreIdentifier)
+                                       .setContextName(context)
                                        .build();
     }
 
