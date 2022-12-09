@@ -67,6 +67,7 @@ class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
 
     private final String processorName = "eventProcessor";
     private final String tokenStoreIdentifier = "myTokenStore";
+    private final String contextName = "myContext";
     private final String mode = "tracking";
     private final String adminClientId = "admin-client-1";
     private AxonServerConnectionFactory client;
@@ -203,7 +204,6 @@ class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
         return true;
     }
 
-
     @Test
     void testPauseEventProcessor() throws Exception {
         AdminChannel adminChannel = connection.adminChannel();
@@ -222,12 +222,40 @@ class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
         expectException(accepted, Status.Code.CANCELLED);
     }
 
-
     @Test
     void testPauseEventProcessorTimeout() throws Exception {
         AdminChannel adminChannel = connection.adminChannel();
         registerEventProcessor();
         CompletableFuture<Result> accepted = adminChannel.pauseEventProcessor(processorName, tokenStoreIdentifier);
+        expectException(accepted, 10, Status.Code.DEADLINE_EXCEEDED);
+    }
+
+    @Test
+    void testPauseEventProcessorCustomContext() throws Exception {
+        AdminChannel adminChannel = connection.adminChannel();
+        FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
+        CompletableFuture<Result> accepted = adminChannel.pauseEventProcessor(processorName, tokenStoreIdentifier,
+                                                                              contextName);
+        checkHandleSuccess(accepted, processorInstructionHandler);
+    }
+
+    @Test
+    void testPauseEventProcessorFailingCustomContext() throws Exception {
+        AdminChannel adminChannel = connection.adminChannel();
+        FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
+        CompletableFuture<Result> accepted = adminChannel.pauseEventProcessor(processorName, tokenStoreIdentifier,
+                                                                              contextName);
+        assertFor(Duration.ofMillis(500), Duration.ofMillis(100), () -> assertFalse(accepted.isDone()));
+        processorInstructionHandler.performFailing();
+        expectException(accepted, Status.Code.CANCELLED);
+    }
+
+    @Test
+    void testPauseEventProcessorTimeoutCustomContext() throws Exception {
+        AdminChannel adminChannel = connection.adminChannel();
+        registerEventProcessor();
+        CompletableFuture<Result> accepted = adminChannel.pauseEventProcessor(processorName, tokenStoreIdentifier,
+                                                                              contextName);
         expectException(accepted, 10, Status.Code.DEADLINE_EXCEEDED);
     }
 
@@ -249,12 +277,40 @@ class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
         expectException(accepted, Status.Code.CANCELLED);
     }
 
-
     @Test
     void testStartEventProcessorTimeout() throws Exception {
         AdminChannel adminChannel = connection.adminChannel();
         registerEventProcessor();
         CompletableFuture<Result> accepted = adminChannel.startEventProcessor(processorName, tokenStoreIdentifier);
+        expectException(accepted, 10, Status.Code.DEADLINE_EXCEEDED);
+    }
+
+    @Test
+    void testStartEventProcessorCustomContext() throws Exception {
+        AdminChannel adminChannel = connection.adminChannel();
+        FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
+        CompletableFuture<Result> accepted = adminChannel.startEventProcessor(processorName, tokenStoreIdentifier,
+                                                                              contextName);
+        checkHandleSuccess(accepted, processorInstructionHandler);
+    }
+
+    @Test
+    void testStartEventProcessorFailingCustomContext() throws Exception {
+        AdminChannel adminChannel = connection.adminChannel();
+        FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
+        CompletableFuture<Result> accepted = adminChannel.startEventProcessor(processorName, tokenStoreIdentifier,
+                                                                              contextName);
+        assertFor(Duration.ofMillis(500), Duration.ofMillis(100), () -> assertFalse(accepted.isDone()));
+        processorInstructionHandler.performFailing();
+        expectException(accepted, Status.Code.CANCELLED);
+    }
+
+    @Test
+    void testStartEventProcessorTimeoutCustomContext() throws Exception {
+        AdminChannel adminChannel = connection.adminChannel();
+        registerEventProcessor();
+        CompletableFuture<Result> accepted = adminChannel.startEventProcessor(processorName, tokenStoreIdentifier,
+                                                                              contextName);
         expectException(accepted, 10, Status.Code.DEADLINE_EXCEEDED);
     }
 
@@ -286,6 +342,37 @@ class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
         expectException(accepted, Status.Code.CANCELLED);
     }
 
+    @Test
+    void testSplitEventProcessorCustomContext() throws Exception {
+        AdminChannel adminChannel = connection.adminChannel();
+        FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
+        CompletableFuture<Result> accepted = adminChannel.splitEventProcessor(processorName, tokenStoreIdentifier,
+                                                                              contextName);
+        checkHandleSuccess(accepted, processorInstructionHandler);
+    }
+
+    @Test
+    void testSplitEventProcessorFailingCustomContext() throws Exception {
+        AdminChannel adminChannel = connection.adminChannel();
+        FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
+        CompletableFuture<Result> accepted = adminChannel.splitEventProcessor(processorName, tokenStoreIdentifier,
+                                                                              contextName);
+        assertFor(Duration.ofMillis(500), Duration.ofMillis(100), () -> assertFalse(accepted.isDone()));
+        processorInstructionHandler.performFailing();
+        expectException(accepted, Status.Code.CANCELLED);
+    }
+
+    @Test
+    void testSplitEventProcessorCompletedExceptionallyCustomContext() throws Exception {
+        AdminChannel adminChannel = connection.adminChannel();
+        FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
+        CompletableFuture<Result> accepted = adminChannel.splitEventProcessor(processorName, tokenStoreIdentifier,
+                                                                              contextName);
+        assertFor(Duration.ofMillis(500), Duration.ofMillis(100), () -> assertFalse(accepted.isDone()));
+        processorInstructionHandler.completeExceptionally(new RuntimeException("something failed"));
+        expectException(accepted, Status.Code.CANCELLED);
+    }
+
     @NotNull
     private FakeProcessorInstructionHandler registerEventProcessor() {
         FakeProcessorInstructionHandler processorInstructionHandler = new FakeProcessorInstructionHandler();
@@ -301,6 +388,15 @@ class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
         AdminChannel adminChannel = connection.adminChannel();
         registerEventProcessor();
         CompletableFuture<Result> accepted = adminChannel.splitEventProcessor(processorName, tokenStoreIdentifier);
+        expectException(accepted, 10, Status.Code.DEADLINE_EXCEEDED);
+    }
+
+    @Test
+    void testSplitEventProcessorTimeoutCustomContext() throws Exception {
+        AdminChannel adminChannel = connection.adminChannel();
+        registerEventProcessor();
+        CompletableFuture<Result> accepted = adminChannel.splitEventProcessor(processorName, tokenStoreIdentifier,
+                                                                              contextName);
         expectException(accepted, 10, Status.Code.DEADLINE_EXCEEDED);
     }
 
@@ -336,6 +432,15 @@ class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
+    void testMergeEventProcessorCustomContext() throws Exception {
+        AdminChannel adminChannel = connection.adminChannel();
+        FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
+        CompletableFuture<Result> accepted = adminChannel.mergeEventProcessor(processorName, tokenStoreIdentifier,
+                                                                              contextName);
+        checkHandleSuccess(accepted, processorInstructionHandler);
+    }
+
+    @Test
     void testMergeEventProcessorCompletedExceptionally() throws Exception {
         AdminChannel adminChannel = connection.adminChannel();
         FakeProcessorInstructionHandler processorInstructionHandler = registerEventProcessor();
@@ -356,7 +461,6 @@ class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
         accepted.get(1, SECONDS);
         Assertions.assertTrue(accepted.isDone());
     }
-
 
     @Test
     void testMoveEventProcessorSegment() throws Exception {
@@ -445,7 +549,6 @@ class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
         accepted.get(1, SECONDS);
         Assertions.assertTrue(accepted.isDone());
     }
-
 
     @Test
     @Disabled("To reactivate after the release of AS 4.6.0")

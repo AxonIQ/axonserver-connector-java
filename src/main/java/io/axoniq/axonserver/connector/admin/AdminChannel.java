@@ -50,6 +50,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public interface AdminChannel {
 
+    static final String CHANNEL_CONTEXT = "";
     /**
      * Returns all the event processor registered to AxonServer.
      *
@@ -74,7 +75,22 @@ public interface AdminChannel {
      * @param tokenStoreIdentifier the token store identifier of the processor to pause
      * @return a {@link CompletableFuture} that completes when the pause has been performed
      */
-    CompletableFuture<Result> pauseEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
+    default CompletableFuture<Result> pauseEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
+        return pauseEventProcessor(eventProcessorName, tokenStoreIdentifier, CHANNEL_CONTEXT);
+    }
+
+    /**
+     * Request to pause a specific event processor in a specific context.
+     * Returns a {@link CompletableFuture} that completes when the pause has been performed.
+     * The {@link CompletableFuture} completes with {@link Result} {@code ACCEPTED}, if the client
+     * application running the event processor is using a version of the connector prior to 4.6.0.
+     *
+     * @param eventProcessorName   the name of the event processor to pause
+     * @param tokenStoreIdentifier the token store identifier of the processor to pause
+     * @param contextName the name of the context where the event processor is
+     * @return a {@link CompletableFuture} that completes when the pause has been performed
+     */
+    CompletableFuture<Result> pauseEventProcessor(String eventProcessorName, String tokenStoreIdentifier, String contextName);
 
     /**
      * Request to start a specific event processor. Returns a {@link CompletableFuture} that completes when the start
@@ -86,7 +102,22 @@ public interface AdminChannel {
      * @param tokenStoreIdentifier the token store identifier of the processor to start
      * @return a {@link CompletableFuture} that completes when the start has been performed
      */
-    CompletableFuture<Result> startEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
+    default CompletableFuture<Result> startEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
+        return startEventProcessor(eventProcessorName, tokenStoreIdentifier, CHANNEL_CONTEXT);
+    }
+
+    /**
+     * Request to start a specific event processor in a specific context.
+     * Returns a {@link CompletableFuture} that completes when the start has been performed
+     * The {@link CompletableFuture} completes with {@link Result} {@code ACCEPTED}, if the client application
+     * running the event processor is using a version of the connector prior to 4.6.0.
+     *
+     * @param eventProcessorName   the name of the event processor to start
+     * @param tokenStoreIdentifier the token store identifier of the processor to start
+     * @param contextName the name of the context where the event processor is
+     * @return a {@link CompletableFuture} that completes when the start has been performed
+     */
+    CompletableFuture<Result> startEventProcessor(String eventProcessorName, String tokenStoreIdentifier, String contextName);
 
     /**
      * Request to split the biggest segment of a specific event processor. Returns a {@link CompletableFuture} that
@@ -98,7 +129,22 @@ public interface AdminChannel {
      * @param tokenStoreIdentifier the token store identifier of the processor to split
      * @return a {@link CompletableFuture} that completes when the split has been performed
      */
-    CompletableFuture<Result> splitEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
+    default CompletableFuture<Result> splitEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
+        return splitEventProcessor(eventProcessorName, tokenStoreIdentifier, CHANNEL_CONTEXT);
+    }
+
+    /**
+     * Request to split the biggest segment of a specific event processor in a specific context.
+     * Returns a {@link CompletableFuture} that completes when the split has been performed
+     * The {@link CompletableFuture} completes with {@link Result} {@code ACCEPTED}, if the client application
+     * running the event processor is using a version of the connector prior to 4.6.0.
+     *
+     * @param eventProcessorName   the name of the event processor to split
+     * @param tokenStoreIdentifier the token store identifier of the processor to split
+     * @param contextName the name of the context where the event processor is
+     * @return a {@link CompletableFuture} that completes when the split has been performed
+     */
+    CompletableFuture<Result> splitEventProcessor(String eventProcessorName, String tokenStoreIdentifier, String contextName);
 
     /**
      * Request to merge the two smallest segments of a specific event processor. Returns a {@link CompletableFuture}
@@ -110,7 +156,23 @@ public interface AdminChannel {
      * @param tokenStoreIdentifier the token store identifier of the processor to merge
      * @return a {@link CompletableFuture} that completes when the merge has been performed
      */
-    CompletableFuture<Result> mergeEventProcessor(String eventProcessorName, String tokenStoreIdentifier);
+    default CompletableFuture<Result> mergeEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
+        return mergeEventProcessor(eventProcessorName, tokenStoreIdentifier, CHANNEL_CONTEXT);
+    }
+
+    /**
+     * Request to merge the two smallest segments of a specific event processor in a specific context.
+     * Returns a {@link CompletableFuture} that completes when the merge has been performed
+     * The {@link CompletableFuture} completes with {@link Result} {@code ACCEPTED}, if the client application
+     * running the event processor is using a version of the connector prior to 4.6.0.
+     *
+     * @param eventProcessorName   the name of the event processor to merge
+     * @param tokenStoreIdentifier the token store identifier of the processor to merge
+     * @param contextName the name of the context where the event processor is
+     * @return a {@link CompletableFuture} that completes when the merge has been performed
+     */
+    CompletableFuture<Result> mergeEventProcessor(String eventProcessorName, String tokenStoreIdentifier,
+                                                  String contextName);
 
     /**
      * Request to balance the load for the given {@code eventProcessorName} within the connected client.
