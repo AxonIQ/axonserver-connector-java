@@ -141,11 +141,6 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public CompletableFuture<Result> pauseEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
-        return pauseEventProcessor(eventProcessorName, tokenStoreIdentifier, "");
-    }
-
-    @Override
     public CompletableFuture<Result> pauseEventProcessor(String eventProcessorName, String tokenStoreIdentifier,
                                                          String contextName) {
         EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier,
@@ -153,10 +148,6 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
         FutureStreamObserver<AdminActionResult> responseObserver = new FutureStreamObserver<>(null);
         eventProcessorServiceStub.pauseEventProcessor(eventProcessorIdentifier, responseObserver);
         return responseObserver.thenApply(AdminActionResult::getResult);
-    }
-
-    public CompletableFuture<Result> startEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
-        return startEventProcessor(eventProcessorName, tokenStoreIdentifier, "");
     }
 
     @Override
@@ -170,11 +161,6 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public CompletableFuture<Result> splitEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
-        return splitEventProcessor(eventProcessorName, tokenStoreIdentifier, "");
-    }
-
-    @Override
     public CompletableFuture<Result> splitEventProcessor(String eventProcessorName, String tokenStoreIdentifier,
                                                          String context) {
         EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier,
@@ -182,11 +168,6 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
         FutureStreamObserver<AdminActionResult> responseObserver = new FutureStreamObserver<>(null);
         eventProcessorServiceStub.splitEventProcessor(eventProcessorIdentifier, responseObserver);
         return responseObserver.thenApply(AdminActionResult::getResult);
-    }
-
-    @Override
-    public CompletableFuture<Result> mergeEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
-        return mergeEventProcessor(eventProcessorName, tokenStoreIdentifier, "");
     }
 
     @Override
