@@ -19,6 +19,7 @@ package io.axoniq.axonserver.connector.admin;
 import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.grpc.admin.ApplicationOverview;
 import io.axoniq.axonserver.grpc.admin.ApplicationRequest;
+import io.axoniq.axonserver.grpc.admin.ApplicationRoles;
 import io.axoniq.axonserver.grpc.admin.ContextOverview;
 import io.axoniq.axonserver.grpc.admin.ContextUpdate;
 import io.axoniq.axonserver.grpc.admin.CreateContextRequest;
@@ -36,6 +37,7 @@ import io.axoniq.axonserver.grpc.admin.Result;
 import io.axoniq.axonserver.grpc.admin.Token;
 import io.axoniq.axonserver.grpc.admin.UpdateContextPropertiesRequest;
 import io.axoniq.axonserver.grpc.admin.UserOverview;
+import io.axoniq.axonserver.grpc.admin.UserRoles;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -329,11 +331,16 @@ public interface AdminChannel {
     CompletableFuture<Void> addNodeToReplicationGroup(JoinReplicationGroup request);
 
     /**
-     * Request to remove a node from a replication group.
-     * Returns a {@link CompletableFuture} that completes when the request has been processed by Axon Server.
+     * Request to remove a node from a replication group. Returns a {@link CompletableFuture} that completes when the
+     * request has been processed by Axon Server.
      *
      * @param request {@link LeaveReplicationGroup} to a node to be removed from replication group
      * @return a {@link CompletableFuture} that completes when the request has been processed by Axon Server
      */
     CompletableFuture<Void> removeNodeFromReplicationGroup(LeaveReplicationGroup request);
+
+
+    CompletableFuture<UserRoles> authenticateUser(String username, String password);
+
+    CompletableFuture<ApplicationRoles> authenticateToken(String token);
 }
