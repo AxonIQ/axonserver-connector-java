@@ -31,7 +31,8 @@ import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.core5.http.ClassicHttpRequest;
 import org.apache.hc.core5.http.ParseException;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.wait.strategy.Wait;
@@ -60,7 +61,8 @@ public abstract class AbstractAxonServerIntegrationTest {
                     .withEnv("AXONIQ_AXONSERVER_NAME", "axonserver")
                     .withEnv("AXONIQ_AXONSERVER_HOSTNAME", "localhost")
                     .withEnv("AXONIQ_AXONSERVER_DEVMODE_ENABLED", "true")
-                    .withEnv("AXONIQ_AXONSERVER_INSTRUCTION-CACHE-TIMEOUT", "1000")
+                    .withEnv("AXONIQ_AXONSERVER_ACCESSCONTROL_TOKEN", "user-token")
+                    .withEnv("AXONIQ_AXONSERVER_ACCESSCONTROL_ADMIN_TOKEN", "admin-token")
                     .withImagePullPolicy(PullPolicy.ageBased(Duration.ofDays(1)))
                     .withNetwork(network)
                     .withNetworkAliases("axonserver")

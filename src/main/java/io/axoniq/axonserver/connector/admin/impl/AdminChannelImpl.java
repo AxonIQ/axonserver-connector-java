@@ -31,6 +31,9 @@ import io.axoniq.axonserver.grpc.admin.ApplicationAdminServiceGrpc;
 import io.axoniq.axonserver.grpc.admin.ApplicationId;
 import io.axoniq.axonserver.grpc.admin.ApplicationOverview;
 import io.axoniq.axonserver.grpc.admin.ApplicationRequest;
+import io.axoniq.axonserver.grpc.admin.ApplicationRoles;
+import io.axoniq.axonserver.grpc.admin.AuthenticateUserRequest;
+import io.axoniq.axonserver.grpc.admin.AuthenticationServiceGrpc;
 import io.axoniq.axonserver.grpc.admin.ContextAdminServiceGrpc;
 import io.axoniq.axonserver.grpc.admin.ContextOverview;
 import io.axoniq.axonserver.grpc.admin.ContextUpdate;
@@ -48,9 +51,9 @@ import io.axoniq.axonserver.grpc.admin.GetContextRequest;
 import io.axoniq.axonserver.grpc.admin.GetReplicationGroupRequest;
 import io.axoniq.axonserver.grpc.admin.JoinReplicationGroup;
 import io.axoniq.axonserver.grpc.admin.LeaveReplicationGroup;
-import io.axoniq.axonserver.grpc.admin.MoveSegment;
 import io.axoniq.axonserver.grpc.admin.LoadBalanceRequest;
 import io.axoniq.axonserver.grpc.admin.LoadBalancingStrategy;
+import io.axoniq.axonserver.grpc.admin.MoveSegment;
 import io.axoniq.axonserver.grpc.admin.NodeOverview;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupAdminServiceGrpc;
 import io.axoniq.axonserver.grpc.admin.ReplicationGroupOverview;
@@ -59,12 +62,13 @@ import io.axoniq.axonserver.grpc.admin.Token;
 import io.axoniq.axonserver.grpc.admin.UpdateContextPropertiesRequest;
 import io.axoniq.axonserver.grpc.admin.UserAdminServiceGrpc;
 import io.axoniq.axonserver.grpc.admin.UserOverview;
+import io.axoniq.axonserver.grpc.admin.UserRoles;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
 
-import javax.annotation.Nonnull;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
+import javax.annotation.Nonnull;
 
 /**
  * {@link AdminChannel} GRPC implementation to allow a client application sending and receiving administration related
@@ -85,6 +89,7 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     private final ReplicationGroupAdminServiceGrpc.ReplicationGroupAdminServiceStub replicationGroupServiceStub;
     private final ApplicationAdminServiceGrpc.ApplicationAdminServiceStub applicationServiceStub;
     private final UserAdminServiceGrpc.UserAdminServiceStub userServiceStub;
+    private final AuthenticationServiceGrpc.AuthenticationServiceStub authenticationServiceStub;
 
     public AdminChannelImpl(ClientIdentification clientIdentification,
                             ScheduledExecutorService executor, AxonServerManagedChannel channel) {
@@ -94,6 +99,7 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
         this.replicationGroupServiceStub = ReplicationGroupAdminServiceGrpc.newStub(channel);
         this.applicationServiceStub = ApplicationAdminServiceGrpc.newStub(channel);
         this.userServiceStub = UserAdminServiceGrpc.newStub(channel);
+        this.authenticationServiceStub = AuthenticationServiceGrpc.newStub(channel);
     }
 
     public ResultStream<EventProcessor> eventProcessors() {
@@ -240,6 +246,7 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
         userServiceStub.getUsers(Empty.newBuilder().build(), responseObserver);
         return responseObserver;
     }
+
     @Override
     public CompletableFuture<List<NodeOverview>> getAllNodes() {
         FutureListStreamObserver<NodeOverview> responseObserver = new FutureListStreamObserver<>();
@@ -403,6 +410,24 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
         return responseObserver;
     }
 
+    @Override
+    public CompletableFuture<UserRoles> authenticateUser(String username, String password) {
+        FutureStreamObserver<UserRoles> responseObserver = new FutureStreamObserver<>(null);
+        authenticationServiceStub.authenticateUser(AuthenticateUserRequest.newBuilder()
+                                                                          .setUserName(username)
+                                                                          .setPassword(password)
+                                                                          .build(), responseObserver);
+        return responseObserver;
+    }
+
+    @Override
+    public CompletableFuture<ApplicationRoles> authenticateToken(String token) {
+        FutureStreamObserver<ApplicationRoles> responseObserver = new FutureStreamObserver<>(null);
+        authenticationServiceStub.authenticateToken(Token.newBuilder()
+                                                         .setToken(token)
+                                                         .build(), responseObserver);
+        return responseObserver;
+    }
 
     @Override
     public void connect() {

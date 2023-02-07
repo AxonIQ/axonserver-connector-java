@@ -22,10 +22,14 @@ import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
 import io.axoniq.axonserver.connector.ResultStreamPublisher;
 import io.axoniq.axonserver.connector.control.FakeProcessorInstructionHandler;
 import io.axoniq.axonserver.connector.control.ProcessorInstructionHandler;
+import io.axoniq.axonserver.grpc.admin.ApplicationRoles;
+import io.axoniq.axonserver.grpc.admin.CreateOrUpdateUserRequest;
 import io.axoniq.axonserver.grpc.admin.EventProcessor;
 import io.axoniq.axonserver.grpc.admin.EventProcessorInstance;
 import io.axoniq.axonserver.grpc.admin.EventProcessorSegment;
 import io.axoniq.axonserver.grpc.admin.Result;
+import io.axoniq.axonserver.grpc.admin.UserRoleRequest;
+import io.axoniq.axonserver.grpc.admin.UserRoles;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo.SegmentStatus;
 import io.grpc.Status;
@@ -63,7 +67,7 @@ import static org.mockito.Mockito.mock;
  * @since 4.6.0
  */
 @Disabled("To reactivate after the release of AS 4.6.0")
-class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
+class AdminChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
     private final String processorName = "eventProcessor";
     private final String tokenStoreIdentifier = "myTokenStore";
@@ -219,7 +223,7 @@ class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
         CompletableFuture<Result> accepted = adminChannel.pauseEventProcessor(processorName, tokenStoreIdentifier);
         assertFor(Duration.ofMillis(500), Duration.ofMillis(100), () -> assertFalse(accepted.isDone()));
         processorInstructionHandler.performFailing();
-        expectException(accepted, Status.Code.CANCELLED);
+        expectException(accepted, Status.Code.INTERNAL);
     }
 
 
@@ -246,7 +250,7 @@ class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
         CompletableFuture<Result> accepted = adminChannel.startEventProcessor(processorName, tokenStoreIdentifier);
         assertFor(Duration.ofMillis(500), Duration.ofMillis(100), () -> assertFalse(accepted.isDone()));
         processorInstructionHandler.performFailing();
-        expectException(accepted, Status.Code.CANCELLED);
+        expectException(accepted, Status.Code.INTERNAL);
     }
 
 
@@ -273,7 +277,7 @@ class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
         CompletableFuture<Result> accepted = adminChannel.splitEventProcessor(processorName, tokenStoreIdentifier);
         assertFor(Duration.ofMillis(500), Duration.ofMillis(100), () -> assertFalse(accepted.isDone()));
         processorInstructionHandler.performFailing();
-        expectException(accepted, Status.Code.CANCELLED);
+        expectException(accepted, Status.Code.INTERNAL);
     }
 
     @Test
@@ -283,7 +287,7 @@ class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
         CompletableFuture<Result> accepted = adminChannel.splitEventProcessor(processorName, tokenStoreIdentifier);
         assertFor(Duration.ofMillis(500), Duration.ofMillis(100), () -> assertFalse(accepted.isDone()));
         processorInstructionHandler.completeExceptionally(new RuntimeException("something failed"));
-        expectException(accepted, Status.Code.CANCELLED);
+        expectException(accepted, Status.Code.INTERNAL);
     }
 
     @NotNull
@@ -324,7 +328,7 @@ class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
         CompletableFuture<Result> accepted = adminChannel.mergeEventProcessor(processorName, tokenStoreIdentifier);
         assertFor(Duration.ofMillis(500), Duration.ofMillis(100), () -> assertFalse(accepted.isDone()));
         processorInstructionHandler.performFailing();
-        expectException(accepted, Status.Code.CANCELLED);
+        expectException(accepted, Status.Code.INTERNAL);
     }
 
     @Test
@@ -342,7 +346,7 @@ class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
         CompletableFuture<Result> accepted = adminChannel.mergeEventProcessor(processorName, tokenStoreIdentifier);
         assertFor(Duration.ofMillis(500), Duration.ofMillis(100), () -> assertFalse(accepted.isDone()));
         processorInstructionHandler.completeExceptionally(new RuntimeException("something failed"));
-        expectException(accepted, Status.Code.CANCELLED);
+        expectException(accepted, Status.Code.INTERNAL);
     }
 
     @Test
@@ -455,7 +459,10 @@ class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
         connection.controlChannel().registerEventProcessor(processorName, eventProcessorInfoSupplier, handler);
         AdminChannel adminChannel = connection.adminChannel();
         CompletableFuture<Void> accepted = adminChannel.getBalancingStrategies()
-                .thenCompose(balancingStrategies -> adminChannel.loadBalanceEventProcessor("processor", "tokenStore", balancingStrategies.get(0).getStrategy()));
+                                                       .thenCompose(balancingStrategies -> adminChannel.loadBalanceEventProcessor(
+                                                               "processor",
+                                                               "tokenStore",
+                                                               balancingStrategies.get(0).getStrategy()));
 
         accepted.get(1, SECONDS);
         Assertions.assertTrue(accepted.isDone());
@@ -469,9 +476,100 @@ class AdminChannelIntegrationTest  extends AbstractAxonServerIntegrationTest {
         connection.controlChannel().registerEventProcessor(processorName, eventProcessorInfoSupplier, handler);
         AdminChannel adminChannel = connection.adminChannel();
         CompletableFuture<Void> accepted = adminChannel.getBalancingStrategies()
-                                                       .thenCompose(balancingStrategies -> adminChannel.setAutoLoadBalanceStrategy("processor", "tokenStore", balancingStrategies.get(1).getStrategy()));
+                                                       .thenCompose(balancingStrategies -> adminChannel.setAutoLoadBalanceStrategy(
+                                                               "processor",
+                                                               "tokenStore",
+                                                               balancingStrategies.get(1).getStrategy()));
         accepted.get(1, SECONDS);
         Assertions.assertTrue(accepted.isDone());
+    }
+
+    @Test
+    @Disabled("To reactivate after the release of AS 2023.0.0")
+    void authenticateUser() throws Exception {
+        connection.adminChannel().createOrUpdateUser(CreateOrUpdateUserRequest.newBuilder()
+                                                                              .setUserName("testuser")
+                                                                              .setPassword("testpassword")
+                                                                              .build()).get(1, SECONDS);
+        UserRoles user = connection.adminChannel().authenticateUser("testuser",
+                                                                    "testpassword").get(
+                1,
+                SECONDS);
+        assertEquals(0, user.getUserRolesList().size());
+
+        try {
+            connection.adminChannel().authenticateUser("testuser",
+                                                       "testpassword123").get(
+                    1,
+                    SECONDS);
+            fail("Invalid password should fail");
+        } catch (ExecutionException executionException) {
+            assertEquals(Status.PERMISSION_DENIED.getCode(), Status.fromThrowable(executionException).getCode());
+        }
+
+        try {
+            connection.adminChannel().authenticateUser("testuser123",
+                                                       "testpassword").get(
+                    1,
+                    SECONDS);
+            fail("Invalid username should fail");
+        } catch (ExecutionException executionException) {
+            assertEquals(Status.PERMISSION_DENIED.getCode(), Status.fromThrowable(executionException).getCode());
+        }
+    }
+
+    @Test
+    @Disabled("To reactivate after the release of AS 2023.0.0")
+    void authenticateAdminUser() throws Exception {
+        connection.adminChannel().createOrUpdateUser(CreateOrUpdateUserRequest.newBuilder()
+                                                                              .setUserName("testadmin")
+                                                                              .setPassword("adminpassword")
+                                                                              .addUserRoles(UserRoleRequest.newBuilder()
+                                                                                                           .setRole(
+                                                                                                                   "ADMIN")
+                                                                                                           .setContext(
+                                                                                                                   "default"))
+                                                                              .build()).get(1, SECONDS);
+        UserRoles user = connection.adminChannel().authenticateUser("testadmin",
+                                                                    "adminpassword").get(
+                1,
+                SECONDS);
+        assertEquals(1, user.getUserRolesList().size());
+        assertEquals("ADMIN", user.getUserRoles(0).getRole());
+        assertEquals("default", user.getUserRoles(0).getContext());
+    }
+
+    @Test
+    @Disabled("To reactivate after the release of AS 2023.0.0")
+    void authenticateToken() throws Exception {
+        ApplicationRoles applicationRoles = connection.adminChannel().authenticateToken("user-token").get(
+                1,
+                SECONDS);
+        assertEquals(0, applicationRoles.getApplicationRoleList().size());
+    }
+
+    @Test
+    @Disabled("To reactivate after the release of AS 2023.0.0")
+    void authenticateAdminToken() throws Exception {
+        ApplicationRoles applicationRoles = connection.adminChannel().authenticateToken("admin-token").get(
+                1,
+                SECONDS);
+        assertEquals(1, applicationRoles.getApplicationRoleList().size());
+        assertEquals("ADMIN", applicationRoles.getApplicationRole(0).getRole());
+        assertEquals("default", applicationRoles.getApplicationRole(0).getContext());
+    }
+
+    @Test
+    @Disabled("To reactivate after the release of AS 2023.0.0")
+    void authenticateInvalidToken() throws Exception {
+        try {
+            connection.adminChannel().authenticateToken("invalid-token").get(
+                    1,
+                    SECONDS);
+            fail("Invalid application token should fail");
+        } catch (ExecutionException executionException) {
+            assertEquals(Status.PERMISSION_DENIED.getCode(), Status.fromThrowable(executionException).getCode());
+        }
     }
 
     private void waitUntilEventProcessorExists(String processorName, String clientId) {
