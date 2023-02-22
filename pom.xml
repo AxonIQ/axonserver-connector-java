@@ -48,7 +48,7 @@
         <netty.tcnative.version>2.0.54.Final</netty.tcnative.version>
 
         <slf4j.version>1.7.36</slf4j.version>
-        <log4j.version>2.19.0</log4j.version>
+        <log4j.version>2.20.0</log4j.version>
 
         <javax-annotation.version>1.3.2</javax-annotation.version>
 
