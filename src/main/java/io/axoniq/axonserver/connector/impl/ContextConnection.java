@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021. AxonIQ
+ * Copyright (c) 2020-2023. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@ import io.axoniq.axonserver.connector.command.impl.CommandChannelImpl;
 import io.axoniq.axonserver.connector.control.ControlChannel;
 import io.axoniq.axonserver.connector.event.EventChannel;
 import io.axoniq.axonserver.connector.event.impl.EventChannelImpl;
+import io.axoniq.axonserver.connector.event.transformation.EventTransformationChannel;
+import io.axoniq.axonserver.connector.event.transformation.impl.EventTransformationChannelImpl;
 import io.axoniq.axonserver.connector.query.QueryChannel;
 import io.axoniq.axonserver.connector.query.impl.QueryChannelImpl;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
@@ -51,6 +53,7 @@ public class ContextConnection implements AxonServerConnection {
     private final AtomicReference<CommandChannelImpl> commandChannel = new AtomicReference<>();
     private final AtomicReference<EventChannelImpl> eventChannel = new AtomicReference<>();
     private final AtomicReference<QueryChannelImpl> queryChannel = new AtomicReference<>();
+    private final AtomicReference<EventTransformationChannelImpl> eventTransformationChannel = new AtomicReference<>();
     private final AtomicReference<AdminChannelImpl> adminChannel = new AtomicReference<>();
     private final ScheduledExecutorService executorService;
     private final AxonServerManagedChannel connection;
@@ -104,6 +107,7 @@ public class ContextConnection implements AxonServerConnection {
         doIfNotNull(queryChannel.get(), QueryChannelImpl::reconnect);
         doIfNotNull(controlChannel, ControlChannelImpl::reconnect);
         doIfNotNull(eventChannel.get(), EventChannelImpl::reconnect);
+        doIfNotNull(eventTransformationChannel.get(), EventTransformationChannelImpl::reconnect);
         doIfNotNull(adminChannel.get(), AdminChannelImpl::reconnect);
     }
 
@@ -118,6 +122,8 @@ public class ContextConnection implements AxonServerConnection {
                 && Optional.ofNullable(commandChannel.get()).map(CommandChannelImpl::isReady).orElse(true)
                 && Optional.ofNullable(queryChannel.get()).map(QueryChannelImpl::isReady).orElse(true)
                 && Optional.ofNullable(eventChannel.get()).map(EventChannelImpl::isReady).orElse(true)
+                && Optional.ofNullable(eventTransformationChannel.get()).map(EventTransformationChannelImpl::isReady)
+                           .orElse(true)
                 && Optional.ofNullable(adminChannel.get()).map(AdminChannelImpl::isReady).orElse(true)
                 && controlChannel.isReady();
     }
@@ -133,6 +139,7 @@ public class ContextConnection implements AxonServerConnection {
         doIfNotNull(commandChannel.get(), CommandChannelImpl::disconnect);
         doIfNotNull(queryChannel.get(), QueryChannelImpl::disconnect);
         doIfNotNull(eventChannel.get(), EventChannelImpl::disconnect);
+        doIfNotNull(eventTransformationChannel.get(), EventTransformationChannelImpl::disconnect);
         doIfNotNull(adminChannel.get(), AdminChannelImpl::disconnect);
         connection.shutdown();
         onShutdown.accept(this);
@@ -191,6 +198,15 @@ public class ContextConnection implements AxonServerConnection {
                                                                       connection),
                                            this::ensureConnected
         );
+    }
+
+    @Override
+    public EventTransformationChannel eventTransformationChannel() {
+        return createIfAbsentAndInitialize(eventTransformationChannel,
+                                           () -> new EventTransformationChannelImpl(clientIdentification,
+                                                                                    executorService,
+                                                                                    connection),
+                                           this::ensureConnected);
     }
 
     @Override

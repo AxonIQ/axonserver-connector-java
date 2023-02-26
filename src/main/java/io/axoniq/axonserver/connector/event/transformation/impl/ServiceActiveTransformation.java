@@ -1,0 +1,66 @@
+/*
+ * Copyright (c) 2020-2023. AxonIQ
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package io.axoniq.axonserver.connector.event.transformation.impl;
+
+import io.axoniq.axonserver.connector.event.transformation.ActiveTransformation;
+import io.axoniq.axonserver.connector.event.transformation.EventTransformation;
+import io.axoniq.axonserver.connector.event.transformation.impl.EventTransformationService.TransformationStream;
+
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
+
+/**
+ * @author Sara Pellegrini
+ * @since 2023.0.0
+ */
+public class ServiceActiveTransformation implements ActiveTransformation {
+
+    private final String transformationId;
+    private final Long currentSequence;
+    private final EventTransformationService service;
+
+    public ServiceActiveTransformation(String transformationId,
+                                       Long currentSequence,
+                                       EventTransformationService service) {
+        this.transformationId = transformationId;
+        this.currentSequence = currentSequence;
+        this.service = service;
+    }
+
+    @Override
+    public CompletableFuture<ActiveTransformation> append(Consumer<Appender> appenderConsumer) {
+        TransformationStream transformationStream = service.transformationStream(transformationId);
+        ActionAppender actionAppender = new ActionAppender(transformationStream, currentSequence);
+        appenderConsumer.accept(actionAppender);
+        return actionAppender.complete()
+                             .thenApply(seq -> new ServiceActiveTransformation(transformationId,
+                                                                               seq,
+                                                                               service));
+    }
+
+    @Override
+    public CompletableFuture<EventTransformation> startApplying() {
+        return service.startApplying(transformationId, currentSequence)
+                      .thenCompose(unused -> service.transformationById(transformationId));
+    }
+
+    @Override
+    public CompletableFuture<EventTransformation> cancel() {
+        return service.cancel(transformationId)
+                      .thenCompose(unused -> service.transformationById(transformationId));
+    }
+}

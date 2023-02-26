@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2020-2023. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import io.axoniq.axonserver.connector.admin.AdminChannel;
 import io.axoniq.axonserver.connector.command.CommandChannel;
 import io.axoniq.axonserver.connector.control.ControlChannel;
 import io.axoniq.axonserver.connector.event.EventChannel;
+import io.axoniq.axonserver.connector.event.transformation.EventTransformationChannel;
 import io.axoniq.axonserver.connector.query.QueryChannel;
 
 /**
@@ -85,6 +86,13 @@ public interface AxonServerConnection {
      * @return the channel for Query messaging
      */
     QueryChannel queryChannel();
+
+    /**
+     * Returns the channel on which Event transformations can be performed with AxonServer.
+     *
+     * @return the channel for Event transformations
+     */
+    EventTransformationChannel eventTransformationChannel();
 
 
     /**
