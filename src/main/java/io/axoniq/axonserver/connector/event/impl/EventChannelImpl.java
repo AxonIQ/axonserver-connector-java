@@ -87,7 +87,8 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
      * @param executor a {@link ScheduledExecutorService} used to schedule reconnects of this channel
      * @param channel  the {@link AxonServerManagedChannel} used to form the connection with AxonServer
      */
-    public EventChannelImpl(ClientIdentification clientIdentification, ScheduledExecutorService executor, AxonServerManagedChannel channel) {
+    public EventChannelImpl(ClientIdentification clientIdentification, ScheduledExecutorService executor,
+                            AxonServerManagedChannel channel) {
         super(clientIdentification, executor, channel);
         clientId = clientIdentification;
         eventStore = EventStoreGrpc.newStub(channel);
@@ -266,20 +267,23 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public ResultStream<EventQueryResultEntry> queryEvents(String queryExpression, boolean liveStream) {
-        return doQueryEvent(queryExpression, liveStream, false);
+    public ResultStream<EventQueryResultEntry> queryEvents(String queryExpression, boolean liveStream,
+                                                           String contextName) {
+        return doQueryEvent(queryExpression, liveStream, false, contextName);
     }
 
     @Override
-    public ResultStream<EventQueryResultEntry> querySnapshotEvents(String queryExpression, boolean liveStream) {
-        return doQueryEvent(queryExpression, liveStream, true);
+    public ResultStream<EventQueryResultEntry> querySnapshotEvents(String queryExpression, boolean liveStream,
+                                                                   String contextName) {
+        return doQueryEvent(queryExpression, liveStream, true, contextName);
     }
 
     private ResultStream<EventQueryResultEntry> doQueryEvent(String queryExpression,
                                                              boolean liveStream,
-                                                             boolean querySnapshots) {
+                                                             boolean querySnapshots,
+                                                             String contextName) {
         EventQueryResponseStream responseStream =
-                new EventQueryResponseStream(queryExpression, liveStream, querySnapshots);
+                new EventQueryResponseStream(queryExpression, liveStream, querySnapshots, contextName);
         //noinspection ResultOfMethodCallIgnored
         eventStore.queryEvents(responseStream);
         responseStream.enableFlowControl();
@@ -308,13 +312,15 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
         private final String query;
         private final boolean liveStream;
         private final boolean querySnapshots;
+        private final String contextName;
         private final AtomicReference<List<String>> columnNames = new AtomicReference<>();
 
-        public EventQueryResponseStream(String query, boolean liveStream, boolean querySnapshots) {
+        public EventQueryResponseStream(String query, boolean liveStream, boolean querySnapshots, String contextName) {
             super("unused", 100, 25);
             this.query = query;
             this.liveStream = liveStream;
             this.querySnapshots = querySnapshots;
+            this.contextName = contextName == null ? "": contextName;
         }
 
         @Override
@@ -340,6 +346,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
                                      .setLiveEvents(liveStream)
                                      .setNumberOfPermits(flowControl.getPermits())
                                      .setQuerySnapshots(querySnapshots)
+                                     .setContextName(contextName)
                                      .build();
         }
 

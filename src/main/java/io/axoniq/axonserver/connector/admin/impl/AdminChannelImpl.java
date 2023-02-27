@@ -34,7 +34,9 @@ import io.axoniq.axonserver.grpc.admin.ApplicationRequest;
 import io.axoniq.axonserver.grpc.admin.ApplicationRoles;
 import io.axoniq.axonserver.grpc.admin.AuthenticateUserRequest;
 import io.axoniq.axonserver.grpc.admin.AuthenticationServiceGrpc;
+import io.axoniq.axonserver.grpc.admin.ConnectedApplicationOverview;
 import io.axoniq.axonserver.grpc.admin.ContextAdminServiceGrpc;
+import io.axoniq.axonserver.grpc.admin.ContextId;
 import io.axoniq.axonserver.grpc.admin.ContextOverview;
 import io.axoniq.axonserver.grpc.admin.ContextUpdate;
 import io.axoniq.axonserver.grpc.admin.CreateContextRequest;
@@ -145,33 +147,40 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public CompletableFuture<Result> pauseEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
-        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
+    public CompletableFuture<Result> pauseEventProcessor(String eventProcessorName, String tokenStoreIdentifier,
+                                                         String contextName) {
+        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier,
+                                                                             contextName);
         FutureStreamObserver<AdminActionResult> responseObserver = new FutureStreamObserver<>(null);
         eventProcessorServiceStub.pauseEventProcessor(eventProcessorIdentifier, responseObserver);
         return responseObserver.thenApply(AdminActionResult::getResult);
     }
 
     @Override
-    public CompletableFuture<Result> startEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
-        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
+    public CompletableFuture<Result> startEventProcessor(String eventProcessorName, String tokenStoreIdentifier,
+                                                         String contextName) {
+        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier,
+                                                                             contextName);
         FutureStreamObserver<AdminActionResult> responseObserver = new FutureStreamObserver<>(null);
         eventProcessorServiceStub.startEventProcessor(eventProcessorIdentifier, responseObserver);
         return responseObserver.thenApply(AdminActionResult::getResult);
     }
 
-
     @Override
-    public CompletableFuture<Result> splitEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
-        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
+    public CompletableFuture<Result> splitEventProcessor(String eventProcessorName, String tokenStoreIdentifier,
+                                                         String context) {
+        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier,
+                                                                             context);
         FutureStreamObserver<AdminActionResult> responseObserver = new FutureStreamObserver<>(null);
         eventProcessorServiceStub.splitEventProcessor(eventProcessorIdentifier, responseObserver);
         return responseObserver.thenApply(AdminActionResult::getResult);
     }
 
     @Override
-    public CompletableFuture<Result> mergeEventProcessor(String eventProcessorName, String tokenStoreIdentifier) {
-        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier);
+    public CompletableFuture<Result> mergeEventProcessor(String eventProcessorName, String tokenStoreIdentifier,
+                                                         String context) {
+        EventProcessorIdentifier eventProcessorIdentifier = eventProcessorId(eventProcessorName, tokenStoreIdentifier,
+                                                                             context);
         FutureStreamObserver<AdminActionResult> responseObserver = new FutureStreamObserver<>(null);
         eventProcessorServiceStub.mergeEventProcessor(eventProcessorIdentifier, responseObserver);
         return responseObserver.thenApply(AdminActionResult::getResult);
@@ -229,6 +238,16 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
         return EventProcessorIdentifier.newBuilder()
                                        .setProcessorName(eventProcessorName)
                                        .setTokenStoreIdentifier(tokenStoreIdentifier)
+                                       .build();
+    }
+
+    @Nonnull
+    private EventProcessorIdentifier eventProcessorId(String eventProcessorName, String tokenStoreIdentifier,
+                                                      String context) {
+        return EventProcessorIdentifier.newBuilder()
+                                       .setProcessorName(eventProcessorName)
+                                       .setTokenStoreIdentifier(tokenStoreIdentifier)
+                                       .setContextName(context)
                                        .build();
     }
 
@@ -301,6 +320,14 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
         });
     }
 
+    public CompletableFuture<ConnectedApplicationOverview> getAllConnectedApplications(String contextName) {
+        FutureStreamObserver<ConnectedApplicationOverview> responseObserver = new FutureStreamObserver<>(null);
+        applicationServiceStub.getConnectedApplicationsByContext(ContextId.newBuilder().setContextName(contextName)
+                                                                          .build(),
+                                                                 responseObserver);
+        return responseObserver;
+    }
+
     @Override
     public CompletableFuture<Void> createContext(CreateContextRequest request) {
         FutureStreamObserver<Empty> responseObserver = new FutureStreamObserver<>(null);
@@ -338,7 +365,6 @@ public class AdminChannelImpl extends AbstractAxonServerChannel<Void> implements
         contextServiceStub.getContexts(Empty.newBuilder().build(), responseObserver);
         return responseObserver;
     }
-
 
     @Override
     public ResultStream<ContextUpdate> subscribeToContextUpdates() {
