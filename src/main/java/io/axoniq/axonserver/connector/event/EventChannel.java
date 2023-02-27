@@ -341,8 +341,23 @@ public interface EventChannel {
      * @param liveStream      whether to continue processing live events
      * @return a ResultStream containing the query results
      */
-    ResultStream<EventQueryResultEntry> queryEvents(String queryExpression, boolean liveStream);
+    default ResultStream<EventQueryResultEntry> queryEvents(String queryExpression, boolean liveStream) {
+        return queryEvents(queryExpression, liveStream, null);
+    }
 
+    /**
+     * Queries the Event Store for events using given {@code queryExpression}. The given {@code liveStream} indicates
+     * whether the query should complete when the end of the Event Stream is reached, or if the query should continue
+     * processing events as they are stored.
+     * When a {@code contextName} is provided the query is executed for that context, instead of the main context for
+     * the channel.
+     *
+     * @param queryExpression a valid Event Stream Query Language expression
+     * @param liveStream      whether to continue processing live events
+     * @param contextName     the name of the context of the event store to query
+     * @return a ResultStream containing the query results
+     */
+    ResultStream<EventQueryResultEntry> queryEvents(String queryExpression, boolean liveStream, String contextName);
     /**
      * Queries the Event Store for snapshot events using given {@code queryExpression}. The given {@code liveStream}
      * indicates whether the query should complete when the end of the Snapshot Event Stream is reached, or if the query
@@ -352,5 +367,20 @@ public interface EventChannel {
      * @param liveStream      whether to continue processing live snapshot events
      * @return a ResultStream containing the query results
      */
-    ResultStream<EventQueryResultEntry> querySnapshotEvents(String queryExpression, boolean liveStream);
+    default ResultStream<EventQueryResultEntry> querySnapshotEvents(String queryExpression, boolean liveStream) {
+        return querySnapshotEvents(queryExpression, liveStream, null);
+    }
+    /**
+     * Queries the Event Store for snapshot events using given {@code queryExpression}. The given {@code liveStream}
+     * indicates whether the query should complete when the end of the Snapshot Event Stream is reached, or if the query
+     * should continue processing snapshot events as they are stored.
+     * When a {@code contextName} is provided the query is executed for that context, instead of the main context for
+     * the channel.
+     *
+     * @param queryExpression a valid Event Stream Query Language expression
+     * @param liveStream      whether to continue processing live snapshot events
+     * @param contextName     the name of the context of the event store to query
+     * @return a ResultStream containing the query results
+     */
+    ResultStream<EventQueryResultEntry> querySnapshotEvents(String queryExpression, boolean liveStream, String contextName);
 }
