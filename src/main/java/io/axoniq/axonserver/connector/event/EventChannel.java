@@ -357,7 +357,9 @@ public interface EventChannel {
      * @param contextName     the name of the context of the event store to query
      * @return a ResultStream containing the query results
      */
-    ResultStream<EventQueryResultEntry> queryEvents(String queryExpression, boolean liveStream, String contextName);
+    default ResultStream<EventQueryResultEntry> queryEvents(String queryExpression, boolean liveStream, String contextName) {
+        throw new UnsupportedOperationException();
+    }
     /**
      * Queries the Event Store for snapshot events using given {@code queryExpression}. The given {@code liveStream}
      * indicates whether the query should complete when the end of the Snapshot Event Stream is reached, or if the query
@@ -382,5 +384,7 @@ public interface EventChannel {
      * @param contextName     the name of the context of the event store to query
      * @return a ResultStream containing the query results
      */
-    ResultStream<EventQueryResultEntry> querySnapshotEvents(String queryExpression, boolean liveStream, String contextName);
+    default ResultStream<EventQueryResultEntry> querySnapshotEvents(String queryExpression, boolean liveStream, String contextName) {
+        throw new UnsupportedOperationException();
+    }
 }
