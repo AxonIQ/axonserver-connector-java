@@ -16,26 +16,17 @@
 
 package io.axoniq.axonserver.connector.event.transformation;
 
+import io.axoniq.axonserver.grpc.event.Event;
+
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 
 /**
  * @author Sara Pellegrini
  * @since 2023.0.0
  */
-public interface EventTransformationChannel {
+public interface Transformer {
 
-    CompletableFuture<Iterable<EventTransformation>> transformations();
+    CompletableFuture<Transformer> deleteEvent(long token);
 
-    CompletableFuture<ActiveTransformation> activeTransformation();
-
-    CompletableFuture<ActiveTransformation> newTransformation(String description);
-
-    default CompletableFuture<EventTransformation> transform(String description, Consumer<Transformer> transformer) {
-        return newTransformation(description)
-                .thenCompose(transformation -> transformation.transform(transformer))
-                .thenCompose(ActiveTransformation::startApplying);
-    }
-
-    CompletableFuture<Void> startCompacting();
+    CompletableFuture<Transformer> replaceEvent(long token, Event replacement);
 }

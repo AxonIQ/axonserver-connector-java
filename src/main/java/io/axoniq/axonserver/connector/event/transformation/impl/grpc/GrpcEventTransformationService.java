@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
-package io.axoniq.axonserver.connector.event.transformation.impl;
+package io.axoniq.axonserver.connector.event.transformation.impl.grpc;
 
 import com.google.protobuf.Empty;
 import io.axoniq.axonserver.connector.AxonServerException;
 import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.event.transformation.EventTransformation;
+import io.axoniq.axonserver.connector.event.transformation.impl.EventTransformationService;
 import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
 import io.axoniq.axonserver.connector.impl.FutureListStreamObserver;
 import io.axoniq.axonserver.connector.impl.FutureStreamObserver;
@@ -44,8 +45,7 @@ import javax.annotation.Nonnull;
  * @author Sara Pellegrini
  * @since 2023.0.0
  */
-public class GrpcEventTransformationService
-        implements EventTransformationService {
+public class GrpcEventTransformationService implements EventTransformationService {
 
     private final EventTransformationServiceGrpc.EventTransformationServiceStub stub;
 

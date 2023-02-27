@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.axoniq.axonserver.connector.event.transformation.impl;
+package io.axoniq.axonserver.connector.event.transformation.impl.grpc;
 
 import io.axoniq.axonserver.connector.event.transformation.EventTransformation;
 import io.axoniq.axonserver.grpc.event.Transformation;

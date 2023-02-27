@@ -16,7 +16,7 @@
 
 package io.axoniq.axonserver.connector.event.transformation.impl;
 
-import io.axoniq.axonserver.connector.event.transformation.ActiveTransformation.Appender;
+import io.axoniq.axonserver.connector.event.transformation.Transformer;
 import io.axoniq.axonserver.connector.event.transformation.impl.EventTransformationService.TransformationStream;
 import io.axoniq.axonserver.grpc.event.Event;
 
@@ -28,46 +28,30 @@ import java.util.concurrent.atomic.AtomicReference;
  * @author Sara Pellegrini
  * @since 2023.0.0
  */
-public class ActionAppender implements Appender {
+public class EventTransformer implements Transformer {
 
     private final AtomicLong sequence;
     private final AtomicLong ackSequence = new AtomicLong(-1L);
     private final TransformationStream transformationStream;
     private final AtomicReference<CompletableFuture<Long>> completeFuture = new AtomicReference<>();
 
-    public ActionAppender(TransformationStream transformationStream,
-                          long currentSequence) {
+    public EventTransformer(TransformationStream transformationStream,
+                            long currentSequence) {
         this.transformationStream = transformationStream;
         this.sequence = new AtomicLong(currentSequence);
     }
 
     @Override
-    public Appender fireDeleteEvent(long token) {
-        long seq = sequence.incrementAndGet();
-        transformationStream().deleteEvent(token, seq)
-                              .thenRun(() -> acceptAck(seq));
-        return this;
-    }
-
-    @Override
-    public CompletableFuture<Appender> deleteEvent(long token) {
+    public CompletableFuture<Transformer> deleteEvent(long token) {
         long seq = sequence.incrementAndGet();
         return transformationStream().deleteEvent(token, seq)
                                      .thenRun(() -> acceptAck(seq))
                                      .thenApply(unused -> this);
     }
 
-    @Override
-    public Appender fireReplaceEvent(long token, Event replacement) {
-        long seq = sequence.incrementAndGet();
-        transformationStream().replaceEvent(token, replacement, seq)
-                              .thenRun(() -> acceptAck(seq));
-
-        return this;
-    }
 
     @Override
-    public CompletableFuture<Appender> replaceEvent(long token, Event replacement) {
+    public CompletableFuture<Transformer> replaceEvent(long token, Event replacement) {
         long seq = sequence.incrementAndGet();
         return transformationStream().replaceEvent(token, replacement, seq)
                                      .thenRun(() -> acceptAck(seq))

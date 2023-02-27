@@ -19,6 +19,7 @@ package io.axoniq.axonserver.connector.event.transformation.impl;
 import io.axoniq.axonserver.connector.event.transformation.ActiveTransformation;
 import io.axoniq.axonserver.connector.event.transformation.EventTransformation;
 import io.axoniq.axonserver.connector.event.transformation.EventTransformationChannel;
+import io.axoniq.axonserver.connector.event.transformation.impl.grpc.GrpcEventTransformationService;
 import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
 import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
@@ -33,8 +34,7 @@ import static io.axoniq.axonserver.connector.event.transformation.EventTransform
  * @author Sara Pellegrini
  * @since 2023.0.0
  */
-public class EventTransformationChannelImpl
-        extends AbstractAxonServerChannel<Void>
+public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Void>
         implements EventTransformationChannel {
 
     private static final Long INITIAL_SEQUENCE = -1L;
@@ -84,7 +84,7 @@ public class EventTransformationChannelImpl
     }
 
     private ActiveTransformation newActiveTransformation(String id, long currentSequence) {
-        return new ServiceActiveTransformation(id, currentSequence, service);
+        return new DefaultActiveTransformation(id, currentSequence, service);
     }
 
 

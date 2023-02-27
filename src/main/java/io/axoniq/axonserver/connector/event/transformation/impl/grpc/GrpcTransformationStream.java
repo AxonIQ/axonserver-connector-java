@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.axoniq.axonserver.connector.event.transformation.impl;
+package io.axoniq.axonserver.connector.event.transformation.impl.grpc;
 
 import io.axoniq.axonserver.connector.event.transformation.impl.EventTransformationService.TransformationStream;
 import io.axoniq.axonserver.grpc.event.DeletedEvent;
@@ -105,7 +105,7 @@ public class GrpcTransformationStream implements TransformationStream {
     }
 
     @Override
-    public void onCompleted(Consumer<Optional<Throwable>> onCompleted) {
+    public void onCompletedByServer(Consumer<Optional<Throwable>> onCompleted) {
         onCompletedRef.set(onCompleted);
     }
 
@@ -113,7 +113,7 @@ public class GrpcTransformationStream implements TransformationStream {
         pendingRequests.computeIfPresent(sequence,
                                          (key, appendOperation) -> {
                                              appendOperation.complete(null);
-                                             return null;
+                                             return null; //this removes the key from the map
                                          });
     }
 }

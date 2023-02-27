@@ -16,8 +16,6 @@
 
 package io.axoniq.axonserver.connector.event.transformation;
 
-import io.axoniq.axonserver.grpc.event.Event;
-
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -27,20 +25,10 @@ import java.util.function.Consumer;
  */
 public interface ActiveTransformation {
 
-    CompletableFuture<ActiveTransformation> append(Consumer<Appender> appenderConsumer);
+    CompletableFuture<ActiveTransformation> transform(Consumer<Transformer> transformerConsumer);
 
     CompletableFuture<EventTransformation> startApplying();
 
     CompletableFuture<EventTransformation> cancel();
 
-    interface Appender {
-
-        Appender fireDeleteEvent(long token);
-
-        CompletableFuture<Appender> deleteEvent(long token);
-
-        Appender fireReplaceEvent(long token, Event replacement);
-
-        CompletableFuture<Appender> replaceEvent(long token, Event replacement);
-    }
 }

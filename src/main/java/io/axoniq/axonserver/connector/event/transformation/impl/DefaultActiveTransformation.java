@@ -18,6 +18,7 @@ package io.axoniq.axonserver.connector.event.transformation.impl;
 
 import io.axoniq.axonserver.connector.event.transformation.ActiveTransformation;
 import io.axoniq.axonserver.connector.event.transformation.EventTransformation;
+import io.axoniq.axonserver.connector.event.transformation.Transformer;
 import io.axoniq.axonserver.connector.event.transformation.impl.EventTransformationService.TransformationStream;
 
 import java.util.concurrent.CompletableFuture;
@@ -27,13 +28,13 @@ import java.util.function.Consumer;
  * @author Sara Pellegrini
  * @since 2023.0.0
  */
-public class ServiceActiveTransformation implements ActiveTransformation {
+public class DefaultActiveTransformation implements ActiveTransformation {
 
     private final String transformationId;
     private final Long currentSequence;
     private final EventTransformationService service;
 
-    public ServiceActiveTransformation(String transformationId,
+    public DefaultActiveTransformation(String transformationId,
                                        Long currentSequence,
                                        EventTransformationService service) {
         this.transformationId = transformationId;
@@ -42,14 +43,14 @@ public class ServiceActiveTransformation implements ActiveTransformation {
     }
 
     @Override
-    public CompletableFuture<ActiveTransformation> append(Consumer<Appender> appenderConsumer) {
-        TransformationStream transformationStream = service.transformationStream(transformationId);
-        ActionAppender actionAppender = new ActionAppender(transformationStream, currentSequence);
-        appenderConsumer.accept(actionAppender);
-        return actionAppender.complete()
-                             .thenApply(seq -> new ServiceActiveTransformation(transformationId,
-                                                                               seq,
-                                                                               service));
+    public CompletableFuture<ActiveTransformation> transform(Consumer<Transformer> transformerConsumer) {
+        TransformationStream transformationStream = service.transformationStream(transformationId); //open stream
+        EventTransformer transformer = new EventTransformer(transformationStream, currentSequence);
+        transformerConsumer.accept(transformer); //execute transformation
+        return transformer.complete()           //close stream
+                          .thenApply(seq -> new DefaultActiveTransformation(transformationId,
+                                                                            seq,
+                                                                            service));
     }
 
     @Override

@@ -51,6 +51,6 @@ public interface EventTransformationService {
 
         void complete();
 
-        void onCompleted(Consumer<Optional<Throwable>> onCompleted);
+        void onCompletedByServer(Consumer<Optional<Throwable>> onCompleted);
     }
 }
