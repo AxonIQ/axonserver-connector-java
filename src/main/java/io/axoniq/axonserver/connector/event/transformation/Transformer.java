@@ -16,17 +16,12 @@
 
 package io.axoniq.axonserver.connector.event.transformation;
 
-import io.axoniq.axonserver.grpc.event.Event;
-
-import java.util.concurrent.CompletableFuture;
-
 /**
  * @author Sara Pellegrini
  * @since 2023.0.0
  */
 public interface Transformer {
 
-    CompletableFuture<Transformer> deleteEvent(long token);
+    void transform(Appender executor);
 
-    CompletableFuture<Transformer> replaceEvent(long token, Event replacement);
 }

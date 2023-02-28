@@ -22,7 +22,6 @@ import io.axoniq.axonserver.connector.event.transformation.Transformer;
 import io.axoniq.axonserver.connector.event.transformation.impl.EventTransformationService.TransformationStream;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 
 /**
  * @author Sara Pellegrini
@@ -43,14 +42,14 @@ public class DefaultActiveTransformation implements ActiveTransformation {
     }
 
     @Override
-    public CompletableFuture<ActiveTransformation> transform(Consumer<Transformer> transformerConsumer) {
+    public CompletableFuture<ActiveTransformation> transform(Transformer transformer) {
         TransformationStream transformationStream = service.transformationStream(transformationId); //open stream
-        EventTransformer transformer = new EventTransformer(transformationStream, currentSequence);
-        transformerConsumer.accept(transformer); //execute transformation
-        return transformer.complete()           //close stream
-                          .thenApply(seq -> new DefaultActiveTransformation(transformationId,
-                                                                            seq,
-                                                                            service));
+        ActionAppender appender = new ActionAppender(transformationStream, currentSequence);
+        transformer.transform(appender); //execute transformation
+        return appender.complete()           //close stream
+                       .thenApply(seq -> new DefaultActiveTransformation(transformationId,
+                                                                         seq,
+                                                                         service));
     }
 
     @Override

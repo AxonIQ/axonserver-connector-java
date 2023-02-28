@@ -16,18 +16,17 @@
 
 package io.axoniq.axonserver.connector.event.transformation;
 
+import io.axoniq.axonserver.grpc.event.Event;
+
 import java.util.concurrent.CompletableFuture;
 
 /**
  * @author Sara Pellegrini
  * @since 2023.0.0
  */
-public interface ActiveTransformation {
+public interface Appender {
 
-    CompletableFuture<ActiveTransformation> transform(Transformer transformer);
+    CompletableFuture<Appender> deleteEvent(long token);
 
-    CompletableFuture<EventTransformation> startApplying();
-
-    CompletableFuture<EventTransformation> cancel();
-
+    CompletableFuture<Appender> replaceEvent(long token, Event replacement);
 }

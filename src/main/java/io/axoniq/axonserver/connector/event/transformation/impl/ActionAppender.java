@@ -16,7 +16,7 @@
 
 package io.axoniq.axonserver.connector.event.transformation.impl;
 
-import io.axoniq.axonserver.connector.event.transformation.Transformer;
+import io.axoniq.axonserver.connector.event.transformation.Appender;
 import io.axoniq.axonserver.connector.event.transformation.impl.EventTransformationService.TransformationStream;
 import io.axoniq.axonserver.grpc.event.Event;
 
@@ -28,21 +28,21 @@ import java.util.concurrent.atomic.AtomicReference;
  * @author Sara Pellegrini
  * @since 2023.0.0
  */
-public class EventTransformer implements Transformer {
+public class ActionAppender implements Appender {
 
     private final AtomicLong sequence;
     private final AtomicLong ackSequence = new AtomicLong(-1L);
     private final TransformationStream transformationStream;
     private final AtomicReference<CompletableFuture<Long>> completeFuture = new AtomicReference<>();
 
-    public EventTransformer(TransformationStream transformationStream,
-                            long currentSequence) {
+    public ActionAppender(TransformationStream transformationStream,
+                          long currentSequence) {
         this.transformationStream = transformationStream;
         this.sequence = new AtomicLong(currentSequence);
     }
 
     @Override
-    public CompletableFuture<Transformer> deleteEvent(long token) {
+    public CompletableFuture<Appender> deleteEvent(long token) {
         long seq = sequence.incrementAndGet();
         return transformationStream().deleteEvent(token, seq)
                                      .thenRun(() -> acceptAck(seq))
@@ -51,7 +51,7 @@ public class EventTransformer implements Transformer {
 
 
     @Override
-    public CompletableFuture<Transformer> replaceEvent(long token, Event replacement) {
+    public CompletableFuture<Appender> replaceEvent(long token, Event replacement) {
         long seq = sequence.incrementAndGet();
         return transformationStream().replaceEvent(token, replacement, seq)
                                      .thenRun(() -> acceptAck(seq))

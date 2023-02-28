@@ -17,7 +17,6 @@
 package io.axoniq.axonserver.connector.event.transformation;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 
 /**
  * @author Sara Pellegrini
@@ -31,7 +30,7 @@ public interface EventTransformationChannel {
 
     CompletableFuture<ActiveTransformation> newTransformation(String description);
 
-    default CompletableFuture<EventTransformation> transform(String description, Consumer<Transformer> transformer) {
+    default CompletableFuture<EventTransformation> transform(String description, Transformer transformer) {
         return newTransformation(description)
                 .thenCompose(transformation -> transformation.transform(transformer))
                 .thenCompose(ActiveTransformation::startApplying);
