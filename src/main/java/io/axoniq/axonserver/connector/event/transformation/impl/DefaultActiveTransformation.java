@@ -24,8 +24,10 @@ import io.axoniq.axonserver.connector.event.transformation.impl.EventTransformat
 import java.util.concurrent.CompletableFuture;
 
 /**
+ * Default implementation of the {@link ActiveTransformation}
+ *
  * @author Sara Pellegrini
- * @since 2023.0.0
+ * @since 2023.1.0
  */
 public class DefaultActiveTransformation implements ActiveTransformation {
 
@@ -33,9 +35,16 @@ public class DefaultActiveTransformation implements ActiveTransformation {
     private final Long currentSequence;
     private final EventTransformationService service;
 
-    public DefaultActiveTransformation(String transformationId,
-                                       Long currentSequence,
-                                       EventTransformationService service) {
+    /**
+     * Constructs an instance based on the specified parameters.
+     *
+     * @param transformationId the identifier of the active transformation
+     * @param currentSequence  the current last sequence, used as validation that no action has been lost
+     * @param service          the {@link EventTransformationService} used to communicate with Axon Server
+     */
+    DefaultActiveTransformation(String transformationId,
+                                Long currentSequence,
+                                EventTransformationService service) {
         this.transformationId = transformationId;
         this.currentSequence = currentSequence;
         this.service = service;
