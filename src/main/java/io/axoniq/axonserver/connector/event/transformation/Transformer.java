@@ -17,11 +17,19 @@
 package io.axoniq.axonserver.connector.event.transformation;
 
 /**
+ * Functional interface that needs to be implemented to register transformation actions into the Transformation.
+ *
  * @author Sara Pellegrini
- * @since 2023.0.0
+ * @since 2023.1.0
  */
+@FunctionalInterface
 public interface Transformer {
 
-    void transform(Appender executor);
-
+    /**
+     * Registers the requested event changes to the event store.
+     *
+     * @param appender the appender used to register the transformation actions into the Transformation, since it
+     *                 provides the methods to delete and replace events
+     */
+    void transform(Appender appender);
 }

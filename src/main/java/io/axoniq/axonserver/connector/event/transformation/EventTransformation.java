@@ -20,7 +20,7 @@ package io.axoniq.axonserver.connector.event.transformation;
  * The Event Transformation details.
  *
  * @author Sara Pellegrini
- * @since 2023.0.0
+ * @since 2023.1.0
  */
 public interface EventTransformation {
 
