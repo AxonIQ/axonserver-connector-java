@@ -87,6 +87,6 @@ public class TransformableEventIterable implements TransformableEventStream {
     @Override
     public EventTransformationExecutor transform(String transformationDescription,
                                                  EventTransformer eventTransformer) {
-        return new DefaultEventTransformationExecutor(transformationDescription, events, eventTransformer);
+        return new IterableEventTransformationExecutor(transformationDescription, events, eventTransformer);
     }
 }
