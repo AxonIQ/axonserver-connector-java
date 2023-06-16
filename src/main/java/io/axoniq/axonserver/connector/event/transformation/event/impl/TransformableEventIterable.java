@@ -28,6 +28,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 
 /**
+ * {@link TransformableEventStream} implementation that is based on an {@link Iterable}.
+ *
  * @author Sara Pellegrini
  * @since 2023.1.0
  */
@@ -35,6 +37,10 @@ public class TransformableEventIterable implements TransformableEventStream {
 
     private final Iterable<EventWithToken> events;
 
+    /**
+     * Constructs an instance based on the specified {@link Iterable}
+     * @param events the {@link Iterable} of {@link EventWithToken}s used to retrieve events
+     */
     public TransformableEventIterable(Iterable<EventWithToken> events) {
         this.events = events;
     }
@@ -42,9 +48,12 @@ public class TransformableEventIterable implements TransformableEventStream {
     @Override
     public TransformableEventStream filter(Predicate<EventWithToken> predicate) {
         return new TransformableEventIterable(() -> new Iterator<EventWithToken>() {
-
             private final Iterator<EventWithToken> iterator = events.iterator();
             private final AtomicReference<EventWithToken> next = new AtomicReference<>();
+
+            {   //prefetch the initial result
+                nextMatchingThePredicate().ifPresent(next::set);
+            }
 
             @Override
             public boolean hasNext() {
@@ -71,9 +80,7 @@ public class TransformableEventIterable implements TransformableEventStream {
                 return Optional.empty();
             }
 
-            {
-                nextMatchingThePredicate().ifPresent(next::set);
-            }
+
         });
     }
 
