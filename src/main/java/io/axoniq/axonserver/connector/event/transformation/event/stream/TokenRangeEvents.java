@@ -27,6 +27,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 /**
+ * {@link EventWithToken}s' {@link Iterable} that start from a given initial token and completes at the last token.
+ *
  * @author Sara Pellegrini
  * @since 2023.0.0
  */
@@ -38,6 +40,13 @@ public class TokenRangeEvents implements Iterable<EventWithToken> {
 
     private final long lastToken;
 
+    /**
+     * Constructs an instance based on the specified parameters.
+     *
+     * @param eventChannel the channel used to open a stream to Axon Server for reading events
+     * @param firstToken   the first token to include
+     * @param lastToken    the last token to include
+     */
     public TokenRangeEvents(Supplier<EventChannel> eventChannel, long firstToken, long lastToken) {
         this.eventChannel = eventChannel;
         this.firstToken = firstToken;
@@ -46,10 +55,8 @@ public class TokenRangeEvents implements Iterable<EventWithToken> {
 
     private static EventWithToken next(EventStream eventStream) {
         try {
-//            return eventStream.nextIfAvailable();
             return eventStream.next();
-            //  } catch (InterruptedException e) {
-        } catch (Exception e) {
+        } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             eventStream.close();
             throw new RuntimeException(e);
