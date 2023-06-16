@@ -31,8 +31,11 @@ import java.util.stream.StreamSupport;
 import static io.axoniq.axonserver.connector.event.transformation.EventTransformation.State.ACTIVE;
 
 /**
+ * Implementation of the {@link EventTransformationChannel} that uses the {@link EventTransformationService} to interact
+ * with Axon Server
+ *
  * @author Sara Pellegrini
- * @since 2023.0.0
+ * @since 2023.1.0
  */
 public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Void>
         implements EventTransformationChannel {
@@ -40,6 +43,13 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
     private static final Long INITIAL_SEQUENCE = -1L;
     private final EventTransformationService service;
 
+    /**
+     * Constructs an instance based on a {@link GrpcEventTransformationService}.
+     *
+     * @param clientIdentification     the identification of the client
+     * @param executor                 a {@link ScheduledExecutorService} used to schedule reconnections
+     * @param axonServerManagedChannel the {@link AxonServerManagedChannel} used to connect to AxonServer
+     */
     public EventTransformationChannelImpl(ClientIdentification clientIdentification,
                                           ScheduledExecutorService executor,
                                           AxonServerManagedChannel axonServerManagedChannel) {
@@ -49,10 +59,19 @@ public class EventTransformationChannelImpl extends AbstractAxonServerChannel<Vo
              new GrpcEventTransformationService(axonServerManagedChannel));
     }
 
-    public EventTransformationChannelImpl(ClientIdentification clientIdentification,
-                                          ScheduledExecutorService executor,
-                                          AxonServerManagedChannel axonServerManagedChannel,
-                                          EventTransformationService service) {
+
+    /**
+     * Primary constructor that creates an instance based on the specified parameters.
+     *
+     * @param clientIdentification     the identification of the client
+     * @param executor                 a {@link ScheduledExecutorService} used to schedule reconnections
+     * @param axonServerManagedChannel the {@link AxonServerManagedChannel} used to connect to AxonServer
+     * @param service                  the {@link EventTransformationService} used to communicate with Axon Server
+     */
+    EventTransformationChannelImpl(ClientIdentification clientIdentification,
+                                   ScheduledExecutorService executor,
+                                   AxonServerManagedChannel axonServerManagedChannel,
+                                   EventTransformationService service) {
         super(clientIdentification, executor, axonServerManagedChannel);
         this.service = service;
     }

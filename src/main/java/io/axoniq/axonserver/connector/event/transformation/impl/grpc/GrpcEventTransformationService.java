@@ -32,8 +32,9 @@ import io.axoniq.axonserver.grpc.event.TransformRequestAck;
 import io.axoniq.axonserver.grpc.event.Transformation;
 import io.axoniq.axonserver.grpc.event.TransformationId;
 import io.grpc.stub.StreamObserver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -46,6 +47,8 @@ import javax.annotation.Nonnull;
  * @since 2023.0.0
  */
 public class GrpcEventTransformationService implements EventTransformationService {
+
+    private final Logger logger = LoggerFactory.getLogger(GrpcEventTransformationService.class);
 
     private final EventTransformationServiceGrpc.EventTransformationServiceStub stub;
 
@@ -71,7 +74,7 @@ public class GrpcEventTransformationService implements EventTransformationServic
         FutureListStreamObserver<Transformation> responseObserver = new FutureListStreamObserver<>();
         stub.transformations(Empty.newBuilder().build(), responseObserver);
         return responseObserver.thenApply(n -> n.stream()
-                                                .map(GrpcTransformation::new)
+                                                .map(GrpcEventTransformation::new)
                                                 .collect(Collectors.toList()));
     }
 
@@ -99,7 +102,7 @@ public class GrpcEventTransformationService implements EventTransformationServic
     @Override
     public TransformationStream transformationStream(String transformationId) {
         AtomicReference<Consumer<Long>> ackListener = new AtomicReference<>(seq -> {});
-        AtomicReference<Consumer<Optional<Throwable>>> onCompletedByServer = new AtomicReference<>(error -> {});
+        AtomicReference<Consumer<Throwable>> onCompletedByServer = new AtomicReference<>(error -> {});
 
         StreamObserver<TransformRequestAck> responseObserver =
                 responseObserver(ackSequence -> ackListener.get().accept(ackSequence),
@@ -112,7 +115,7 @@ public class GrpcEventTransformationService implements EventTransformationServic
     }
 
     private StreamObserver<TransformRequestAck> responseObserver(Consumer<Long> ackListenerSupplier,
-                                                                 Consumer<Optional<Throwable>> onComplete) {
+                                                                 Consumer<Throwable> onError) {
         return new StreamObserver<TransformRequestAck>() {
             @Override
             public void onNext(TransformRequestAck value) {
@@ -121,13 +124,16 @@ public class GrpcEventTransformationService implements EventTransformationServic
 
             @Override
             public void onError(Throwable t) {
-                //todo log error
-                onComplete.accept(Optional.of(t));
+                logger.warn("Transformation failed by server", t);
+                onError.accept(t);
             }
 
             @Override
             public void onCompleted() {
-                onComplete.accept(Optional.empty());
+                String message = "The server unexpectedly completed the transformation stream";
+                NonTransientException e = new NonTransientException(message);
+                logger.warn(message, e);
+                onError.accept(e);
             }
         };
     }

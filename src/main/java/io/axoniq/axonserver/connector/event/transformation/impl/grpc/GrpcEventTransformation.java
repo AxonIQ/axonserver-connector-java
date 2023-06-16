@@ -58,4 +58,11 @@ public class GrpcEventTransformation implements EventTransformation {
     public State state() {
         return State.valueOf(transformation.getState().name());
     }
+
+    @Override
+    public String toString() {
+        return "GrpcEventTransformation{" +
+                "transformation=" + transformation +
+                '}';
+    }
 }

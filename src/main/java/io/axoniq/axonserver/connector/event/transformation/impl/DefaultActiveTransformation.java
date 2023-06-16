@@ -53,7 +53,7 @@ public class DefaultActiveTransformation implements ActiveTransformation {
     @Override
     public CompletableFuture<ActiveTransformation> transform(Transformer transformer) {
         TransformationStream transformationStream = service.transformationStream(transformationId); //open stream
-        ActionAppender appender = new ActionAppender(transformationStream, currentSequence);
+        TransformationStreamAppender appender = new TransformationStreamAppender(transformationStream, currentSequence);
         transformer.transform(appender); //execute transformation
         return appender.complete()           //close stream
                        .thenApply(seq -> new DefaultActiveTransformation(transformationId,

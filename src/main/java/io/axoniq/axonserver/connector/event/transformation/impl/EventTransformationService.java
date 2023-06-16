@@ -19,7 +19,6 @@ package io.axoniq.axonserver.connector.event.transformation.impl;
 import io.axoniq.axonserver.connector.event.transformation.EventTransformation;
 import io.axoniq.axonserver.grpc.event.Event;
 
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -125,6 +124,6 @@ public interface EventTransformationService {
          *
          * @param onCompleted the callback function invoked when the stream is completed by Axon Server.
          */
-        void onCompletedByServer(Consumer<Optional<Throwable>> onCompleted);
+        void onCompletedByServer(Consumer<Throwable> onCompleted);
     }
 }
