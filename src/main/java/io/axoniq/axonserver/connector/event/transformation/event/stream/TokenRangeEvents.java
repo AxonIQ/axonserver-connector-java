@@ -70,11 +70,11 @@ public class TokenRangeEvents implements Iterable<EventWithToken> {
 
     private Iterator<EventWithToken> events(long firstToken, long lastToken) {
         EventStream eventStream = eventChannel.get().openStream(firstToken, 10);
-        AtomicReference<EventWithToken> prev = new AtomicReference<>(TokenRangeEvents.next(eventStream));
+        AtomicReference<EventWithToken> nextRef = new AtomicReference<>(TokenRangeEvents.next(eventStream));
         return new Iterator<EventWithToken>() {
             @Override
             public boolean hasNext() {
-                return prev.get().getToken() < lastToken;
+                return nextRef.get().getToken() <= lastToken;
             }
 
             @Override
@@ -85,12 +85,14 @@ public class TokenRangeEvents implements Iterable<EventWithToken> {
                 if (eventStream.isClosed()) {
                     throw new StreamClosedException(eventStream.getError().orElse(null));
                 }
-                EventWithToken next = TokenRangeEvents.next(eventStream);
-                if (next.getToken() == lastToken) {
+                EventWithToken current = nextRef.get();
+                if (current.getToken() == lastToken) {
+                    nextRef.set(current.toBuilder().setToken(lastToken + 1).build());
                     eventStream.close();
+                } else {
+                    nextRef.set(TokenRangeEvents.next(eventStream));
                 }
-                prev.set(next);
-                return next;
+                return current;
             }
         };
     }

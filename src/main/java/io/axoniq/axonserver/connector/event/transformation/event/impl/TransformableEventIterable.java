@@ -63,7 +63,7 @@ public class TransformableEventIterable implements TransformableEventStream {
             @Override
             public EventWithToken next() {
                 if (!hasNext()) {
-                    throw new NoSuchElementException("");
+                    throw new NoSuchElementException();
                 }
                 EventWithToken current = next.get();
                 next.set(nextMatchingThePredicate().orElse(null));

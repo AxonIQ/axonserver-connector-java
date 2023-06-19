@@ -16,27 +16,165 @@
 
 package io.axoniq.axonserver.connector.testutils;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
+import org.jetbrains.annotations.NotNull;
+
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class AxonServerUtils {
 
     public static void purgeEventsFromAxonServer(String hostname, int port) throws IOException {
-        final URL url = new URL(String.format("http://%s:%d%s", hostname, port, "/v1/devmode/purge-events"));
-        HttpURLConnection connection =  null;
+        purgeEventsFromAxonServer("default", hostname, port);
+    }
+
+    public static void purgeEventsFromAxonServer(String context, String hostname, int port) throws IOException {
+        deleteContext(context, hostname, port);
+        createContext(context, hostname, port);
+    }
+
+    public static void deleteContext(String context, String hostname, int port) throws IOException {
+        final URL url = new URL(String.format("http://%s:%d/v1/context/%s", hostname, port, context));
+        HttpURLConnection connection = null;
         try {
             connection = (HttpURLConnection) url.openConnection();
             connection.setDoOutput(true);
             connection.setRequestMethod("DELETE");
             connection.getInputStream().close();
-            assertEquals(200, connection.getResponseCode());
+            assertEquals(202, connection.getResponseCode());
         } finally {
             if (connection != null) {
                 connection.disconnect();
             }
+        }
+        waitForContextsCondition(hostname, port, contexts -> !contexts.contains(context));
+    }
+
+    public static void createContext(String context, String hostname, int port) throws IOException {
+        final URL url = new URL(String.format("http://%s:%d/v1/context", hostname, port));
+        HttpURLConnection connection = null;
+        try {
+            String jsonRequest = String.format(
+                    "{\"context\": \"%s\", \"replicationGroup\": \"%s\", \"roles\": [{ \"node\": \"axonserver\", \"role\": \"PRIMARY\" }]}",
+                    context,
+                    context);
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestProperty("Content-Type", "application/json");
+            connection.setRequestProperty("Accept", "application/json");
+            connection.setDoOutput(true);
+            connection.setRequestMethod("POST");
+            try (OutputStream os = connection.getOutputStream()) {
+                byte[] input = jsonRequest.getBytes(StandardCharsets.UTF_8);
+                os.write(input, 0, input.length);
+            }
+            connection.getInputStream().close();
+            assertEquals(202, connection.getResponseCode());
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+        waitForContextsCondition(hostname, port, contexts -> contexts.contains(context));
+    }
+
+    public static List<String> contexts(String hostname, int port) throws IOException {
+        final URL url = new URL(String.format("http://%s:%d/v1/public/context", hostname, port));
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestProperty("Accept", "application/json");
+            connection.setDoOutput(true);
+            connection.setRequestMethod("GET");
+
+            assertEquals(200, connection.getResponseCode());
+
+            return contexts(connection);
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+    }
+
+    public static void initCluster(String hostname, int port) throws IOException {
+        final URL url = new URL(String.format("http://%s:%d/v1/context/init", hostname, port));
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setDoOutput(true);
+            connection.setRequestMethod("POST");
+            connection.getInputStream().close();
+            assertEquals(202, connection.getResponseCode());
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+        waitForContextsCondition(hostname, port, contexts -> contexts.contains("_admin"));
+    }
+
+    private static ArrayList<String> contexts(HttpURLConnection connection) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+        StringBuilder sb = new StringBuilder();
+        String output;
+        while ((output = br.readLine()) != null) {
+            sb.append(output);
+        }
+        JsonElement jsonElement = JsonParser.parseString(sb.toString());
+        ArrayList<String> contexts = new ArrayList<>();
+        for (JsonElement element : jsonElement.getAsJsonArray()) {
+            String context = element.getAsJsonObject().get("context").getAsString();
+            contexts.add(context);
+        }
+        return contexts;
+    }
+
+    private static void waitForContextsCondition(String hostname, int port,
+                                                 Predicate<List<String>> condition) {
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        CountDownLatch latch = new CountDownLatch(1);
+        try {
+            scheduler.submit(() -> checkContextsCondition(hostname, port, condition, latch, scheduler))
+                     .get();
+            if (!latch.await(60, TimeUnit.SECONDS)) {
+                throw new RuntimeException("Condition on contexts has not been met!");
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        } finally {
+            scheduler.shutdown();
+        }
+    }
+
+    private static void checkContextsCondition(String hostname, int port,
+                                               Predicate<List<String>> condition,
+                                               CountDownLatch latch, ScheduledExecutorService scheduler) {
+        try {
+            if (condition.test(contexts(hostname, port))) {
+                latch.countDown();
+            } else {
+                scheduler.schedule(() -> checkContextsCondition(hostname, port, condition, latch, scheduler),
+                                   10,
+                                   TimeUnit.MILLISECONDS);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
 }
