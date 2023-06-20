@@ -46,7 +46,6 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@Disabled("Disabled until Axon Server 4.6 is released.")
 class StreamingQueryIntegrationTest extends AbstractAxonServerIntegrationTest {
 
     private AxonServerConnectionFactory connectionFactory1;

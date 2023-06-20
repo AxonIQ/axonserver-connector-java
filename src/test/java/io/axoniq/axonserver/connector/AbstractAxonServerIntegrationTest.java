@@ -56,8 +56,9 @@ public abstract class AbstractAxonServerIntegrationTest {
     @SuppressWarnings("resource")
     @Container
     public static GenericContainer<?> axonServerContainer =
-            new GenericContainer<>(System.getProperty("AXON_SERVER_IMAGE", "axoniq/axonserver"))
+            new GenericContainer<>(System.getProperty("AXON_SERVER_IMAGE", "axoniq/axonserver-enterprise:latest-dev"))
                     .withExposedPorts(8024, 8124)
+                    .withEnv("AXONIQ_AXONSERVER_PREVIEW_EVENT_TRANSFORMATION", "true")
                     .withEnv("AXONIQ_AXONSERVER_NAME", "axonserver")
                     .withEnv("AXONIQ_AXONSERVER_HOSTNAME", "localhost")
                     .withEnv("AXONIQ_AXONSERVER_DEVMODE_ENABLED", "true")
@@ -91,6 +92,7 @@ public abstract class AbstractAxonServerIntegrationTest {
                 toxiProxyContainer.getHost(), toxiProxyContainer.getMappedPort(8474)
         );
         axonServerProxy = getOrCreateProxy(client, "axonserver", "0.0.0.0:8124", "axonserver:8124");
+        AxonServerUtils.initCluster(axonServerHttpPort.getHostName(), axonServerHttpPort.getGrpcPort());
     }
 
     @BeforeEach
