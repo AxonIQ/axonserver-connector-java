@@ -18,7 +18,6 @@ package io.axoniq.axonserver.connector.testutils;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
-import org.jetbrains.annotations.NotNull;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -47,6 +46,8 @@ public class AxonServerUtils {
     public static void purgeEventsFromAxonServer(String context, String hostname, int port) throws IOException {
         deleteContext(context, hostname, port);
         createContext(context, hostname, port);
+        // TODO: 6/20/23 Figure out why busy wait is necessary for newly created context to be operative
+        waitFor(1_000);
     }
 
     public static void deleteContext(String context, String hostname, int port) throws IOException {
@@ -126,20 +127,24 @@ public class AxonServerUtils {
                 connection.disconnect();
             }
         }
-        waitForContextsCondition(hostname, port, contexts -> contexts.contains("_admin"));
+        waitForContextsCondition(hostname,
+                                 port,
+                                 contexts -> contexts.contains("_admin") && contexts.contains("default"));
     }
 
     private static ArrayList<String> contexts(HttpURLConnection connection) throws IOException {
         BufferedReader br = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-        StringBuilder sb = new StringBuilder();
-        String output;
-        while ((output = br.readLine()) != null) {
-            sb.append(output);
+        StringBuilder output = new StringBuilder();
+        String outputLine;
+        while ((outputLine = br.readLine()) != null) {
+            output.append(outputLine);
         }
-        JsonElement jsonElement = JsonParser.parseString(sb.toString());
+        JsonElement jsonElement = JsonParser.parseString(output.toString());
         ArrayList<String> contexts = new ArrayList<>();
         for (JsonElement element : jsonElement.getAsJsonArray()) {
-            String context = element.getAsJsonObject().get("context").getAsString();
+            String context = element.getAsJsonObject()
+                                    .get("context")
+                                    .getAsString();
             contexts.add(context);
         }
         return contexts;
@@ -159,6 +164,14 @@ public class AxonServerUtils {
             throw new RuntimeException(e);
         } finally {
             scheduler.shutdown();
+        }
+    }
+
+    private static void waitFor(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
         }
     }
 
