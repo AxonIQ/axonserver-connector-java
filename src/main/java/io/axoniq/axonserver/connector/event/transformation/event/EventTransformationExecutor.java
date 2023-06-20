@@ -23,10 +23,18 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 /**
+ * Executes the Transformation by invoking APPLY operation.
+ *
  * @author Sara Pellegrini
  * @since 2023.1.0
  */
 public interface EventTransformationExecutor {
 
+    /**
+     * Executes the Transformation by invoking APPLY operation.
+     *
+     * @param channelSupplier supplies the {@link EventTransformationChannel}
+     * @return a {@link CompletableFuture} to indicate when the APPLY process has been accepted
+     */
     CompletableFuture<EventTransformation> execute(Supplier<EventTransformationChannel> channelSupplier);
 }

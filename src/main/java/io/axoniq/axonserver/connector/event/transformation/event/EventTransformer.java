@@ -22,6 +22,8 @@ import io.axoniq.axonserver.grpc.event.EventWithToken;
 import java.util.function.BiConsumer;
 
 /**
+ * Provides a way to transform a given event by invoking operations on the {@link Appender}.
+ *
  * @author Sara Pellegrini
  * @since 2023.1.0
  */
