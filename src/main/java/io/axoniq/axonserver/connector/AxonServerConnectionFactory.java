@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021. AxonIQ
+ * Copyright (c) 2020-2023. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -285,7 +285,6 @@ public class AxonServerConnectionFactory {
          * @return this builder for further configuration
          */
         public Builder routingServers(ServerAddress... serverAddresses) {
-            suppressDownloadMessage = true;
             this.routingServers = new ArrayList<>(Arrays.asList(serverAddresses));
             return this;
         }
@@ -559,7 +558,19 @@ public class AxonServerConnectionFactory {
          */
         public AxonServerConnectionFactory build() {
             validate();
+            suppressDownloadMessage = customizedServerAddressProvided(routingServers)
+                    || Boolean.getBoolean("axon.axonserver.suppressDownloadMessage");
             return new AxonServerConnectionFactory(this);
+        }
+
+        private static boolean customizedServerAddressProvided(List<ServerAddress> serverAddresses) {
+            if (serverAddresses.size() > 1) {
+                return true;
+            }
+            if (serverAddresses.isEmpty()) {
+                return false;
+            }
+            return !ServerAddress.DEFAULT.equals(serverAddresses.get(0));
         }
     }
 

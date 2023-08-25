@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2023. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,12 @@ import java.util.Objects;
  * Definition of an AxonServer address, defining the {@link #getGrpcPort()} and {@link #getHostName()}.
  */
 public class ServerAddress {
+
+    /**
+     * A default {@link ServerAddress}, using {@link #getHostName() host} {@code "localhost"} and
+     * {@link #getGrpcPort() gRPC port} {@code 8124}.
+     */
+    public static final ServerAddress DEFAULT = new ServerAddress();
 
     private final int grpcPort;
     private final String host;
