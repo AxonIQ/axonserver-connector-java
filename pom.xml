@@ -414,6 +414,7 @@
                     <mavenExecutorId>forked-path</mavenExecutorId>
                     <localCheckout>true</localCheckout>
                     <releaseProfiles>release-sign-artifacts</releaseProfiles>
+                    <tagNameFormat>@{project.version}</tagNameFormat>
                 </configuration>
             </plugin>
             <plugin>
@@ -441,7 +442,7 @@
                 <executions>
                     <execution>
                         <id>attach-javadoc</id>
-                        <phase>deploy</phase>
+                        <phase>package</phase>
                         <goals>
                             <goal>jar</goal>
                         </goals>
