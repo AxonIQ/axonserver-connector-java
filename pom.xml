@@ -408,6 +408,7 @@
                     <mavenExecutorId>forked-path</mavenExecutorId>
                     <localCheckout>true</localCheckout>
                     <releaseProfiles>release-sign-artifacts</releaseProfiles>
+                    <tagNameFormat>@{project.version}</tagNameFormat>
                 </configuration>
             </plugin>
             <plugin>
