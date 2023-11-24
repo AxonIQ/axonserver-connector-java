@@ -61,7 +61,7 @@
         <testcontainers.version>1.19.3</testcontainers.version>
         <testng.version>7.5.1</testng.version>
 
-        <httpclient5.version>5.2.1</httpclient5.version>
+        <httpclient5.version>5.2.2</httpclient5.version>
         <toxiproxy.version>2.1.7</toxiproxy.version>
         <maven.surefire.plugin.version>3.2.2</maven.surefire.plugin.version>
     </properties>
