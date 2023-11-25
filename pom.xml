@@ -44,8 +44,7 @@
         <axonserver.api.version>2023.0.1</axonserver.api.version>
 
         <!-- For compatibility between grpc and tcnative, check https://github.com/grpc/grpc-java/blob/master/SECURITY.md#netty -->
-        <grpc.version>1.50.2</grpc.version>
-        <netty.tcnative.version>2.0.54.Final</netty.tcnative.version>
+        <grpc.version>1.59.0</grpc.version>
 
         <slf4j.version>1.7.36</slf4j.version>
         <log4j.version>2.22.0</log4j.version>
@@ -191,13 +190,8 @@
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
-            <artifactId>grpc-netty</artifactId>
+            <artifactId>grpc-netty-shaded</artifactId>
         </dependency>
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty-tcnative-boringssl-static</artifactId>
-        </dependency>
-
         <dependency>
             <groupId>javax.annotation</groupId>
             <artifactId>javax.annotation-api</artifactId>

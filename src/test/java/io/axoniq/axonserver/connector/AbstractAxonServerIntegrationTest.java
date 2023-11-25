@@ -56,7 +56,7 @@ public abstract class AbstractAxonServerIntegrationTest {
     @SuppressWarnings("resource")
     @Container
     public static GenericContainer<?> axonServerContainer =
-            new GenericContainer<>(System.getProperty("AXON_SERVER_IMAGE", "axoniq/axonserver-enterprise:latest-dev"))
+            new GenericContainer<>(System.getProperty("AXON_SERVER_IMAGE", "axoniq/axonserver"))
                     .withExposedPorts(8024, 8124)
                     .withEnv("AXONIQ_AXONSERVER_PREVIEW_EVENT_TRANSFORMATION", "true")
                     .withEnv("AXONIQ_AXONSERVER_NAME", "axonserver")

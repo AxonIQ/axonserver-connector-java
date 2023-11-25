@@ -228,7 +228,7 @@ class EventHandlingIntegrationTest extends AbstractAxonServerIntegrationTest {
     @Test
     void testScheduleAndCancel() throws Exception {
         assumeTrue(
-                axonServerVersion.matches("4\\.[4-9].*"),
+                axonServerVersion.matches("20[0-9]{2}.*") || axonServerVersion.matches("4\\.[4-9].*"),
                 "Version " + axonServerVersion + " does not support scheduled events"
         );
 
@@ -246,7 +246,7 @@ class EventHandlingIntegrationTest extends AbstractAxonServerIntegrationTest {
     @Test
     void testCancelUnknownToken() throws Exception {
         assumeTrue(
-                axonServerVersion.matches("4\\.[4-9].*"),
+                axonServerVersion.matches("20[0-9]{2}.*") || axonServerVersion.matches("4\\.[4-9].*"),
                 "Version " + axonServerVersion + " does not support scheduled events"
         );
 

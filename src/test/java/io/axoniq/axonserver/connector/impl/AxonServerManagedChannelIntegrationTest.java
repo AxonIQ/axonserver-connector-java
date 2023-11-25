@@ -25,13 +25,10 @@ import io.grpc.ConnectivityState;
 import io.grpc.ManagedChannel;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
-import io.grpc.netty.NettyChannelBuilder;
+import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
 import io.grpc.stub.ClientResponseObserver;
 import io.grpc.stub.StreamObserver;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.RepeatedTest;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
 
@@ -219,6 +216,7 @@ class AxonServerManagedChannelIntegrationTest extends AbstractAxonServerIntegrat
         assertEquals(ConnectivityState.READY, testSubject.getState(false));
     }
 
+    @Disabled("Not forcing platform reconnects does not ensure reconnects don't happen via platform servers")
     @RepeatedTest(20)
     void sameConnectionRecoveredOnDisconnectionWithoutForcedPlatformReconnect() throws Exception {
         testSubject = new AxonServerManagedChannel(asList(new ServerAddress("server1"),
