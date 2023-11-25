@@ -216,7 +216,6 @@ class AxonServerManagedChannelIntegrationTest extends AbstractAxonServerIntegrat
         assertEquals(ConnectivityState.READY, testSubject.getState(false));
     }
 
-    @Disabled("Not forcing platform reconnects does not ensure reconnects don't happen via platform servers")
     @RepeatedTest(20)
     void sameConnectionRecoveredOnDisconnectionWithoutForcedPlatformReconnect() throws Exception {
         testSubject = new AxonServerManagedChannel(asList(new ServerAddress("server1"),
@@ -260,6 +259,7 @@ class AxonServerManagedChannelIntegrationTest extends AbstractAxonServerIntegrat
         axonServerProxy.enable();
         connectAttempts.clear();
 
+        testSubject.enterIdle();
         assertWithin(1, TimeUnit.SECONDS, () -> {
             // because we want the test to re-attempt in quick succession, we must avoid underlying connect backoff
             testSubject.resetConnectBackoff();
