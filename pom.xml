@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  ~ Copyright (c) 2020-2021. AxonIQ
+  ~ Copyright (c) 2020-2023. AxonIQ
   ~
   ~ Licensed under the Apache License, Version 2.0 (the "License");
   ~ you may not use this file except in compliance with the License.
@@ -43,9 +43,7 @@
     <properties>
         <axonserver.api.version>2023.0.1</axonserver.api.version>
 
-        <!-- For compatibility between grpc and tcnative, check https://github.com/grpc/grpc-java/blob/master/SECURITY.md#netty -->
-        <grpc.version>1.50.2</grpc.version>
-        <netty.tcnative.version>2.0.54.Final</netty.tcnative.version>
+        <grpc.version>1.59.1</grpc.version>
 
         <slf4j.version>1.7.36</slf4j.version>
         <log4j.version>2.22.0</log4j.version>
@@ -95,11 +93,6 @@
                 <groupId>org.slf4j</groupId>
                 <artifactId>slf4j-log4j12</artifactId>
                 <version>${slf4j.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.netty</groupId>
-                <artifactId>netty-tcnative-boringssl-static</artifactId>
-                <version>${netty.tcnative.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.junit.jupiter</groupId>
@@ -191,13 +184,8 @@
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
-            <artifactId>grpc-netty</artifactId>
+            <artifactId>grpc-netty-shaded</artifactId>
         </dependency>
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty-tcnative-boringssl-static</artifactId>
-        </dependency>
-
         <dependency>
             <groupId>javax.annotation</groupId>
             <artifactId>javax.annotation-api</artifactId>
