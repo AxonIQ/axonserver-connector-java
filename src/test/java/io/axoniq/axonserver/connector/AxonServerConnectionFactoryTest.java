@@ -67,7 +67,8 @@ class AxonServerConnectionFactoryTest {
                                                                              .build();
 
         testSubject.connect(TEST_CONTEXT);
-        assertTrue(systemOut.toString().contains(downloadMessage));
+        String replace = systemOut.toString().replace("\r\n", "\n");
+        assertTrue(replace.contains(downloadMessage));
     }
 
     @Test
@@ -80,8 +81,8 @@ class AxonServerConnectionFactoryTest {
                                                                              .build();
 
         testSubject.connect(TEST_CONTEXT);
-
-        assertFalse(systemOut.toString().contains(downloadMessage));
+        String replace = systemOut.toString().replace("\r\n", "\n");
+        assertFalse(replace.contains(downloadMessage));
     }
 
     @Test
@@ -94,7 +95,7 @@ class AxonServerConnectionFactoryTest {
                                                                              .build();
 
         testSubject.connect(TEST_CONTEXT);
-
-        assertFalse(systemOut.toString().contains(downloadMessage));
+        String replace = systemOut.toString().replace("\r\n", "\n");
+        assertFalse(replace.contains(downloadMessage));
     }
 }
