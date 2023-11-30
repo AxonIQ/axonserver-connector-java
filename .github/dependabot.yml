@@ -16,7 +16,7 @@ updates:
     - "schananas"
     - "smcvb"
     - "trimoq"
-  milestone: 29
+  milestone: 30
 - package-ecosystem: maven
   directory: "/"
   schedule:
@@ -33,4 +33,4 @@ updates:
     - "schananas"
     - "smcvb"
     - "trimoq"
-  milestone: 29
+  milestone: 30
