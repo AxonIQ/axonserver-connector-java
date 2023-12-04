@@ -37,8 +37,7 @@ jobs:
       - name: Build and Test with Sonar Analysis
         if: matrix.sonar-enabled
         run: |
-          ./mvnw -B -U -Dstyle.color=always -Possrh -Pcoverage \
-          clean verify \ 
+          ./mvnw -B -U -Dstyle.color=always -Possrh -Pcoverage clean verify \ 
           org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
           -Dsonar.projectKey=AxonIQ_axonserver-connector-java
         env:
