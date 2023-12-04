@@ -18,12 +18,16 @@ jobs:
         include:
           - java-version: 8
             sonar-enabled: false
+            deploy-enabled: true
           - java-version: 11
             sonar-enabled: false
+            deploy-enabled: false
           - java-version: 17
             sonar-enabled: true
+            deploy-enabled: false
           - java-version: 21
             sonar-enabled: false
+            deploy-enabled: false
 
     steps:
       - name: Checkout Code
@@ -58,7 +62,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Deploy to Sonatype
-        if: success()
+        if: success() && deploy-enabled
         run: |
           mvn -B -U -Dstyle.color=always deploy -DskipTests=true
         env:
