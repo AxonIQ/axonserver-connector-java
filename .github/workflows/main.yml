@@ -1,4 +1,4 @@
-name: AxonServer Connector Java
+name: Main - Axon Server Connector Java
 
 on:
   push:
@@ -26,7 +26,7 @@ jobs:
             sonar-enabled: false
 
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Set up JDK ${{ matrix.java-version }}
@@ -39,7 +39,7 @@ jobs:
           server-username: MAVEN_USERNAME
           server-password: MAVEN_PASSWORD
 
-      - name: Maven operation with Sonar
+      - name: Build and Test with Sonar Analysis
         if: matrix.sonar-enabled
         run: |
           ./mvnw -B -U -Dstyle.color=always -Possrh -Pcoverage \ 
@@ -50,7 +50,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.CONNECTOR_SONAR_TOKEN }}
 
-      - name: Maven operation without Sonar
+      - name: Build and Test without Sonar Analysis
         if: matrix.sonar-enabled != true
         run: |
           mvn -B -U -Dstyle.color=always -Possrh clean verify
