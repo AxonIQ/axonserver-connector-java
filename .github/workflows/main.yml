@@ -37,16 +37,10 @@ jobs:
 
       - name: Maven operation with Sonar
         if: matrix.sonar-enabled
-        run: |
-          mvn -B -U -Dstyle.color=always -Possrh -Pcoverage \
-          clean verify \
-          sonar:sonar \
-          -Dsonar.projectKey=AxonIQ_axonserver-connector-java \
-          -Dsonar.organization=axoniq \
-          -Dsonar.host.url=https://sonarcloud.io \
-          -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+        run: ./mvnw -B -U -Dstyle.color=always -Possrh -Pcoverage org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=AxonIQ_axonserver-connector-java
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.CONNECTOR_SONAR_TOKEN }}
 
       - name: Maven operation without Sonar
         if: matrix.sonar-enabled != true
