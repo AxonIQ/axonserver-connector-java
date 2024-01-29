@@ -59,10 +59,10 @@
         <jacoco-maven-plugin.version>0.8.11</jacoco-maven-plugin.version>
         <junit.jupiter.version>5.10.1</junit.jupiter.version>
         <mockito.version>4.11.0</mockito.version>
-        <testcontainers.version>1.19.3</testcontainers.version>
+        <testcontainers.version>1.19.4</testcontainers.version>
         <testng.version>7.5.1</testng.version>
 
-        <httpclient5.version>5.3</httpclient5.version>
+        <httpclient5.version>5.3.1</httpclient5.version>
         <toxiproxy.version>2.1.7</toxiproxy.version>
         <maven.surefire.plugin.version>3.2.5</maven.surefire.plugin.version>
     </properties>
