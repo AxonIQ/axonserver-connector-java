@@ -23,6 +23,7 @@ import io.axoniq.axonserver.grpc.event.Event;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -186,6 +187,10 @@ public interface EventChannel {
      * @see #openStream(long, int) to use a sensible default for refill batch value.
      */
     EventStream openStream(long token, int bufferSize, int refillBatch, boolean forceReadFromLeader);
+
+    SegmentedEventStreams openPersistedStream(String streamId);
+    SegmentedEventStreams openPersistedStream(String streamId, String streamName, int segments, String sequencingPolicyName,
+                                           List<String> sequencingPolicyParameters, int token, String filter);
 
     /**
      * Opens a stream for consuming Events from a single aggregate, allowing the first event to be a Snapshot Event.
@@ -387,4 +392,6 @@ public interface EventChannel {
     default ResultStream<EventQueryResultEntry> querySnapshotEvents(String queryExpression, boolean liveStream, String contextName) {
         throw new UnsupportedOperationException();
     }
+
+    CompletableFuture<Void> deletePersistedStream(String streamId);
 }

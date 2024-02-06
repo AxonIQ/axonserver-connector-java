@@ -16,6 +16,7 @@
 
 package io.axoniq.axonserver.connector.event.impl;
 
+import com.google.protobuf.Empty;
 import io.axoniq.axonserver.connector.AxonServerException;
 import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.ResultStream;
@@ -24,8 +25,10 @@ import io.axoniq.axonserver.connector.event.AppendEventsTransaction;
 import io.axoniq.axonserver.connector.event.EventChannel;
 import io.axoniq.axonserver.connector.event.EventQueryResultEntry;
 import io.axoniq.axonserver.connector.event.EventStream;
+import io.axoniq.axonserver.connector.event.SegmentedEventStreams;
 import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
 import io.axoniq.axonserver.connector.impl.AbstractBufferedStream;
+import io.axoniq.axonserver.connector.impl.AssertUtils;
 import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
 import io.axoniq.axonserver.connector.impl.FutureStreamObserver;
 import io.axoniq.axonserver.grpc.FlowControl;
@@ -51,6 +54,10 @@ import io.axoniq.axonserver.grpc.event.RowResponse;
 import io.axoniq.axonserver.grpc.event.ScheduleEventRequest;
 import io.axoniq.axonserver.grpc.event.ScheduleToken;
 import io.axoniq.axonserver.grpc.event.TrackingToken;
+import io.axoniq.axonserver.grpc.streams.DeleteStreamRequest;
+import io.axoniq.axonserver.grpc.streams.EventStreamServiceGrpc;
+import io.axoniq.axonserver.grpc.streams.InitializationProperties;
+import io.axoniq.axonserver.grpc.streams.SequencingPolicy;
 import io.grpc.stub.StreamObserver;
 
 import java.time.Instant;
@@ -77,6 +84,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
 
     private final EventStoreGrpc.EventStoreStub eventStore;
     private final EventSchedulerGrpc.EventSchedulerStub eventScheduler;
+    private final EventStreamServiceGrpc.EventStreamServiceStub eventStreamService;
     private final Set<BufferedEventStream> buffers = ConcurrentHashMap.newKeySet();
     private final ClientIdentification clientId;
     // guarded by -this-
@@ -93,6 +101,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
         clientId = clientIdentification;
         eventStore = EventStoreGrpc.newStub(channel);
         eventScheduler = EventSchedulerGrpc.newStub(channel);
+        eventStreamService = EventStreamServiceGrpc.newStub(channel);
     }
 
     @Override
@@ -199,6 +208,54 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
         }
         buffer.enableFlowControl();
         return buffer;
+    }
+
+    @Override
+    public SegmentedEventStreams openPersistedStream(String streamId) {
+        AssertUtils.assertParameter(streamId != null, "streamId must not be null");
+        SegmentedEventStreamsImpl buffer = new SegmentedEventStreamsImpl(clientId, streamId);
+        //noinspection ResultOfMethodCallIgnored
+        eventStreamService.openStream(buffer);
+        buffer.openConnection();
+        return buffer;
+    }
+
+    @Override
+    public SegmentedEventStreams openPersistedStream(String streamId, String streamName, int segments,
+                                                     String sequencingPolicyName, List<String> sequencingPolicyParameters,
+                                                     int token, String filter) {
+        AssertUtils.assertParameter(streamId != null, "streamId must not be null");
+        AssertUtils.assertParameter(sequencingPolicyName != null, "sequencingPolicyName must not be null");
+        SegmentedEventStreamsImpl buffer = new SegmentedEventStreamsImpl(clientId, streamId);
+        //noinspection ResultOfMethodCallIgnored
+        eventStreamService.openStream(buffer);
+        SequencingPolicy.Builder builder = SequencingPolicy.newBuilder()
+                                                           .setPolicyName(
+                                                                   sequencingPolicyName);
+        if (sequencingPolicyParameters != null) {
+            builder.addAllParameter(sequencingPolicyParameters);
+        }
+        InitializationProperties initializationProperties = InitializationProperties.newBuilder()
+                                                                                    .setInitialPosition(token)
+                                                                                    .setSegments(segments)
+                                                                                    .setFilter(getOrDefault(filter, ""))
+                                                                                    .setStreamName(getOrDefault(streamName, streamId))
+                                                                                    .setSequencingPolicy(builder)
+                                                                                    .build();
+        buffer.openConnection(initializationProperties);
+
+        return buffer;
+    }
+
+    public CompletableFuture<Void> deletePersistedStream(String streamId) {
+        FutureStreamObserver<Empty> futureResult = new FutureStreamObserver<>(null);
+        eventStreamService.deleteStream(DeleteStreamRequest.newBuilder().setStreamId(streamId).build(),
+                                        futureResult);
+        return futureResult.thenApply(e -> null);
+    }
+
+    private <T> T getOrDefault(T value, T defaultValue) {
+        return value == null ? defaultValue : value;
     }
 
     @Override
@@ -320,7 +377,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
             this.query = query;
             this.liveStream = liveStream;
             this.querySnapshots = querySnapshots;
-            this.contextName = contextName == null ? "": contextName;
+            this.contextName = contextName == null ? "" : contextName;
         }
 
         @Override
