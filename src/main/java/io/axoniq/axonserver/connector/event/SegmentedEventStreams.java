@@ -1,13 +1,12 @@
 package io.axoniq.axonserver.connector.event;
 
-import java.util.function.IntConsumer;
+import java.util.function.Consumer;
 
 public interface SegmentedEventStreams  {
 
-    void onSegmentClosed(IntConsumer callback);
-    void onSegmentOpened(IntConsumer callback);
-
-    SegmentEventStream segment(int segment);
+    void onSegmentOpened(Consumer<SegmentEventStream> callback);
 
     void close();
+
+    void onClosed(Consumer<Throwable> closedCallback);
 }

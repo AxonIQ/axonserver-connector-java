@@ -16,6 +16,7 @@ import java.util.function.LongConsumer;
 
 public class BufferedSegmentEventStream
         implements SegmentEventStream {
+
     private static final Runnable NO_OP = () -> {
     };
 
@@ -26,9 +27,11 @@ public class BufferedSegmentEventStream
 
     private final AtomicReference<Runnable> onAvailableCallback = new AtomicReference<>(NO_OP);
 
+    private final int segment;
     private final LongConsumer progressCallback;
 
-    public BufferedSegmentEventStream( LongConsumer progressCallback) {
+    public BufferedSegmentEventStream(int segment, LongConsumer progressCallback) {
+        this.segment = segment;
         this.progressCallback = progressCallback;
     }
 
@@ -96,8 +99,8 @@ public class BufferedSegmentEventStream
     }
 
     public void onNext(EventWithToken streamSignal) {
-            buffer.add(streamSignal);
-            onAvailableCallback.get().run();
+        buffer.add(streamSignal);
+        onAvailableCallback.get().run();
     }
 
     public void onError(Throwable throwable) {
@@ -118,4 +121,8 @@ public class BufferedSegmentEventStream
         }
     }
 
+    @Override
+    public int segment() {
+        return segment;
+    }
 }

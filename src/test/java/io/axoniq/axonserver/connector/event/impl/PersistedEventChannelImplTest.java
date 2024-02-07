@@ -3,7 +3,6 @@ package io.axoniq.axonserver.connector.event.impl;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
 import io.axoniq.axonserver.connector.ResultStreamPublisher;
 import io.axoniq.axonserver.connector.event.EventChannel;
-import io.axoniq.axonserver.connector.event.SegmentEventStream;
 import io.axoniq.axonserver.connector.event.SegmentedEventStreams;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.EventWithToken;
@@ -43,10 +42,9 @@ class PersistedEventChannelImplTest {
                 null,
                 0,
                 null);
-        streams.onSegmentOpened(segment -> {
-            SegmentEventStream segmentEventStream = streams.segment(segment);
+        streams.onSegmentOpened(segmentEventStream -> {
             Flux.from(new ResultStreamPublisher<>(() -> segmentEventStream))
-                    .publishOn(Schedulers.newSingle("segment-" + segment))
+                    .publishOn(Schedulers.newSingle("segment-" + segmentEventStream.segment()))
                 .subscribe(new Subscriber<EventWithToken>() {
                 private Subscription subscription;
                 @Override
@@ -57,19 +55,19 @@ class PersistedEventChannelImplTest {
 
                 @Override
                 public void onNext(EventWithToken event) {
-                    logger.info("{}: next available -> {} ", segment, event);
+                    logger.info("{}: next available -> {} ", segmentEventStream.segment(), event);
                     segmentEventStream.progress(event.getToken());
                     subscription.request(1);
                 }
 
                 @Override
                 public void onError(Throwable throwable) {
-                    logger.warn("{}: exception ", segment, throwable);
+                    logger.warn("{}: exception ", segmentEventStream.segment(), throwable);
                 }
 
                 @Override
                 public void onComplete() {
-                    logger.info("{}: closed ", segment);
+                    logger.info("{}: closed ", segmentEventStream.segment());
                 }
             });
         });

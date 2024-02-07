@@ -20,6 +20,8 @@ import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.event.Confirmation;
 import io.axoniq.axonserver.grpc.event.Event;
+import io.axoniq.axonserver.grpc.streams.StreamConnections;
+import io.axoniq.axonserver.grpc.streams.StreamStatus;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -394,4 +396,11 @@ public interface EventChannel {
     }
 
     CompletableFuture<Void> deletePersistedStream(String streamId);
+
+    CompletableFuture<Void> updatePersistedStream(String streamId, Integer segments, String name);
+
+    CompletableFuture<List<StreamStatus>> persistedStreams();
+
+    CompletableFuture<List<StreamConnections>> persistedStreamConnections();
+
 }

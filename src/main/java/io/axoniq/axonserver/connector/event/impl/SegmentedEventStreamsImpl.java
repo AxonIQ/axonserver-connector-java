@@ -18,22 +18,21 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.IntConsumer;
+import java.util.function.Consumer;
 
 public class SegmentedEventStreamsImpl
         implements SegmentedEventStreams, ClientResponseObserver<StreamCommand, StreamSignal> {
     private static final Logger logger = LoggerFactory.getLogger(SegmentedEventStreamsImpl.class);
-    private static final Runnable NO_OP = () -> {
+    private static final Consumer<Throwable> NO_OP = ex -> {
     };
 
     private final Map<Integer, BufferedSegmentEventStream> openSegments = new ConcurrentHashMap<>();
     private final String streamId;
     private final String clientId;
 
-    private ClientCallStreamObserver<StreamCommand> outboundStream;
-    private final AtomicReference<Runnable> onAvailableCallback = new AtomicReference<>(NO_OP);
-    private final Set<IntConsumer> onSegmentClosedCallbacks = new CopyOnWriteArraySet<>();
-    private final Set<IntConsumer> onSegmentOpenedCallbacks = new CopyOnWriteArraySet<>();
+    private final AtomicReference<ClientCallStreamObserver<StreamCommand>> outboundStreamHolder = new AtomicReference<>();
+    private final AtomicReference<Consumer<Throwable>> onClosedCallback = new AtomicReference<>(NO_OP);
+    private final Set<Consumer<SegmentEventStream>> onSegmentOpenedCallbacks = new CopyOnWriteArraySet<>();
 
 
     public SegmentedEventStreamsImpl(ClientIdentification clientId, String streamId) {
@@ -54,45 +53,42 @@ public class SegmentedEventStreamsImpl
             openRequest.setInitializationProperties(initializationProperties);
         }
 
-        outboundStream.onNext(StreamCommand.newBuilder().setOpen(openRequest).build());
+        outboundStreamHolder.get().onNext(StreamCommand.newBuilder().setOpen(openRequest).build());
     }
 
 
     public void close() {
-        outboundStream.onCompleted();
+        outboundStreamHolder.get().onCompleted();
     }
 
     @Override
     public void beforeStart(ClientCallStreamObserver<StreamCommand> clientCallStreamObserver) {
-        outboundStream = clientCallStreamObserver;
+        outboundStreamHolder.set(clientCallStreamObserver);
     }
 
     @Override
     public void onNext(StreamSignal streamSignal) {
-        BufferedSegmentEventStream segment;
         if (streamSignal.hasEvent()) {
             boolean isNew = !openSegments.containsKey(streamSignal.getSegment());
-            segment = openSegments.computeIfAbsent(streamSignal.getSegment(),
-                                                   s -> new BufferedSegmentEventStream(progress -> onProgress(s,
+            BufferedSegmentEventStream segment = openSegments.computeIfAbsent(streamSignal.getSegment(),
+                                                   s -> new BufferedSegmentEventStream(streamSignal.getSegment(), progress -> onProgress(s,
                                                                                                               progress)));
             segment.onNext(streamSignal.getEvent());
             if (isNew) {
-                onSegmentOpenedCallbacks.forEach(callback -> callback.accept(streamSignal.getSegment()));
+                onSegmentOpenedCallbacks.forEach(callback -> callback.accept(segment));
             }
-            onAvailableCallback.get().run();
         }
         if (streamSignal.getClosed()) {
-            segment = openSegments.remove(streamSignal.getSegment());
+            BufferedSegmentEventStream segment = openSegments.remove(streamSignal.getSegment());
             if (segment != null) {
                 segment.onCompleted();
-                onSegmentClosedCallbacks.forEach(callback -> callback.accept(streamSignal.getSegment()));
             }
         }
     }
 
     private void onProgress(int segment, long progress) {
-        synchronized (outboundStream) {
-            outboundStream.onNext(StreamCommand.newBuilder()
+        synchronized (outboundStreamHolder) {
+            outboundStreamHolder.get().onNext(StreamCommand.newBuilder()
                                                .setProgress(ProgressRequest.newBuilder()
                                                                            .setSegment(segment)
                                                                            .setPosition(progress)
@@ -110,7 +106,7 @@ public class SegmentedEventStreamsImpl
     @Override
     public void onCompleted() {
         try {
-            outboundStream.onCompleted();
+            outboundStreamHolder.get().onCompleted();
         } catch (Exception ex) {
             // Ignore exception
         }
@@ -124,23 +120,21 @@ public class SegmentedEventStreamsImpl
             } else {
                 buffer.onCompleted();
             }
-            onSegmentClosedCallbacks.forEach(callback -> callback.accept(segment));
         });
-        onAvailableCallback.get().run();
+        onClosedCallback.get().accept(throwable);
     }
 
     @Override
-    public void onSegmentClosed(IntConsumer callback) {
-        onSegmentClosedCallbacks.add(callback);
-    }
-
-    @Override
-    public void onSegmentOpened(IntConsumer callback) {
+    public void onSegmentOpened(Consumer<SegmentEventStream>  callback) {
         onSegmentOpenedCallbacks.add(callback);
     }
 
     @Override
-    public SegmentEventStream segment(int segment) {
-        return openSegments.get(segment);
+    public void onClosed(Consumer<Throwable> closedCallback) {
+        if (closedCallback == null ) {
+            onClosedCallback.set(NO_OP);
+        } else {
+            onClosedCallback.set(closedCallback);
+        }
     }
 }
