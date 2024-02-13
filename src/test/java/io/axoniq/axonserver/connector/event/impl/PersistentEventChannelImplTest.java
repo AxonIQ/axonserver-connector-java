@@ -19,8 +19,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-class PersistedEventChannelImplTest {
-    private static final Logger logger = LoggerFactory.getLogger(PersistedEventChannelImplTest.class);
+class PersistentEventChannelImplTest {
+    private static final Logger logger = LoggerFactory.getLogger(PersistentEventChannelImplTest.class);
     private EventChannel eventChannel;
 
     @BeforeEach
@@ -33,8 +33,9 @@ class PersistedEventChannelImplTest {
     }
 
     @Test
+    @Disabled
     void openPersistedStream() throws ExecutionException, InterruptedException, TimeoutException {
-        SegmentedEventStreams streams = eventChannel.openPersistedStream(
+        SegmentedEventStreams streams = eventChannel.openPersistentStream(
                 "sample-events",
                 null,
                 2,

@@ -220,7 +220,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public SegmentedEventStreams openPersistedStream(String streamId) {
+    public SegmentedEventStreams openPersistentStream(String streamId) {
         AssertUtils.assertParameter(streamId != null, "streamId must not be null");
         SegmentedEventStreamsImpl buffer = new SegmentedEventStreamsImpl(clientId, streamId);
         //noinspection ResultOfMethodCallIgnored
@@ -231,10 +231,10 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public SegmentedEventStreams openPersistedStream(String streamId, String streamName, int segments,
-                                                     String sequencingPolicyName,
-                                                     List<String> sequencingPolicyParameters,
-                                                     int token, String filter) {
+    public SegmentedEventStreams openPersistentStream(String streamId, String streamName, int segments,
+                                                      String sequencingPolicyName,
+                                                      List<String> sequencingPolicyParameters,
+                                                      int token, String filter) {
         AssertUtils.assertParameter(streamId != null, "streamId must not be null");
         AssertUtils.assertParameter(sequencingPolicyName != null, "sequencingPolicyName must not be null");
         SegmentedEventStreamsImpl buffer = new SegmentedEventStreamsImpl(clientId, streamId);

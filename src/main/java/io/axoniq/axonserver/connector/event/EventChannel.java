@@ -190,9 +190,9 @@ public interface EventChannel {
      */
     EventStream openStream(long token, int bufferSize, int refillBatch, boolean forceReadFromLeader);
 
-    SegmentedEventStreams openPersistedStream(String streamId);
-    SegmentedEventStreams openPersistedStream(String streamId, String streamName, int segments, String sequencingPolicyName,
-                                           List<String> sequencingPolicyParameters, int token, String filter);
+    SegmentedEventStreams openPersistentStream(String streamId);
+    SegmentedEventStreams openPersistentStream(String streamId, String streamName, int segments, String sequencingPolicyName,
+                                               List<String> sequencingPolicyParameters, int token, String filter);
 
     /**
      * Opens a stream for consuming Events from a single aggregate, allowing the first event to be a Snapshot Event.
