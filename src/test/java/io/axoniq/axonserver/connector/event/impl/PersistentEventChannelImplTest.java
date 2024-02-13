@@ -3,7 +3,7 @@ package io.axoniq.axonserver.connector.event.impl;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
 import io.axoniq.axonserver.connector.ResultStreamPublisher;
 import io.axoniq.axonserver.connector.event.EventChannel;
-import io.axoniq.axonserver.connector.event.SegmentedEventStreams;
+import io.axoniq.axonserver.connector.event.PersistentStream;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.EventWithToken;
 import org.junit.jupiter.api.*;
@@ -35,7 +35,7 @@ class PersistentEventChannelImplTest {
     @Test
     @Disabled
     void openPersistedStream() throws ExecutionException, InterruptedException, TimeoutException {
-        SegmentedEventStreams streams = eventChannel.openPersistentStream(
+        PersistentStream streams = eventChannel.openPersistentStream(
                 "sample-events",
                 null,
                 2,

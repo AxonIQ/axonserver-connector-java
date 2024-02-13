@@ -1,7 +1,7 @@
 package io.axoniq.axonserver.connector.event.impl;
 
-import io.axoniq.axonserver.connector.event.SegmentEventStream;
-import io.axoniq.axonserver.connector.event.SegmentedEventStreams;
+import io.axoniq.axonserver.connector.event.EventStreamSegment;
+import io.axoniq.axonserver.connector.event.PersistentStream;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
 import io.axoniq.axonserver.grpc.streams.InitializationProperties;
 import io.axoniq.axonserver.grpc.streams.OpenRequest;
@@ -20,22 +20,22 @@ import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
-public class SegmentedEventStreamsImpl
-        implements SegmentedEventStreams, ClientResponseObserver<StreamCommand, StreamSignal> {
-    private static final Logger logger = LoggerFactory.getLogger(SegmentedEventStreamsImpl.class);
+public class PersistentStreamImpl
+        implements PersistentStream, ClientResponseObserver<StreamCommand, StreamSignal> {
+    private static final Logger logger = LoggerFactory.getLogger(PersistentStreamImpl.class);
     private static final Consumer<Throwable> NO_OP = ex -> {
     };
 
-    private final Map<Integer, BufferedSegmentEventStream> openSegments = new ConcurrentHashMap<>();
+    private final Map<Integer, BufferedEventStreamSegment> openSegments = new ConcurrentHashMap<>();
     private final String streamId;
     private final String clientId;
 
     private final AtomicReference<ClientCallStreamObserver<StreamCommand>> outboundStreamHolder = new AtomicReference<>();
     private final AtomicReference<Consumer<Throwable>> onClosedCallback = new AtomicReference<>(NO_OP);
-    private final Set<Consumer<SegmentEventStream>> onSegmentOpenedCallbacks = new CopyOnWriteArraySet<>();
+    private final Set<Consumer<EventStreamSegment>> onSegmentOpenedCallbacks = new CopyOnWriteArraySet<>();
 
 
-    public SegmentedEventStreamsImpl(ClientIdentification clientId, String streamId) {
+    public PersistentStreamImpl(ClientIdentification clientId, String streamId) {
         this.streamId = streamId;
         this.clientId = clientId.getClientId();
     }
@@ -70,16 +70,16 @@ public class SegmentedEventStreamsImpl
     public void onNext(StreamSignal streamSignal) {
         if (streamSignal.hasEvent()) {
             boolean isNew = !openSegments.containsKey(streamSignal.getSegment());
-            BufferedSegmentEventStream segment = openSegments.computeIfAbsent(streamSignal.getSegment(),
-                                                   s -> new BufferedSegmentEventStream(streamSignal.getSegment(), progress -> onProgress(s,
-                                                                                                              progress)));
+            BufferedEventStreamSegment segment = openSegments.computeIfAbsent(streamSignal.getSegment(),
+                                                   s -> new BufferedEventStreamSegment(streamSignal.getSegment(), progress -> onProgress(s,
+                                                                                                                                         progress)));
             segment.onNext(streamSignal.getEvent());
             if (isNew) {
                 onSegmentOpenedCallbacks.forEach(callback -> callback.accept(segment));
             }
         }
         if (streamSignal.getClosed()) {
-            BufferedSegmentEventStream segment = openSegments.remove(streamSignal.getSegment());
+            BufferedEventStreamSegment segment = openSegments.remove(streamSignal.getSegment());
             if (segment != null) {
                 segment.onCompleted();
             }
@@ -125,7 +125,7 @@ public class SegmentedEventStreamsImpl
     }
 
     @Override
-    public void onSegmentOpened(Consumer<SegmentEventStream>  callback) {
+    public void onSegmentOpened(Consumer<EventStreamSegment>  callback) {
         onSegmentOpenedCallbacks.add(callback);
     }
 

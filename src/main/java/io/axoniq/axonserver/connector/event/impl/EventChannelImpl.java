@@ -25,7 +25,7 @@ import io.axoniq.axonserver.connector.event.AppendEventsTransaction;
 import io.axoniq.axonserver.connector.event.EventChannel;
 import io.axoniq.axonserver.connector.event.EventQueryResultEntry;
 import io.axoniq.axonserver.connector.event.EventStream;
-import io.axoniq.axonserver.connector.event.SegmentedEventStreams;
+import io.axoniq.axonserver.connector.event.PersistentStream;
 import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
 import io.axoniq.axonserver.connector.impl.AbstractBufferedStream;
 import io.axoniq.axonserver.connector.impl.AssertUtils;
@@ -92,7 +92,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     private final EventSchedulerGrpc.EventSchedulerStub eventScheduler;
     private final EventStreamServiceGrpc.EventStreamServiceStub eventStreamService;
     private final Set<BufferedEventStream> buffers = ConcurrentHashMap.newKeySet();
-    private final Set<SegmentedEventStreamsImpl> persistedEventStreams = ConcurrentHashMap.newKeySet();
+    private final Set<PersistentStreamImpl> persistedEventStreams = ConcurrentHashMap.newKeySet();
     private final ClientIdentification clientId;
     // guarded by -this-
 
@@ -129,7 +129,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     private void closeEventStreams() {
         buffers.forEach(BufferedEventStream::close);
         buffers.clear();
-        persistedEventStreams.forEach(SegmentedEventStreamsImpl::close);
+        persistedEventStreams.forEach(PersistentStreamImpl::close);
         persistedEventStreams.clear();
     }
 
@@ -220,9 +220,9 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public SegmentedEventStreams openPersistentStream(String streamId) {
+    public PersistentStream openPersistentStream(String streamId) {
         AssertUtils.assertParameter(streamId != null, "streamId must not be null");
-        SegmentedEventStreamsImpl buffer = new SegmentedEventStreamsImpl(clientId, streamId);
+        PersistentStreamImpl buffer = new PersistentStreamImpl(clientId, streamId);
         //noinspection ResultOfMethodCallIgnored
         eventStreamService.openStream(buffer);
         buffer.openConnection();
@@ -231,13 +231,13 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public SegmentedEventStreams openPersistentStream(String streamId, String streamName, int segments,
-                                                      String sequencingPolicyName,
-                                                      List<String> sequencingPolicyParameters,
-                                                      int token, String filter) {
+    public PersistentStream openPersistentStream(String streamId, String streamName, int segments,
+                                                 String sequencingPolicyName,
+                                                 List<String> sequencingPolicyParameters,
+                                                 int token, String filter) {
         AssertUtils.assertParameter(streamId != null, "streamId must not be null");
         AssertUtils.assertParameter(sequencingPolicyName != null, "sequencingPolicyName must not be null");
-        SegmentedEventStreamsImpl buffer = new SegmentedEventStreamsImpl(clientId, streamId);
+        PersistentStreamImpl buffer = new PersistentStreamImpl(clientId, streamId);
         //noinspection ResultOfMethodCallIgnored
         eventStreamService.openStream(buffer);
         SequencingPolicy.Builder builder = SequencingPolicy.newBuilder()
