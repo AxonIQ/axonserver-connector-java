@@ -25,6 +25,7 @@ import io.axoniq.axonserver.connector.event.AppendEventsTransaction;
 import io.axoniq.axonserver.connector.event.EventChannel;
 import io.axoniq.axonserver.connector.event.EventQueryResultEntry;
 import io.axoniq.axonserver.connector.event.EventStream;
+import io.axoniq.axonserver.connector.event.PersistedStreamProperties;
 import io.axoniq.axonserver.connector.event.PersistentStream;
 import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
 import io.axoniq.axonserver.connector.impl.AbstractBufferedStream;
@@ -65,6 +66,7 @@ import io.axoniq.axonserver.grpc.streams.UpdateStreamRequest;
 import io.grpc.stub.StreamObserver;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -222,45 +224,46 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     @Override
     public PersistentStream openPersistentStream(String streamId) {
         AssertUtils.assertParameter(streamId != null, "streamId must not be null");
-        PersistentStreamImpl buffer = new PersistentStreamImpl(clientId, streamId);
-        //noinspection ResultOfMethodCallIgnored
-        eventStreamService.openStream(buffer);
-        buffer.openConnection();
-        persistedEventStreams.add(buffer);
-        return buffer;
+        return openPersistentStream(clientId, streamId, null);
     }
 
     @Override
-    public PersistentStream openPersistentStream(String streamId, String streamName, int segments,
-                                                 String sequencingPolicyName,
-                                                 List<String> sequencingPolicyParameters,
-                                                 int token, String filter) {
+    public PersistentStream openPersistentStream(String streamId, PersistedStreamProperties creationProperties) {
         AssertUtils.assertParameter(streamId != null, "streamId must not be null");
-        AssertUtils.assertParameter(sequencingPolicyName != null, "sequencingPolicyName must not be null");
+        AssertUtils.assertParameter(creationProperties != null, "creationProperties must not be null");
+        AssertUtils.assertParameter(creationProperties.sequencingPolicyName() != null,
+                                    "sequencingPolicyName must not be null");
+
+        return openPersistentStream(clientId, streamId, initializationProperties(creationProperties));
+    }
+
+    private PersistentStream openPersistentStream(ClientIdentification clientId, String streamId,
+                                                  InitializationProperties initializationProperties) {
         PersistentStreamImpl buffer = new PersistentStreamImpl(clientId, streamId);
         //noinspection ResultOfMethodCallIgnored
         eventStreamService.openStream(buffer);
-        SequencingPolicy.Builder builder = SequencingPolicy.newBuilder()
-                                                           .setPolicyName(
-                                                                   sequencingPolicyName);
-        if (sequencingPolicyParameters != null) {
-            builder.addAllParameter(sequencingPolicyParameters);
-        }
-        InitializationProperties initializationProperties = InitializationProperties.newBuilder()
-                                                                                    .setInitialPosition(token)
-                                                                                    .setSegments(segments)
-                                                                                    .setFilter(nonNullOrDefault(filter, ""))
-                                                                                    .setStreamName(nonNullOrDefault(
-                                                                                            streamName,
-                                                                                            streamId))
-                                                                                    .setSequencingPolicy(builder)
-                                                                                    .build();
         buffer.openConnection(initializationProperties);
         persistedEventStreams.add(buffer);
         return buffer;
     }
 
-    public CompletableFuture<Void> deletePersistedStream(String streamId) {
+    private InitializationProperties initializationProperties(PersistedStreamProperties creationProperties) {
+        return InitializationProperties.newBuilder()
+                                       .setInitialPosition(creationProperties.initialPosition())
+                                       .setSegments(creationProperties.segments())
+                                       .setStreamName(nonNullOrDefault(creationProperties.streamName(),""))
+                                       .setFilter(nonNullOrDefault(creationProperties.filter(),""))
+                                       .setSequencingPolicy(SequencingPolicy.newBuilder()
+                                                                            .setPolicyName(
+                                                                                    creationProperties.sequencingPolicyName())
+                                                                            .addAllParameter(
+                                                                                    nonNullOrDefault(
+                                                                                            creationProperties.sequencingPolicyParameters(),
+                                                                                            Collections.emptyList())))
+                                       .build();
+    }
+
+    public CompletableFuture<Void> deletePersistentStream(String streamId) {
         FutureStreamObserver<Empty> futureResult = new FutureStreamObserver<>(null);
         eventStreamService.deleteStream(DeleteStreamRequest.newBuilder().setStreamId(streamId).build(),
                                         futureResult);
@@ -268,11 +271,11 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public CompletableFuture<Void> updatePersistedStream(String streamId, Integer segments, String name) {
+    public CompletableFuture<Void> updatePersistentStream(String streamId, Integer segments, String streamName) {
         FutureStreamObserver<Empty> futureResult = new FutureStreamObserver<>(null);
         UpdateStreamRequest request = UpdateStreamRequest.newBuilder()
                                                          .setStreamId(streamId)
-                                                         .setStreamName(nonNullOrDefault(name, ""))
+                                                         .setStreamName(nonNullOrDefault(streamName, ""))
                                                          .setSegments(nonNullOrDefault(segments, 0))
                                                          .build();
         eventStreamService.updateStream(request, futureResult);
@@ -280,14 +283,14 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public CompletableFuture<List<StreamStatus>> persistedStreams() {
+    public CompletableFuture<List<StreamStatus>> persistentStreams() {
         FutureListStreamObserver<StreamStatus> futureList = new FutureListStreamObserver<>();
         eventStreamService.listStreams(Empty.getDefaultInstance(), futureList);
         return futureList;
     }
 
     @Override
-    public CompletableFuture<List<StreamConnections>> persistedStreamConnections() {
+    public CompletableFuture<List<StreamConnections>> persistentStreamConnections() {
         FutureListStreamObserver<StreamConnections> futureList = new FutureListStreamObserver<>();
         eventStreamService.listConnections(Empty.getDefaultInstance(), futureList);
         return futureList;

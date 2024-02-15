@@ -190,10 +190,6 @@ public interface EventChannel {
      */
     EventStream openStream(long token, int bufferSize, int refillBatch, boolean forceReadFromLeader);
 
-    PersistentStream openPersistentStream(String streamId);
-    PersistentStream openPersistentStream(String streamId, String streamName, int segments, String sequencingPolicyName,
-                                          List<String> sequencingPolicyParameters, int token, String filter);
-
     /**
      * Opens a stream for consuming Events from a single aggregate, allowing the first event to be a Snapshot Event.
      * <p>
@@ -395,12 +391,50 @@ public interface EventChannel {
         throw new UnsupportedOperationException();
     }
 
-    CompletableFuture<Void> deletePersistedStream(String streamId);
+    /**
+     * Opens the persistent stream identified by {@code streamId}. Fails if the stream does not exist.
+     * @param streamId the unique identification of a persistent stream
+     * @return a PersistedStream streaming events per segment
+     */
+    PersistentStream openPersistentStream(String streamId);
 
-    CompletableFuture<Void> updatePersistedStream(String streamId, Integer segments, String name);
+    /**
+     * Opens the persistent stream identified by {@code streamId}. If the stream does not exist it will be
+     * created with the properties specified in {@code creationProperties}.
+     * @param streamId the unique identification of a persistent stream
+     * @param creationProperties properties to initialize the persistent stream if it does not exist yet
+     * @return a PersistedStream streaming events per segment
+     */
+    PersistentStream openPersistentStream(String streamId, PersistedStreamProperties creationProperties);
 
-    CompletableFuture<List<StreamStatus>> persistedStreams();
 
-    CompletableFuture<List<StreamConnections>> persistedStreamConnections();
+    /**
+     * Deletes a persistent stream.
+     * @param streamId the unique identification of a persistent stream
+     * @return a CompletableFuture that completes when the persistent stream is deleted
+     */
+    CompletableFuture<Void> deletePersistentStream(String streamId);
+
+    /**
+     * Updates properties for a persistent stream. If {@code segments} parameter is set to a positive value, it changes
+     * the number of segments for the persistent stream.
+     * @param streamId the unique identification of a persistent stream
+     * @param segments the requested number of segments for the persistent stream
+     * @param streamName the new logical name for the stream
+     * @return a CompletableFuture that completes when the persistent stream is updated
+     */
+    CompletableFuture<Void> updatePersistentStream(String streamId, Integer segments, String streamName);
+
+    /**
+     * Returns a list of persistent streams with the last confirmed token per segment.
+     * @return a list of persistent streams
+     */
+    CompletableFuture<List<StreamStatus>> persistentStreams();
+
+    /**
+     * Returns a list of persistent streams with the connected client per segment.
+     * @return a list of persistent streams
+     */
+    CompletableFuture<List<StreamConnections>> persistentStreamConnections();
 
 }

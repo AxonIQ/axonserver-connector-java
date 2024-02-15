@@ -3,6 +3,7 @@ package io.axoniq.axonserver.connector.event.impl;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
 import io.axoniq.axonserver.connector.ResultStreamPublisher;
 import io.axoniq.axonserver.connector.event.EventChannel;
+import io.axoniq.axonserver.connector.event.PersistedStreamProperties;
 import io.axoniq.axonserver.connector.event.PersistentStream;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.EventWithToken;
@@ -20,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 class PersistentEventChannelImplTest {
+
     private static final Logger logger = LoggerFactory.getLogger(PersistentEventChannelImplTest.class);
     private EventChannel eventChannel;
 
@@ -29,52 +31,53 @@ class PersistentEventChannelImplTest {
                                                                                               UUID.randomUUID()
                                                                                                   .toString()).build();
         eventChannel = connectionFactory.connect("second").eventChannel();
-        eventChannel.deletePersistedStream("sample-events").get();
+        eventChannel.deletePersistentStream("sample-events").get();
     }
 
     @Test
     @Disabled
     void openPersistedStream() throws ExecutionException, InterruptedException, TimeoutException {
         PersistentStream streams = eventChannel.openPersistentStream(
-                "sample-events",
-                null,
-                2,
-                "AggregateIdentifier",
-                null,
-                0,
-                null);
+                "sample-events", new PersistedStreamProperties(
+                        null,
+                        2,
+                        "AggregateIdentifier",
+                        null,
+                        0,
+                        null));
         streams.onSegmentOpened(segmentEventStream -> {
             Flux.from(new ResultStreamPublisher<>(() -> segmentEventStream))
-                    .publishOn(Schedulers.newSingle("segment-" + segmentEventStream.segment()))
+                .publishOn(Schedulers.newSingle("segment-" + segmentEventStream.segment()))
                 .subscribe(new Subscriber<EventWithToken>() {
-                private Subscription subscription;
-                @Override
-                public void onSubscribe(Subscription subscription) {
-                    this.subscription = subscription;
-                    subscription.request(100);
-                }
+                    private Subscription subscription;
 
-                @Override
-                public void onNext(EventWithToken event) {
-                    logger.info("{}: next available -> {} ", segmentEventStream.segment(), event);
-                    segmentEventStream.progress(event.getToken());
-                    subscription.request(1);
-                }
+                    @Override
+                    public void onSubscribe(Subscription subscription) {
+                        this.subscription = subscription;
+                        subscription.request(100);
+                    }
 
-                @Override
-                public void onError(Throwable throwable) {
-                    logger.warn("{}: exception ", segmentEventStream.segment(), throwable);
-                }
+                    @Override
+                    public void onNext(EventWithToken event) {
+                        logger.info("{}: next available -> {} ", segmentEventStream.segment(), event);
+                        segmentEventStream.progress(event.getToken());
+                        subscription.request(1);
+                    }
 
-                @Override
-                public void onComplete() {
-                    logger.info("{}: closed ", segmentEventStream.segment());
-                }
-            });
+                    @Override
+                    public void onError(Throwable throwable) {
+                        logger.warn("{}: exception ", segmentEventStream.segment(), throwable);
+                    }
+
+                    @Override
+                    public void onComplete() {
+                        logger.info("{}: closed ", segmentEventStream.segment());
+                    }
+                });
         });
 
         eventChannel.appendEvents(Event.newBuilder()
-                                          .setAggregateIdentifier("1234")
+                                       .setAggregateIdentifier("1234")
                                        .build()).get(1, TimeUnit.SECONDS);
         eventChannel.appendEvents(Event.newBuilder()
                                        .setAggregateIdentifier("1235")
@@ -87,6 +90,5 @@ class PersistentEventChannelImplTest {
         Thread.sleep(2000);
 
         streams.close();
-
     }
 }
