@@ -1,12 +1,12 @@
 package io.axoniq.axonserver.connector.event.impl;
 
-import io.axoniq.axonserver.connector.event.EventStreamSegment;
 import io.axoniq.axonserver.connector.event.PersistentStream;
+import io.axoniq.axonserver.connector.event.PersistentStreamSegment;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
+import io.axoniq.axonserver.grpc.streams.Acknowledgement;
 import io.axoniq.axonserver.grpc.streams.InitializationProperties;
-import io.axoniq.axonserver.grpc.streams.OpenRequest;
-import io.axoniq.axonserver.grpc.streams.ProgressRequest;
-import io.axoniq.axonserver.grpc.streams.StreamCommand;
+import io.axoniq.axonserver.grpc.streams.Open;
+import io.axoniq.axonserver.grpc.streams.StreamRequest;
 import io.axoniq.axonserver.grpc.streams.StreamSignal;
 import io.grpc.stub.ClientCallStreamObserver;
 import io.grpc.stub.ClientResponseObserver;
@@ -21,18 +21,18 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 public class PersistentStreamImpl
-        implements PersistentStream, ClientResponseObserver<StreamCommand, StreamSignal> {
+        implements PersistentStream, ClientResponseObserver<StreamRequest, StreamSignal> {
     private static final Logger logger = LoggerFactory.getLogger(PersistentStreamImpl.class);
     private static final Consumer<Throwable> NO_OP = ex -> {
     };
 
-    private final Map<Integer, BufferedEventStreamSegment> openSegments = new ConcurrentHashMap<>();
+    private final Map<Integer, BufferedPersistentStreamSegment> openSegments = new ConcurrentHashMap<>();
     private final String streamId;
     private final String clientId;
 
-    private final AtomicReference<ClientCallStreamObserver<StreamCommand>> outboundStreamHolder = new AtomicReference<>();
+    private final AtomicReference<ClientCallStreamObserver<StreamRequest>> outboundStreamHolder = new AtomicReference<>();
     private final AtomicReference<Consumer<Throwable>> onClosedCallback = new AtomicReference<>(NO_OP);
-    private final Set<Consumer<EventStreamSegment>> onSegmentOpenedCallbacks = new CopyOnWriteArraySet<>();
+    private final Set<Consumer<PersistentStreamSegment>> onSegmentOpenedCallbacks = new CopyOnWriteArraySet<>();
 
 
     public PersistentStreamImpl(ClientIdentification clientId, String streamId) {
@@ -45,15 +45,15 @@ public class PersistentStreamImpl
     }
 
     public void openConnection(InitializationProperties initializationProperties) {
-        OpenRequest.Builder openRequest = OpenRequest.newBuilder()
-                                                     .setStreamId(streamId)
-                                                     .setClientId(clientId);
+        Open.Builder openRequest = Open.newBuilder()
+                                              .setStreamId(streamId)
+                                              .setClientId(clientId);
 
         if (initializationProperties != null) {
             openRequest.setInitializationProperties(initializationProperties);
         }
 
-        outboundStreamHolder.get().onNext(StreamCommand.newBuilder().setOpen(openRequest).build());
+        outboundStreamHolder.get().onNext(StreamRequest.newBuilder().setOpen(openRequest).build());
     }
 
 
@@ -62,7 +62,7 @@ public class PersistentStreamImpl
     }
 
     @Override
-    public void beforeStart(ClientCallStreamObserver<StreamCommand> clientCallStreamObserver) {
+    public void beforeStart(ClientCallStreamObserver<StreamRequest> clientCallStreamObserver) {
         outboundStreamHolder.set(clientCallStreamObserver);
     }
 
@@ -70,29 +70,29 @@ public class PersistentStreamImpl
     public void onNext(StreamSignal streamSignal) {
         if (streamSignal.hasEvent()) {
             boolean isNew = !openSegments.containsKey(streamSignal.getSegment());
-            BufferedEventStreamSegment segment = openSegments.computeIfAbsent(streamSignal.getSegment(),
-                                                   s -> new BufferedEventStreamSegment(streamSignal.getSegment(), progress -> onProgress(s,
-                                                                                                                                         progress)));
+            BufferedPersistentStreamSegment segment = openSegments.computeIfAbsent(streamSignal.getSegment(),
+                                                   s -> new BufferedPersistentStreamSegment(streamSignal.getSegment(), progress -> acknowledge(s,
+                                                                                                                                               progress)));
             segment.onNext(streamSignal.getEvent());
             if (isNew) {
                 onSegmentOpenedCallbacks.forEach(callback -> callback.accept(segment));
             }
         }
         if (streamSignal.getClosed()) {
-            BufferedEventStreamSegment segment = openSegments.remove(streamSignal.getSegment());
+            BufferedPersistentStreamSegment segment = openSegments.remove(streamSignal.getSegment());
             if (segment != null) {
                 segment.onCompleted();
             }
         }
     }
 
-    private void onProgress(int segment, long progress) {
+    private void acknowledge(int segment, long progress) {
         synchronized (outboundStreamHolder) {
-            outboundStreamHolder.get().onNext(StreamCommand.newBuilder()
-                                               .setProgress(ProgressRequest.newBuilder()
-                                                                           .setSegment(segment)
-                                                                           .setPosition(progress)
-                                                                           .build())
+            outboundStreamHolder.get().onNext(StreamRequest.newBuilder()
+                                               .setAcknowledgment(Acknowledgement.newBuilder()
+                                                                                 .setSegment(segment)
+                                                                                 .setPosition(progress)
+                                                                                 .build())
                                                .build());
         }
     }
@@ -125,7 +125,7 @@ public class PersistentStreamImpl
     }
 
     @Override
-    public void onSegmentOpened(Consumer<EventStreamSegment>  callback) {
+    public void onSegmentOpened(Consumer<PersistentStreamSegment>  callback) {
         onSegmentOpenedCallbacks.add(callback);
     }
 

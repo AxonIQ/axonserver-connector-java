@@ -1,6 +1,6 @@
 package io.axoniq.axonserver.connector.event.impl;
 
-import io.axoniq.axonserver.connector.event.EventStreamSegment;
+import io.axoniq.axonserver.connector.event.PersistentStreamSegment;
 import io.axoniq.axonserver.connector.impl.StreamClosedException;
 import io.axoniq.axonserver.grpc.event.EventWithToken;
 
@@ -14,8 +14,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongConsumer;
 
-public class BufferedEventStreamSegment
-        implements EventStreamSegment {
+public class BufferedPersistentStreamSegment
+        implements PersistentStreamSegment {
 
     private static final Runnable NO_OP = () -> {
     };
@@ -30,7 +30,7 @@ public class BufferedEventStreamSegment
     private final int segment;
     private final LongConsumer progressCallback;
 
-    public BufferedEventStreamSegment(int segment, LongConsumer progressCallback) {
+    public BufferedPersistentStreamSegment(int segment, LongConsumer progressCallback) {
         this.segment = segment;
         this.progressCallback = progressCallback;
     }
@@ -115,7 +115,7 @@ public class BufferedEventStreamSegment
     }
 
     @Override
-    public void progress(long token) {
+    public void acknowledge(long token) {
         if (!closed.get()) {
             progressCallback.accept(token);
         }

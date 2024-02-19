@@ -57,8 +57,8 @@ import io.axoniq.axonserver.grpc.event.ScheduleEventRequest;
 import io.axoniq.axonserver.grpc.event.ScheduleToken;
 import io.axoniq.axonserver.grpc.event.TrackingToken;
 import io.axoniq.axonserver.grpc.streams.DeleteStreamRequest;
-import io.axoniq.axonserver.grpc.streams.EventStreamServiceGrpc;
 import io.axoniq.axonserver.grpc.streams.InitializationProperties;
+import io.axoniq.axonserver.grpc.streams.PersistentStreamServiceGrpc;
 import io.axoniq.axonserver.grpc.streams.SequencingPolicy;
 import io.axoniq.axonserver.grpc.streams.StreamConnections;
 import io.axoniq.axonserver.grpc.streams.StreamStatus;
@@ -92,7 +92,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
 
     private final EventStoreGrpc.EventStoreStub eventStore;
     private final EventSchedulerGrpc.EventSchedulerStub eventScheduler;
-    private final EventStreamServiceGrpc.EventStreamServiceStub eventStreamService;
+    private final PersistentStreamServiceGrpc.PersistentStreamServiceStub persistentStreamService;
     private final Set<BufferedEventStream> buffers = ConcurrentHashMap.newKeySet();
     private final Set<PersistentStreamImpl> persistedEventStreams = ConcurrentHashMap.newKeySet();
     private final ClientIdentification clientId;
@@ -110,7 +110,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
         clientId = clientIdentification;
         eventStore = EventStoreGrpc.newStub(channel);
         eventScheduler = EventSchedulerGrpc.newStub(channel);
-        eventStreamService = EventStreamServiceGrpc.newStub(channel);
+        persistentStreamService = PersistentStreamServiceGrpc.newStub(channel);
     }
 
     @Override
@@ -241,7 +241,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
                                                   InitializationProperties initializationProperties) {
         PersistentStreamImpl buffer = new PersistentStreamImpl(clientId, streamId);
         //noinspection ResultOfMethodCallIgnored
-        eventStreamService.openStream(buffer);
+        persistentStreamService.openStream(buffer);
         buffer.openConnection(initializationProperties);
         persistedEventStreams.add(buffer);
         return buffer;
@@ -265,8 +265,8 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
 
     public CompletableFuture<Void> deletePersistentStream(String streamId) {
         FutureStreamObserver<Empty> futureResult = new FutureStreamObserver<>(null);
-        eventStreamService.deleteStream(DeleteStreamRequest.newBuilder().setStreamId(streamId).build(),
-                                        futureResult);
+        persistentStreamService.deleteStream(DeleteStreamRequest.newBuilder().setStreamId(streamId).build(),
+                                             futureResult);
         return futureResult.thenApply(e -> null);
     }
 
@@ -278,21 +278,21 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
                                                          .setStreamName(nonNullOrDefault(streamName, ""))
                                                          .setSegments(nonNullOrDefault(segments, 0))
                                                          .build();
-        eventStreamService.updateStream(request, futureResult);
+        persistentStreamService.updateStream(request, futureResult);
         return futureResult.thenApply(e -> null);
     }
 
     @Override
     public CompletableFuture<List<StreamStatus>> persistentStreams() {
         FutureListStreamObserver<StreamStatus> futureList = new FutureListStreamObserver<>();
-        eventStreamService.listStreams(Empty.getDefaultInstance(), futureList);
+        persistentStreamService.listStreams(Empty.getDefaultInstance(), futureList);
         return futureList;
     }
 
     @Override
     public CompletableFuture<List<StreamConnections>> persistentStreamConnections() {
         FutureListStreamObserver<StreamConnections> futureList = new FutureListStreamObserver<>();
-        eventStreamService.listConnections(Empty.getDefaultInstance(), futureList);
+        persistentStreamService.listConnections(Empty.getDefaultInstance(), futureList);
         return futureList;
     }
 

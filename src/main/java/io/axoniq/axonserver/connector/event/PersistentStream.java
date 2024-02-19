@@ -11,7 +11,7 @@ public interface PersistentStream {
      * Registers a callback to invoke when Axon Server assigns a segment to this connection.
      * @param callback the callback to invoke when a segment is opened
      */
-    void onSegmentOpened(Consumer<EventStreamSegment> callback);
+    void onSegmentOpened(Consumer<PersistentStreamSegment> callback);
 
     /**
      * Closes the persistent stream.

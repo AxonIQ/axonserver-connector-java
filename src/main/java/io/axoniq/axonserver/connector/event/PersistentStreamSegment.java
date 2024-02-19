@@ -6,7 +6,7 @@ import io.axoniq.axonserver.grpc.event.EventWithToken;
 /**
  * An event stream producing events for one segment of a persistent stream.
  */
-public interface EventStreamSegment extends ResultStream<EventWithToken> {
+public interface PersistentStreamSegment extends ResultStream<EventWithToken> {
 
     /**
      * Registers a callback that will be invoked when Axon Server closes the segment within the persistent
@@ -21,7 +21,7 @@ public interface EventStreamSegment extends ResultStream<EventWithToken> {
      * or to only sent progress information after a number of processed events.
      * @param token the last processed token for this segment
      */
-    void progress( long token);
+    void acknowledge(long token);
 
     /**
      * Returns the segment number of the stream.

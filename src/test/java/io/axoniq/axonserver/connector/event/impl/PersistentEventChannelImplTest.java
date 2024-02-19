@@ -60,7 +60,7 @@ class PersistentEventChannelImplTest {
                     @Override
                     public void onNext(EventWithToken event) {
                         logger.info("{}: next available -> {} ", segmentEventStream.segment(), event);
-                        segmentEventStream.progress(event.getToken());
+                        segmentEventStream.acknowledge(event.getToken());
                         subscription.request(1);
                     }
 
