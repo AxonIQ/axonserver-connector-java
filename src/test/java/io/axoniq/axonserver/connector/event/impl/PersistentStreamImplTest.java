@@ -139,7 +139,7 @@ class PersistentStreamImplTest {
 
     @Test
     void onError() throws InterruptedException {
-        AtomicReference<Throwable> error = new AtomicReference();
+        AtomicReference<Throwable> error = new AtomicReference<>();
         AtomicBoolean closed = new AtomicBoolean();
         testSubject.onClosed(t -> {
             error.set(t);
@@ -161,6 +161,7 @@ class PersistentStreamImplTest {
         }
 
         assertNotNull(error.get());
+        assertTrue(closed.get());
     }
 
     @Test
