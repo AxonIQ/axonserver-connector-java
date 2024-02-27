@@ -271,11 +271,21 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public CompletableFuture<Void> updatePersistentStream(String streamId, Integer segments, String streamName) {
+    public CompletableFuture<Void> updatePersistentStreamName(String streamId, String streamName) {
         FutureStreamObserver<Empty> futureResult = new FutureStreamObserver<>(null);
         UpdateStreamRequest request = UpdateStreamRequest.newBuilder()
                                                          .setStreamId(streamId)
                                                          .setStreamName(nonNullOrDefault(streamName, ""))
+                                                         .build();
+        persistentStreamService.updateStream(request, futureResult);
+        return futureResult.thenApply(e -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> setPersistentStreamSegments(String streamId, Integer segments) {
+        FutureStreamObserver<Empty> futureResult = new FutureStreamObserver<>(null);
+        UpdateStreamRequest request = UpdateStreamRequest.newBuilder()
+                                                         .setStreamId(streamId)
                                                          .setSegments(nonNullOrDefault(segments, 0))
                                                          .build();
         persistentStreamService.updateStream(request, futureResult);

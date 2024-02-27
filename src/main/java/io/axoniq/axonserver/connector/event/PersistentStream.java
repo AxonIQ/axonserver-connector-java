@@ -1,6 +1,7 @@
 package io.axoniq.axonserver.connector.event;
 
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 
 /**
  * A connection to a persistent stream. Axon Server can assign zero or more segments to this connection.
@@ -23,4 +24,11 @@ public interface PersistentStream {
      * @param closedCallback the callback to invoke when the persistent stream is closed
      */
     void onClosed(Consumer<Throwable> closedCallback);
+
+    /**
+     * Registers a callback to invoke when a new event arrives on the persistent stream. The callback gets the
+     * segment number as parameter.
+     * @param segmentOnAvailable the callback to invoke
+     */
+    void onAvailable(IntConsumer segmentOnAvailable);
 }

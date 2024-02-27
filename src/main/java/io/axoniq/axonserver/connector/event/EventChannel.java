@@ -416,14 +416,20 @@ public interface EventChannel {
     CompletableFuture<Void> deletePersistentStream(String streamId);
 
     /**
-     * Updates properties for a persistent stream. If {@code segments} parameter is set to a positive value, it changes
-     * the number of segments for the persistent stream.
+     * Updates the name for a persistent stream.
      * @param streamId the unique identification of a persistent stream
-     * @param segments the requested number of segments for the persistent stream
      * @param streamName the new logical name for the stream
      * @return a CompletableFuture that completes when the persistent stream is updated
      */
-    CompletableFuture<Void> updatePersistentStream(String streamId, Integer segments, String streamName);
+    CompletableFuture<Void> updatePersistentStreamName(String streamId, String streamName);
+
+    /**
+     * Updates the number of segments for a persistent stream.
+     * @param streamId the unique identification of a persistent stream
+     * @param segments the requested number of segments for the persistent stream
+     * @return a CompletableFuture that completes when the persistent stream is updated
+     */
+    CompletableFuture<Void> setPersistentStreamSegments(String streamId, Integer segments);
 
     /**
      * Returns a list of persistent streams with the last confirmed token per segment.

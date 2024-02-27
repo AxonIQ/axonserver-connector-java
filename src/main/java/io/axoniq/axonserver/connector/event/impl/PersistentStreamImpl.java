@@ -3,9 +3,9 @@ package io.axoniq.axonserver.connector.event.impl;
 import io.axoniq.axonserver.connector.event.PersistentStream;
 import io.axoniq.axonserver.connector.event.PersistentStreamSegment;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
-import io.axoniq.axonserver.grpc.streams.Acknowledgement;
 import io.axoniq.axonserver.grpc.streams.InitializationProperties;
 import io.axoniq.axonserver.grpc.streams.Open;
+import io.axoniq.axonserver.grpc.streams.ProgressAcknowledgement;
 import io.axoniq.axonserver.grpc.streams.StreamRequest;
 import io.axoniq.axonserver.grpc.streams.StreamSignal;
 import io.grpc.stub.ClientCallStreamObserver;
@@ -19,6 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 
 public class PersistentStreamImpl
         implements PersistentStream, ClientResponseObserver<StreamRequest, StreamSignal> {
@@ -33,6 +34,7 @@ public class PersistentStreamImpl
     private final AtomicReference<ClientCallStreamObserver<StreamRequest>> outboundStreamHolder = new AtomicReference<>();
     private final AtomicReference<Consumer<Throwable>> onClosedCallback = new AtomicReference<>(NO_OP);
     private final Set<Consumer<PersistentStreamSegment>> onSegmentOpenedCallbacks = new CopyOnWriteArraySet<>();
+    private final Set<IntConsumer> segmentOnAvailable = new CopyOnWriteArraySet<>();
 
 
     public PersistentStreamImpl(ClientIdentification clientId, String streamId) {
@@ -73,15 +75,16 @@ public class PersistentStreamImpl
             BufferedPersistentStreamSegment segment = openSegments.computeIfAbsent(streamSignal.getSegment(),
                                                    s -> new BufferedPersistentStreamSegment(streamSignal.getSegment(), progress -> acknowledge(s,
                                                                                                                                                progress)));
-            segment.onNext(streamSignal.getEvent());
             if (isNew) {
                 onSegmentOpenedCallbacks.forEach(callback -> callback.accept(segment));
+                segmentOnAvailable.forEach(a -> segment.onAvailable(() -> a.accept(segment.segment())));
             }
+            segment.addNext(streamSignal.getEvent());
         }
         if (streamSignal.getClosed()) {
             BufferedPersistentStreamSegment segment = openSegments.remove(streamSignal.getSegment());
             if (segment != null) {
-                segment.onCompleted();
+                segment.markCompleted();
             }
         }
     }
@@ -89,7 +92,7 @@ public class PersistentStreamImpl
     private void acknowledge(int segment, long progress) {
         synchronized (outboundStreamHolder) {
             outboundStreamHolder.get().onNext(StreamRequest.newBuilder()
-                                               .setAcknowledgment(Acknowledgement.newBuilder()
+                                               .setAcknowledgeProgress(ProgressAcknowledgement.newBuilder()
                                                                                  .setSegment(segment)
                                                                                  .setPosition(progress)
                                                                                  .build())
@@ -116,9 +119,9 @@ public class PersistentStreamImpl
     private void close(Throwable throwable) {
         openSegments.forEach((segment, buffer) -> {
             if (throwable != null) {
-                buffer.onError(throwable);
+                buffer.markError(throwable);
             } else {
-                buffer.onCompleted();
+                buffer.markCompleted();
             }
         });
         onClosedCallback.get().accept(throwable);
@@ -136,5 +139,10 @@ public class PersistentStreamImpl
         } else {
             onClosedCallback.set(closedCallback);
         }
+    }
+
+    @Override
+    public void onAvailable(IntConsumer segmentOnAvailable) {
+        this.segmentOnAvailable.add(segmentOnAvailable);
     }
 }

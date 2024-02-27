@@ -7,11 +7,11 @@ public class PersistedStreamProperties {
     private final int segments;
     private final String sequencingPolicyName;
     private final List<String> sequencingPolicyParameters;
-    private final int initialPosition;
+    private final long initialPosition;
     private final String filter;
 
     public PersistedStreamProperties(String streamName, int segments, String sequencingPolicyName,
-                                     List<String> sequencingPolicyParameters, int initialPosition, String filter) {
+                                     List<String> sequencingPolicyParameters, long initialPosition, String filter) {
         this.streamName = streamName;
         this.segments = segments;
         this.sequencingPolicyName = sequencingPolicyName;
@@ -36,7 +36,7 @@ public class PersistedStreamProperties {
         return sequencingPolicyParameters;
     }
 
-    public int initialPosition() {
+    public long initialPosition() {
         return initialPosition;
     }
 

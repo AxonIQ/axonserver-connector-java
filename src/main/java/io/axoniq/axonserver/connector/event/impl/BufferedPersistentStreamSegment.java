@@ -10,12 +10,12 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongConsumer;
 
 public class BufferedPersistentStreamSegment
         implements PersistentStreamSegment {
+    private static final EventWithToken TERMINAL_MESSAGE = EventWithToken.newBuilder().setToken(-1729).build();
 
     private static final Runnable NO_OP = () -> {
     };
@@ -23,8 +23,6 @@ public class BufferedPersistentStreamSegment
     private final Set<Runnable> onSegmentClosedCallbacks = new CopyOnWriteArraySet<>();
     private final BlockingQueue<EventWithToken> buffer = new LinkedBlockingQueue<>();
     private final AtomicReference<Throwable> errorResult = new AtomicReference<>();
-    private final AtomicBoolean closed = new AtomicBoolean();
-
     private final AtomicReference<Runnable> onAvailableCallback = new AtomicReference<>(NO_OP);
 
     private final int segment;
@@ -37,45 +35,49 @@ public class BufferedPersistentStreamSegment
 
     @Override
     public EventWithToken peek() {
-        checkClosed();
-        return buffer.peek();
+        return validate(buffer.peek(), false);
     }
 
     @Override
     public EventWithToken nextIfAvailable() {
-        checkClosed();
-        return buffer.poll();
+        return validate(buffer.poll(), false);
     }
 
     @Override
     public EventWithToken nextIfAvailable(long timeout, TimeUnit unit) throws InterruptedException {
-        checkClosed();
-        return buffer.poll(timeout, unit);
+        return validate(buffer.poll(timeout, unit), false);
     }
 
     @Override
     public EventWithToken next() throws InterruptedException {
-        checkClosed();
-        return buffer.take();
+        return validate(buffer.take(), false);
     }
 
     @Override
     public void onAvailable(Runnable callback) {
-        checkClosed();
         if (callback == null) {
             onAvailableCallback.set(NO_OP);
         } else {
             onAvailableCallback.set(callback);
-            if (isClosed() || peek() != null) {
+            if (validate(peek(), true) != null) {
                 callback.run();
             }
         }
     }
 
-    private void checkClosed() {
-        if (closed.get()) {
+
+    private EventWithToken validate(EventWithToken peek, boolean nullOnTerminal) {
+        if (TERMINAL_MESSAGE.equals(peek)) {
+            if (buffer.isEmpty()) {
+                // just to make sure there is always a TERMINAL entry left in a terminated buffer
+                buffer.offer(TERMINAL_MESSAGE);
+            }
+            if (nullOnTerminal) {
+                return null;
+            }
             throw new StreamClosedException(errorResult.get());
         }
+        return peek;
     }
 
     @Override
@@ -85,7 +87,7 @@ public class BufferedPersistentStreamSegment
 
     @Override
     public boolean isClosed() {
-        return closed.get();
+        return TERMINAL_MESSAGE.equals(buffer.peek());
     }
 
     @Override
@@ -98,25 +100,25 @@ public class BufferedPersistentStreamSegment
         onSegmentClosedCallbacks.add(callback);
     }
 
-    public void onNext(EventWithToken streamSignal) {
+    public void addNext(EventWithToken streamSignal) {
         buffer.add(streamSignal);
         onAvailableCallback.get().run();
     }
 
-    public void onError(Throwable throwable) {
+    public void markError(Throwable throwable) {
         errorResult.set(throwable);
-        onCompleted();
+        markCompleted();
     }
 
-    public void onCompleted() {
-        closed.set(true);
+    public void markCompleted() {
+        buffer.offer(TERMINAL_MESSAGE);
         onSegmentClosedCallbacks.forEach(Runnable::run);
         onAvailableCallback.get().run();
     }
 
     @Override
     public void acknowledge(long token) {
-        if (!closed.get()) {
+        if (!isClosed()) {
             progressCallback.accept(token);
         }
     }
