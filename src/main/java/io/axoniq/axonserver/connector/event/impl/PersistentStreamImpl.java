@@ -1,6 +1,22 @@
+/*
+ * Copyright (c) 2020-2024. AxonIQ
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.axoniq.axonserver.connector.event.impl;
 
 import io.axoniq.axonserver.connector.event.PersistentStream;
+import io.axoniq.axonserver.connector.event.PersistentStreamCallbacks;
 import io.axoniq.axonserver.connector.event.PersistentStreamSegment;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
 import io.axoniq.axonserver.grpc.streams.InitializationProperties;
@@ -20,9 +36,11 @@ import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
+import javax.annotation.Nullable;
 
 public class PersistentStreamImpl
         implements PersistentStream, ClientResponseObserver<StreamRequest, StreamSignal> {
+
     private static final Logger logger = LoggerFactory.getLogger(PersistentStreamImpl.class);
     private static final Consumer<Throwable> NO_OP = ex -> {
     };
@@ -35,11 +53,29 @@ public class PersistentStreamImpl
     private final AtomicReference<Consumer<Throwable>> onClosedCallback = new AtomicReference<>(NO_OP);
     private final Set<Consumer<PersistentStreamSegment>> onSegmentOpenedCallbacks = new CopyOnWriteArraySet<>();
     private final Set<IntConsumer> segmentOnAvailable = new CopyOnWriteArraySet<>();
+    private final Set<IntConsumer> segmentOnClose = new CopyOnWriteArraySet<>();
 
+    private final int bufferSize;
+    private final int refillBatch;
 
-    public PersistentStreamImpl(ClientIdentification clientId, String streamId) {
+    public PersistentStreamImpl(ClientIdentification clientId, String streamId, int bufferSize, int refillBatch,
+                                PersistentStreamCallbacks callbacks) {
         this.streamId = streamId;
         this.clientId = clientId.getClientId();
+        this.bufferSize = bufferSize;
+        this.refillBatch = refillBatch;
+        if (callbacks.onAvailable() != null) {
+            segmentOnAvailable.add(callbacks.onAvailable());
+        }
+        if (callbacks.onClosed() != null) {
+            onClosedCallback.set(callbacks.onClosed());
+        }
+        if (callbacks.onSegmentOpened() != null) {
+            onSegmentOpenedCallbacks.add(callbacks.onSegmentOpened());
+        }
+        if (callbacks.onSegmentClosed() != null) {
+            segmentOnClose.add(callbacks.onSegmentClosed());
+        }
     }
 
     public void openConnection() {
@@ -48,16 +84,14 @@ public class PersistentStreamImpl
 
     public void openConnection(InitializationProperties initializationProperties) {
         Open.Builder openRequest = Open.newBuilder()
-                                              .setStreamId(streamId)
-                                              .setClientId(clientId);
+                                       .setStreamId(streamId)
+                                       .setClientId(clientId);
 
         if (initializationProperties != null) {
             openRequest.setInitializationProperties(initializationProperties);
         }
-
-        outboundStreamHolder.get().onNext(StreamRequest.newBuilder().setOpen(openRequest).build());
+        outboundStreamHolder.get().onNext(StreamRequest.newBuilder().setOpen(openRequest.build()).build());
     }
-
 
     public void close() {
         outboundStreamHolder.get().onCompleted();
@@ -65,7 +99,59 @@ public class PersistentStreamImpl
 
     @Override
     public void beforeStart(ClientCallStreamObserver<StreamRequest> clientCallStreamObserver) {
-        outboundStreamHolder.set(clientCallStreamObserver);
+        outboundStreamHolder.set(new ClientCallStreamObserver<StreamRequest>() {
+            @Override
+            public void cancel(@Nullable String s, @Nullable Throwable throwable) {
+                clientCallStreamObserver.cancel(s, throwable);
+            }
+
+            @Override
+            public boolean isReady() {
+                return clientCallStreamObserver.isReady();
+            }
+
+            @Override
+            public void setOnReadyHandler(Runnable runnable) {
+                clientCallStreamObserver.setOnReadyHandler(runnable);
+            }
+
+            @Override
+            public void request(int i) {
+                clientCallStreamObserver.request(i);
+            }
+
+            @Override
+            public void setMessageCompression(boolean b) {
+                clientCallStreamObserver.setMessageCompression(b);
+            }
+
+            @Override
+            public void disableAutoInboundFlowControl() {
+                clientCallStreamObserver.disableAutoInboundFlowControl();
+            }
+
+            @Override
+            public void disableAutoRequestWithInitial(int request) {
+
+            }
+
+            @Override
+            public void onNext(StreamRequest streamRequest) {
+                synchronized (outboundStreamHolder) {
+                    clientCallStreamObserver.onNext(streamRequest);
+                }
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+                clientCallStreamObserver.onError(throwable);
+            }
+
+            @Override
+            public void onCompleted() {
+                clientCallStreamObserver.onCompleted();
+            }
+        });
     }
 
     @Override
@@ -73,11 +159,22 @@ public class PersistentStreamImpl
         if (streamSignal.hasEvent()) {
             boolean isNew = !openSegments.containsKey(streamSignal.getSegment());
             BufferedPersistentStreamSegment segment = openSegments.computeIfAbsent(streamSignal.getSegment(),
-                                                   s -> new BufferedPersistentStreamSegment(streamSignal.getSegment(), progress -> acknowledge(s,
-                                                                                                                                               progress)));
+                                                                                   s -> {
+                                                                                       BufferedPersistentStreamSegment stream = new BufferedPersistentStreamSegment(
+                                                                                               streamSignal.getSegment(),
+                                                                                               bufferSize,
+                                                                                               refillBatch,
+                                                                                               progress -> acknowledge(s,
+                                                                                                                       progress));
+                                                                                       stream.beforeStart(
+                                                                                               outboundStreamHolder.get());
+                                                                                       stream.enableFlowControl();
+                                                                                       return stream;
+                                                                                   });
             if (isNew) {
                 onSegmentOpenedCallbacks.forEach(callback -> callback.accept(segment));
                 segmentOnAvailable.forEach(a -> segment.onAvailable(() -> a.accept(segment.segment())));
+                segmentOnClose.forEach(a -> segment.onSegmentClosed(() -> a.accept(segment.segment())));
             }
             segment.addNext(streamSignal.getEvent());
         }
@@ -90,14 +187,14 @@ public class PersistentStreamImpl
     }
 
     private void acknowledge(int segment, long progress) {
-        synchronized (outboundStreamHolder) {
-            outboundStreamHolder.get().onNext(StreamRequest.newBuilder()
-                                               .setAcknowledgeProgress(ProgressAcknowledgement.newBuilder()
-                                                                                 .setSegment(segment)
-                                                                                 .setPosition(progress)
-                                                                                 .build())
-                                               .build());
-        }
+        outboundStreamHolder.get().onNext(StreamRequest.newBuilder()
+                                                       .setAcknowledgeProgress(ProgressAcknowledgement.newBuilder()
+                                                                                                      .setSegment(
+                                                                                                              segment)
+                                                                                                      .setPosition(
+                                                                                                              progress)
+                                                                                                      .build())
+                                                       .build());
     }
 
     @Override
@@ -125,24 +222,5 @@ public class PersistentStreamImpl
             }
         });
         onClosedCallback.get().accept(throwable);
-    }
-
-    @Override
-    public void onSegmentOpened(Consumer<PersistentStreamSegment>  callback) {
-        onSegmentOpenedCallbacks.add(callback);
-    }
-
-    @Override
-    public void onClosed(Consumer<Throwable> closedCallback) {
-        if (closedCallback == null ) {
-            onClosedCallback.set(NO_OP);
-        } else {
-            onClosedCallback.set(closedCallback);
-        }
-    }
-
-    @Override
-    public void onAvailable(IntConsumer segmentOnAvailable) {
-        this.segmentOnAvailable.add(segmentOnAvailable);
     }
 }

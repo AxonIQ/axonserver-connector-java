@@ -25,8 +25,9 @@ import io.axoniq.axonserver.connector.event.AppendEventsTransaction;
 import io.axoniq.axonserver.connector.event.EventChannel;
 import io.axoniq.axonserver.connector.event.EventQueryResultEntry;
 import io.axoniq.axonserver.connector.event.EventStream;
-import io.axoniq.axonserver.connector.event.PersistedStreamProperties;
 import io.axoniq.axonserver.connector.event.PersistentStream;
+import io.axoniq.axonserver.connector.event.PersistentStreamCallbacks;
+import io.axoniq.axonserver.connector.event.PersistentStreamProperties;
 import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
 import io.axoniq.axonserver.connector.impl.AbstractBufferedStream;
 import io.axoniq.axonserver.connector.impl.AssertUtils;
@@ -60,7 +61,6 @@ import io.axoniq.axonserver.grpc.streams.DeleteStreamRequest;
 import io.axoniq.axonserver.grpc.streams.InitializationProperties;
 import io.axoniq.axonserver.grpc.streams.PersistentStreamServiceGrpc;
 import io.axoniq.axonserver.grpc.streams.SequencingPolicy;
-import io.axoniq.axonserver.grpc.streams.StreamConnections;
 import io.axoniq.axonserver.grpc.streams.StreamStatus;
 import io.axoniq.axonserver.grpc.streams.UpdateStreamRequest;
 import io.grpc.stub.StreamObserver;
@@ -79,6 +79,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static io.axoniq.axonserver.connector.impl.AssertUtils.assertParameter;
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.nonNullOrDefault;
 
 /**
@@ -222,24 +223,35 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public PersistentStream openPersistentStream(String streamId) {
+    public PersistentStream openPersistentStream(String streamId, int bufferSize, int refillBatch,
+                                                 PersistentStreamCallbacks callbacks) {
         AssertUtils.assertParameter(streamId != null, "streamId must not be null");
-        return openPersistentStream(clientId, streamId, null);
+        return openPersistentStream(clientId, streamId, bufferSize, refillBatch, callbacks, null);
     }
 
     @Override
-    public PersistentStream openPersistentStream(String streamId, PersistedStreamProperties creationProperties) {
+    public PersistentStream openPersistentStream(String streamId, int bufferSize, int refillBatch,
+                                                 PersistentStreamCallbacks callbacks,
+                                                 PersistentStreamProperties creationProperties) {
         AssertUtils.assertParameter(streamId != null, "streamId must not be null");
         AssertUtils.assertParameter(creationProperties != null, "creationProperties must not be null");
-        AssertUtils.assertParameter(creationProperties.sequencingPolicyName() != null,
-                                    "sequencingPolicyName must not be null");
-
-        return openPersistentStream(clientId, streamId, initializationProperties(creationProperties));
+        return openPersistentStream(clientId,
+                                    streamId,
+                                    bufferSize,
+                                    refillBatch,
+                                    callbacks,
+                                    initializationProperties(creationProperties));
     }
 
     private PersistentStream openPersistentStream(ClientIdentification clientId, String streamId,
+                                                  int bufferSize, int refillBatch,
+                                                  PersistentStreamCallbacks callbacks,
                                                   InitializationProperties initializationProperties) {
-        PersistentStreamImpl buffer = new PersistentStreamImpl(clientId, streamId);
+        assertParameter(bufferSize > 0, "Buffer size must be > 0");
+        assertParameter(refillBatch > 0, "Refill batch must be > 0");
+        assertParameter(refillBatch <= bufferSize, "The refillBatch must be smaller than the buffer size");
+
+        PersistentStreamImpl buffer = new PersistentStreamImpl(clientId, streamId, bufferSize, refillBatch, callbacks);
         //noinspection ResultOfMethodCallIgnored
         persistentStreamService.openStream(buffer);
         buffer.openConnection(initializationProperties);
@@ -247,7 +259,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
         return buffer;
     }
 
-    private InitializationProperties initializationProperties(PersistedStreamProperties creationProperties) {
+    private InitializationProperties initializationProperties(PersistentStreamProperties creationProperties) {
         return InitializationProperties.newBuilder()
                                        .setInitialPosition(creationProperties.initialPosition())
                                        .setSegments(creationProperties.segments())
@@ -282,11 +294,12 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
-    public CompletableFuture<Void> setPersistentStreamSegments(String streamId, Integer segments) {
+    public CompletableFuture<Void> setPersistentStreamSegments(String streamId, int segments) {
+        AssertUtils.assertParameter(segments > 0, "Segments must be > 0");
         FutureStreamObserver<Empty> futureResult = new FutureStreamObserver<>(null);
         UpdateStreamRequest request = UpdateStreamRequest.newBuilder()
                                                          .setStreamId(streamId)
-                                                         .setSegments(nonNullOrDefault(segments, 0))
+                                                         .setSegments(segments)
                                                          .build();
         persistentStreamService.updateStream(request, futureResult);
         return futureResult.thenApply(e -> null);
@@ -296,13 +309,6 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     public CompletableFuture<List<StreamStatus>> persistentStreams() {
         FutureListStreamObserver<StreamStatus> futureList = new FutureListStreamObserver<>();
         persistentStreamService.listStreams(Empty.getDefaultInstance(), futureList);
-        return futureList;
-    }
-
-    @Override
-    public CompletableFuture<List<StreamConnections>> persistentStreamConnections() {
-        FutureListStreamObserver<StreamConnections> futureList = new FutureListStreamObserver<>();
-        persistentStreamService.listConnections(Empty.getDefaultInstance(), futureList);
         return futureList;
     }
 

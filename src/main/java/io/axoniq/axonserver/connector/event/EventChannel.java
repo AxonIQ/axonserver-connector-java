@@ -20,7 +20,6 @@ import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.event.Confirmation;
 import io.axoniq.axonserver.grpc.event.Event;
-import io.axoniq.axonserver.grpc.streams.StreamConnections;
 import io.axoniq.axonserver.grpc.streams.StreamStatus;
 
 import java.time.Duration;
@@ -396,20 +395,23 @@ public interface EventChannel {
      * @param streamId the unique identification of a persistent stream
      * @return a PersistedStream streaming events per segment
      */
-    PersistentStream openPersistentStream(String streamId);
+    PersistentStream openPersistentStream(String streamId, int bufferSize, int refillBatch,
+                                          PersistentStreamCallbacks callbacks);
 
     /**
      * Opens the persistent stream identified by {@code streamId}. If the stream does not exist it will be
      * created with the properties specified in {@code creationProperties}.
      * @param streamId the unique identification of a persistent stream
      * @param creationProperties properties to initialize the persistent stream if it does not exist yet
-     * @return a PersistedStream streaming events per segment
+     * @return a PersistentStream streaming events per segment
      */
-    PersistentStream openPersistentStream(String streamId, PersistedStreamProperties creationProperties);
+    PersistentStream openPersistentStream(String streamId, int bufferSize, int refillBatch,
+                                          PersistentStreamCallbacks callbacks,
+                                          PersistentStreamProperties creationProperties);
 
 
     /**
-     * Deletes a persistent stream.
+     * Deletes a persistent stream. If the stream does not exist the operation completes successfully.
      * @param streamId the unique identification of a persistent stream
      * @return a CompletableFuture that completes when the persistent stream is deleted
      */
@@ -429,18 +431,12 @@ public interface EventChannel {
      * @param segments the requested number of segments for the persistent stream
      * @return a CompletableFuture that completes when the persistent stream is updated
      */
-    CompletableFuture<Void> setPersistentStreamSegments(String streamId, Integer segments);
+    CompletableFuture<Void> setPersistentStreamSegments(String streamId, int segments);
 
     /**
      * Returns a list of persistent streams with the last confirmed token per segment.
      * @return a list of persistent streams
      */
     CompletableFuture<List<StreamStatus>> persistentStreams();
-
-    /**
-     * Returns a list of persistent streams with the connected client per segment.
-     * @return a list of persistent streams
-     */
-    CompletableFuture<List<StreamConnections>> persistentStreamConnections();
 
 }

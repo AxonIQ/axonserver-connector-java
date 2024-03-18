@@ -1,7 +1,19 @@
+/*
+ * Copyright (c) 2020-2024. AxonIQ
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.axoniq.axonserver.connector.event;
-
-import java.util.function.Consumer;
-import java.util.function.IntConsumer;
 
 /**
  * A connection to a persistent stream. Axon Server can assign zero or more segments to this connection.
@@ -9,26 +21,8 @@ import java.util.function.IntConsumer;
 public interface PersistentStream {
 
     /**
-     * Registers a callback to invoke when Axon Server assigns a segment to this connection.
-     * @param callback the callback to invoke when a segment is opened
-     */
-    void onSegmentOpened(Consumer<PersistentStreamSegment> callback);
-
-    /**
      * Closes the persistent stream.
      */
     void close();
 
-    /**
-     * Registers a callback to invoke when Axon Server closes this connection (or the connection to Axon Server is lost).
-     * @param closedCallback the callback to invoke when the persistent stream is closed
-     */
-    void onClosed(Consumer<Throwable> closedCallback);
-
-    /**
-     * Registers a callback to invoke when a new event arrives on the persistent stream. The callback gets the
-     * segment number as parameter.
-     * @param segmentOnAvailable the callback to invoke
-     */
-    void onAvailable(IntConsumer segmentOnAvailable);
 }

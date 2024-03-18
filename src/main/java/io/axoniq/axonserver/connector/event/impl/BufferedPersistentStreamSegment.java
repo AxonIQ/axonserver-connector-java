@@ -1,117 +1,72 @@
+/*
+ * Copyright (c) 2020-2024. AxonIQ
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.axoniq.axonserver.connector.event.impl;
 
 import io.axoniq.axonserver.connector.event.PersistentStreamSegment;
-import io.axoniq.axonserver.connector.impl.StreamClosedException;
+import io.axoniq.axonserver.connector.impl.AbstractBufferedStream;
+import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.event.EventWithToken;
+import io.axoniq.axonserver.grpc.streams.Requests;
+import io.axoniq.axonserver.grpc.streams.StreamRequest;
 
-import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CopyOnWriteArraySet;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongConsumer;
 
 public class BufferedPersistentStreamSegment
+        extends AbstractBufferedStream<EventWithToken, StreamRequest>
         implements PersistentStreamSegment {
+
     private static final EventWithToken TERMINAL_MESSAGE = EventWithToken.newBuilder().setToken(-1729).build();
 
     private static final Runnable NO_OP = () -> {
     };
 
     private final Set<Runnable> onSegmentClosedCallbacks = new CopyOnWriteArraySet<>();
-    private final BlockingQueue<EventWithToken> buffer = new LinkedBlockingQueue<>();
-    private final AtomicReference<Throwable> errorResult = new AtomicReference<>();
     private final AtomicReference<Runnable> onAvailableCallback = new AtomicReference<>(NO_OP);
 
     private final int segment;
     private final LongConsumer progressCallback;
 
-    public BufferedPersistentStreamSegment(int segment, LongConsumer progressCallback) {
+    public BufferedPersistentStreamSegment(int segment,
+                                           int bufferSize,
+                                           int refillBatch,
+                                           LongConsumer progressCallback) {
+        super("ignoredClientId", bufferSize, refillBatch);
         this.segment = segment;
         this.progressCallback = progressCallback;
     }
 
-    @Override
-    public EventWithToken peek() {
-        return validate(buffer.peek(), false);
-    }
-
-    @Override
-    public EventWithToken nextIfAvailable() {
-        return validate(buffer.poll(), false);
-    }
-
-    @Override
-    public EventWithToken nextIfAvailable(long timeout, TimeUnit unit) throws InterruptedException {
-        return validate(buffer.poll(timeout, unit), false);
-    }
-
-    @Override
-    public EventWithToken next() throws InterruptedException {
-        return validate(buffer.take(), false);
-    }
-
-    @Override
-    public void onAvailable(Runnable callback) {
-        if (callback == null) {
-            onAvailableCallback.set(NO_OP);
-        } else {
-            onAvailableCallback.set(callback);
-            if (validate(peek(), true) != null) {
-                callback.run();
-            }
-        }
-    }
-
-
-    private EventWithToken validate(EventWithToken peek, boolean nullOnTerminal) {
-        if (TERMINAL_MESSAGE.equals(peek)) {
-            if (buffer.isEmpty()) {
-                // just to make sure there is always a TERMINAL entry left in a terminated buffer
-                buffer.offer(TERMINAL_MESSAGE);
-            }
-            if (nullOnTerminal) {
-                return null;
-            }
-            throw new StreamClosedException(errorResult.get());
-        }
-        return peek;
-    }
-
-    @Override
-    public void close() {
-        // No-op
-    }
-
-    @Override
-    public boolean isClosed() {
-        return TERMINAL_MESSAGE.equals(buffer.peek());
-    }
-
-    @Override
-    public Optional<Throwable> getError() {
-        return Optional.ofNullable(errorResult.get());
-    }
 
     @Override
     public void onSegmentClosed(Runnable callback) {
         onSegmentClosedCallbacks.add(callback);
     }
 
-    public void addNext(EventWithToken streamSignal) {
-        buffer.add(streamSignal);
-        onAvailableCallback.get().run();
+    public void addNext(EventWithToken eventWithToken) {
+        onNext(eventWithToken);
     }
 
     public void markError(Throwable throwable) {
-        errorResult.set(throwable);
-        markCompleted();
+        onError(throwable);
     }
 
     public void markCompleted() {
-        buffer.offer(TERMINAL_MESSAGE);
+        onCompleted();
         onSegmentClosedCallbacks.forEach(Runnable::run);
         onAvailableCallback.get().run();
     }
@@ -126,5 +81,21 @@ public class BufferedPersistentStreamSegment
     @Override
     public int segment() {
         return segment;
+    }
+
+
+    @Override
+    protected EventWithToken terminalMessage() {
+        return TERMINAL_MESSAGE;
+    }
+
+    @Override
+    protected StreamRequest buildFlowControlMessage(FlowControl flowControl) {
+        return StreamRequest.newBuilder()
+                            .setRequests(Requests.newBuilder()
+                                                 .setSegment(segment)
+                                                 .setRequests(flowControl.getPermits()))
+
+                            .build();
     }
 }
