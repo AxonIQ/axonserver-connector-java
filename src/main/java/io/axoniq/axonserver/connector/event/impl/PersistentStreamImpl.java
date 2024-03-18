@@ -99,59 +99,7 @@ public class PersistentStreamImpl
 
     @Override
     public void beforeStart(ClientCallStreamObserver<StreamRequest> clientCallStreamObserver) {
-        outboundStreamHolder.set(new ClientCallStreamObserver<StreamRequest>() {
-            @Override
-            public void cancel(@Nullable String s, @Nullable Throwable throwable) {
-                clientCallStreamObserver.cancel(s, throwable);
-            }
-
-            @Override
-            public boolean isReady() {
-                return clientCallStreamObserver.isReady();
-            }
-
-            @Override
-            public void setOnReadyHandler(Runnable runnable) {
-                clientCallStreamObserver.setOnReadyHandler(runnable);
-            }
-
-            @Override
-            public void request(int i) {
-                clientCallStreamObserver.request(i);
-            }
-
-            @Override
-            public void setMessageCompression(boolean b) {
-                clientCallStreamObserver.setMessageCompression(b);
-            }
-
-            @Override
-            public void disableAutoInboundFlowControl() {
-                clientCallStreamObserver.disableAutoInboundFlowControl();
-            }
-
-            @Override
-            public void disableAutoRequestWithInitial(int request) {
-
-            }
-
-            @Override
-            public void onNext(StreamRequest streamRequest) {
-                synchronized (outboundStreamHolder) {
-                    clientCallStreamObserver.onNext(streamRequest);
-                }
-            }
-
-            @Override
-            public void onError(Throwable throwable) {
-                clientCallStreamObserver.onError(throwable);
-            }
-
-            @Override
-            public void onCompleted() {
-                clientCallStreamObserver.onCompleted();
-            }
-        });
+        outboundStreamHolder.set(new StreamRequestClientCallStreamObserver(clientCallStreamObserver));
     }
 
     @Override
@@ -176,12 +124,12 @@ public class PersistentStreamImpl
                 segmentOnAvailable.forEach(a -> segment.onAvailable(() -> a.accept(segment.segment())));
                 segmentOnClose.forEach(a -> segment.onSegmentClosed(() -> a.accept(segment.segment())));
             }
-            segment.addNext(streamSignal.getEvent());
+            segment.onNext(streamSignal.getEvent());
         }
         if (streamSignal.getClosed()) {
             BufferedPersistentStreamSegment segment = openSegments.remove(streamSignal.getSegment());
             if (segment != null) {
-                segment.markCompleted();
+                segment.onCompleted();
             }
         }
     }
@@ -216,11 +164,72 @@ public class PersistentStreamImpl
     private void close(Throwable throwable) {
         openSegments.forEach((segment, buffer) -> {
             if (throwable != null) {
-                buffer.markError(throwable);
+                buffer.onError(throwable);
             } else {
-                buffer.markCompleted();
+                buffer.onCompleted();
             }
         });
         onClosedCallback.get().accept(throwable);
+    }
+
+    private class StreamRequestClientCallStreamObserver extends ClientCallStreamObserver<StreamRequest> {
+
+        private final ClientCallStreamObserver<StreamRequest> clientCallStreamObserver;
+
+        public StreamRequestClientCallStreamObserver(ClientCallStreamObserver<StreamRequest> clientCallStreamObserver) {
+            this.clientCallStreamObserver = clientCallStreamObserver;
+        }
+
+        @Override
+        public void cancel(@Nullable String s, @Nullable Throwable throwable) {
+            clientCallStreamObserver.cancel(s, throwable);
+        }
+
+        @Override
+        public boolean isReady() {
+            return clientCallStreamObserver.isReady();
+        }
+
+        @Override
+        public void setOnReadyHandler(Runnable runnable) {
+            clientCallStreamObserver.setOnReadyHandler(runnable);
+        }
+
+        @Override
+        public void request(int i) {
+            clientCallStreamObserver.request(i);
+        }
+
+        @Override
+        public void setMessageCompression(boolean b) {
+            clientCallStreamObserver.setMessageCompression(b);
+        }
+
+        @Override
+        public void disableAutoInboundFlowControl() {
+            clientCallStreamObserver.disableAutoInboundFlowControl();
+        }
+
+        @Override
+        public void disableAutoRequestWithInitial(int request) {
+            // all assigned segments for a persistent stream use the same stream observer
+        }
+
+        @Override
+        public void onNext(StreamRequest streamRequest) {
+            synchronized (outboundStreamHolder) {
+                clientCallStreamObserver.onNext(streamRequest);
+            }
+        }
+
+        @Override
+        public void onError(Throwable throwable) {
+            clientCallStreamObserver.onError(throwable);
+        }
+
+        @Override
+        public void onCompleted() {
+            clientCallStreamObserver.onCompleted();
+        }
     }
 }

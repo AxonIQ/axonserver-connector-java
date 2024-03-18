@@ -57,16 +57,9 @@ public class BufferedPersistentStreamSegment
         onSegmentClosedCallbacks.add(callback);
     }
 
-    public void addNext(EventWithToken eventWithToken) {
-        onNext(eventWithToken);
-    }
-
-    public void markError(Throwable throwable) {
-        onError(throwable);
-    }
-
-    public void markCompleted() {
-        onCompleted();
+    @Override
+    public void onCompleted() {
+        super.onCompleted();
         onSegmentClosedCallbacks.forEach(Runnable::run);
         onAvailableCallback.get().run();
     }
