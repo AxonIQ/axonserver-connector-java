@@ -59,6 +59,7 @@ import io.axoniq.axonserver.grpc.event.ScheduleToken;
 import io.axoniq.axonserver.grpc.event.TrackingToken;
 import io.axoniq.axonserver.grpc.streams.DeleteStreamRequest;
 import io.axoniq.axonserver.grpc.streams.InitializationProperties;
+import io.axoniq.axonserver.grpc.streams.ListStreamsRequest;
 import io.axoniq.axonserver.grpc.streams.PersistentStreamServiceGrpc;
 import io.axoniq.axonserver.grpc.streams.SequencingPolicy;
 import io.axoniq.axonserver.grpc.streams.StreamStatus;
@@ -308,7 +309,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     @Override
     public CompletableFuture<List<StreamStatus>> persistentStreams() {
         FutureListStreamObserver<StreamStatus> futureList = new FutureListStreamObserver<>();
-        persistentStreamService.listStreams(Empty.getDefaultInstance(), futureList);
+        persistentStreamService.listStreams(ListStreamsRequest.getDefaultInstance(), futureList);
         return futureList;
     }
 

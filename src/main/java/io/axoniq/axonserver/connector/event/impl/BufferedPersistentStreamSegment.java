@@ -87,7 +87,7 @@ public class BufferedPersistentStreamSegment
         return StreamRequest.newBuilder()
                             .setRequests(Requests.newBuilder()
                                                  .setSegment(segment)
-                                                 .setRequests(flowControl.getPermits()))
+                                                 .setRequests((int) flowControl.getPermits()))
 
                             .build();
     }
