@@ -25,13 +25,10 @@ import io.grpc.ConnectivityState;
 import io.grpc.ManagedChannel;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
-import io.grpc.netty.NettyChannelBuilder;
+import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
 import io.grpc.stub.ClientResponseObserver;
 import io.grpc.stub.StreamObserver;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.RepeatedTest;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
 
@@ -262,6 +259,7 @@ class AxonServerManagedChannelIntegrationTest extends AbstractAxonServerIntegrat
         axonServerProxy.enable();
         connectAttempts.clear();
 
+        testSubject.enterIdle();
         assertWithin(1, TimeUnit.SECONDS, () -> {
             // because we want the test to re-attempt in quick succession, we must avoid underlying connect backoff
             testSubject.resetConnectBackoff();

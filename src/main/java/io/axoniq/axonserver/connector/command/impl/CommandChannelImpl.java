@@ -40,9 +40,9 @@ import io.axoniq.axonserver.grpc.command.CommandResponse;
 import io.axoniq.axonserver.grpc.command.CommandServiceGrpc;
 import io.axoniq.axonserver.grpc.command.CommandSubscription;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
+import io.grpc.netty.shaded.io.netty.util.internal.OutOfDirectMemoryError;
 import io.grpc.stub.CallStreamObserver;
 import io.grpc.stub.StreamObserver;
-import io.netty.util.internal.OutOfDirectMemoryError;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

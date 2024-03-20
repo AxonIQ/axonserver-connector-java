@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  ~ Copyright (c) 2020-2021. AxonIQ
+  ~ Copyright (c) 2020-2023. AxonIQ
   ~
   ~ Licensed under the Apache License, Version 2.0 (the "License");
   ~ you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 
     <groupId>io.axoniq</groupId>
     <artifactId>axonserver-connector-java</artifactId>
-    <version>2023.1.0-SNAPSHOT</version>
+    <version>2023.2.1-SNAPSHOT</version>
 
     <name>AxonServer Connector</name>
     <description>
@@ -41,29 +41,30 @@
     </issueManagement>
 
     <properties>
+        <sonar.organization>axoniq</sonar.organization>
+        <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+
         <axonserver.api.version>2023.0.1</axonserver.api.version>
 
-        <!-- For compatibility between grpc and tcnative, check https://github.com/grpc/grpc-java/blob/master/SECURITY.md#netty -->
-        <grpc.version>1.50.2</grpc.version>
-        <netty.tcnative.version>2.0.54.Final</netty.tcnative.version>
+        <grpc.version>1.59.1</grpc.version>
 
         <slf4j.version>1.7.36</slf4j.version>
-        <log4j.version>2.20.0</log4j.version>
+        <log4j.version>2.23.1</log4j.version>
 
         <javax-annotation.version>1.3.2</javax-annotation.version>
 
         <reactive.streams.version>1.0.4</reactive.streams.version>
-        <projectreactor.version>3.5.7</projectreactor.version>
+        <projectreactor.version>3.6.4</projectreactor.version>
 
-        <jacoco-maven-plugin.version>0.8.8</jacoco-maven-plugin.version>
-        <junit.jupiter.version>5.9.1</junit.jupiter.version>
+        <jacoco-maven-plugin.version>0.8.11</jacoco-maven-plugin.version>
+        <junit.jupiter.version>5.10.2</junit.jupiter.version>
         <mockito.version>4.11.0</mockito.version>
-        <testcontainers.version>1.18.3</testcontainers.version>
-        <testng.version>7.5</testng.version>
+        <testcontainers.version>1.19.7</testcontainers.version>
+        <testng.version>7.5.1</testng.version>
 
-        <httpclient5.version>5.2.1</httpclient5.version>
+        <httpclient5.version>5.3.1</httpclient5.version>
         <toxiproxy.version>2.1.7</toxiproxy.version>
-        <maven.surefire.plugin.version>3.1.2</maven.surefire.plugin.version>
+        <maven.surefire.plugin.version>3.2.5</maven.surefire.plugin.version>
     </properties>
 
     <dependencyManagement>
@@ -95,11 +96,6 @@
                 <groupId>org.slf4j</groupId>
                 <artifactId>slf4j-log4j12</artifactId>
                 <version>${slf4j.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.netty</groupId>
-                <artifactId>netty-tcnative-boringssl-static</artifactId>
-                <version>${netty.tcnative.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.junit.jupiter</groupId>
@@ -163,6 +159,12 @@
             <groupId>org.testng</groupId>
             <artifactId>testng</artifactId>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.webjars</groupId>
+                    <artifactId>jquery</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.projectreactor</groupId>
@@ -185,13 +187,8 @@
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
-            <artifactId>grpc-netty</artifactId>
+            <artifactId>grpc-netty-shaded</artifactId>
         </dependency>
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty-tcnative-boringssl-static</artifactId>
-        </dependency>
-
         <dependency>
             <groupId>javax.annotation</groupId>
             <artifactId>javax.annotation-api</artifactId>
@@ -300,7 +297,7 @@
             <extension>
                 <groupId>kr.motd.maven</groupId>
                 <artifactId>os-maven-plugin</artifactId>
-                <version>1.7.0</version>
+                <version>1.7.1</version>
             </extension>
         </extensions>
         <plugins>
@@ -376,7 +373,7 @@
             </plugin>
             <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.11.0</version>
+                <version>3.12.1</version>
                 <configuration>
                     <source>1.8</source>
                     <target>1.8</target>
@@ -388,7 +385,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-assembly-plugin</artifactId>
-                <version>3.6.0</version>
+                <version>3.7.0</version>
                 <configuration>
                     <descriptorSourceDirectory>assembly</descriptorSourceDirectory>
                     <archiverConfig>
@@ -400,10 +397,15 @@
                 <artifactId>maven-release-plugin</artifactId>
                 <version>3.0.1</version>
                 <configuration>
+                    <!-- prepare goal configuration -->
                     <mavenExecutorId>forked-path</mavenExecutorId>
-                    <localCheckout>true</localCheckout>
                     <pushChanges>false</pushChanges>
                     <autoVersionSubmodules>true</autoVersionSubmodules>
+                    <!-- perform goal configuration -->
+                    <mavenExecutorId>forked-path</mavenExecutorId>
+                    <localCheckout>true</localCheckout>
+                    <releaseProfiles>release-sign-artifacts</releaseProfiles>
+                    <tagNameFormat>@{project.version}</tagNameFormat>
                 </configuration>
             </plugin>
             <plugin>
@@ -427,11 +429,11 @@
             </plugin>
             <plugin>
                 <artifactId>maven-javadoc-plugin</artifactId>
-                <version>3.5.0</version>
+                <version>3.6.3</version>
                 <executions>
                     <execution>
                         <id>attach-javadoc</id>
-                        <phase>deploy</phase>
+                        <phase>package</phase>
                         <goals>
                             <goal>jar</goal>
                         </goals>
@@ -475,7 +477,7 @@
                 <!-- just to make sure deployed artifacts are always built (and tested) using JDK 8+ -->
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>
-                <version>3.3.0</version>
+                <version>3.4.1</version>
                 <executions>
                     <execution>
                         <id>enforce-java</id>
@@ -503,18 +505,12 @@
     <profiles>
         <profile>
             <id>release-sign-artifacts</id>
-            <activation>
-                <property>
-                    <name>performRelease</name>
-                    <value>true</value>
-                </property>
-            </activation>
             <build>
                 <plugins>
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-gpg-plugin</artifactId>
-                        <version>3.1.0</version>
+                        <version>3.2.0</version>
                         <executions>
                             <execution>
                                 <id>sign-artifacts</id>
@@ -582,7 +578,7 @@
         <connection>scm:git:https://github.com/AxonIQ/axonserver-connector-java.git</connection>
         <developerConnection>scm:git:https://github.com/AxonIQ/axonserver-connector-java.git</developerConnection>
         <url>https://github.com/AxonIQ/axonserver-connector-java</url>
-        <tag>master</tag>
+        <tag>2023.2.0</tag>
     </scm>
 
     <distributionManagement>

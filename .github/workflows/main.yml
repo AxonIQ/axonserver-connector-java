@@ -1,4 +1,4 @@
-name: AxonServer Connector Java
+name: Main - Axon Server Connector Java
 
 on:
   push:
@@ -18,15 +18,23 @@ jobs:
         include:
           - java-version: 8
             sonar-enabled: false
+            deploy-enabled: true
           - java-version: 11
+            sonar-enabled: false
+            deploy-enabled: false
+          - java-version: 17
             sonar-enabled: true
+            deploy-enabled: false
+          - java-version: 21
+            sonar-enabled: false
+            deploy-enabled: false
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
       - name: Set up JDK ${{ matrix.java-version }}
-        uses: actions/setup-java@v3.11.0
+        uses: actions/setup-java@v4.2.1
         with:
           distribution: 'zulu'
           java-version: ${{ matrix.java-version }}
@@ -35,20 +43,17 @@ jobs:
           server-username: MAVEN_USERNAME
           server-password: MAVEN_PASSWORD
 
-      - name: Maven operation with Sonar
+      - name: Build and Test with Sonar Analysis
         if: matrix.sonar-enabled
         run: |
-          mvn -B -U -Dstyle.color=always -Possrh -Pcoverage \
-          clean verify \
-          sonar:sonar \
-          -Dsonar.projectKey=AxonIQ_axonserver-connector-java \
-          -Dsonar.organization=axoniq \
-          -Dsonar.host.url=https://sonarcloud.io \
-          -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+          ./mvnw -B -U -Dstyle.color=always -Possrh -Pcoverage clean verify \
+          org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+          -Dsonar.projectKey=AxonIQ_axonserver-connector-java
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.CONNECTOR_SONAR_TOKEN }}
 
-      - name: Maven operation without Sonar
+      - name: Build and Test without Sonar Analysis
         if: matrix.sonar-enabled != true
         run: |
           mvn -B -U -Dstyle.color=always -Possrh clean verify
@@ -56,30 +61,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Deploy to Sonatype
-        if: success()
+        if: success() && matrix.deploy-enabled
         run: |
           mvn -B -U -Dstyle.color=always deploy -DskipTests=true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MAVEN_USERNAME: ${{ secrets.SONATYPE_TOKEN_ID }}
           MAVEN_PASSWORD: ${{ secrets.SONATYPE_TOKEN_PASS }}
-
-      - name: Notify success to Slack
-        if: success()
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-        uses: voxmedia/github-action-slack-notify-build@v1.6.0
-        with:
-          channel_id: C02P7REDBM4
-          status: SUCCESS
-          color: good
-
-      - name: Notify failure to Slack
-        if: failure()
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-        uses: voxmedia/github-action-slack-notify-build@v1.6.0
-        with:
-          channel_id: C02P7REDBM4
-          status: FAILED
-          color: danger
