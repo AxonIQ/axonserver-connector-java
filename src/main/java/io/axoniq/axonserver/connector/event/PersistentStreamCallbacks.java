@@ -20,6 +20,9 @@ import java.util.function.IntConsumer;
 
 /**
  * Definitions of the callbacks to be added to a persistent stream.
+ *
+ * @author Marc Gathier
+ * @since 2024.0.0
  */
 public class PersistentStreamCallbacks {
 

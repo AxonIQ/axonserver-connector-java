@@ -24,24 +24,29 @@ import io.axoniq.axonserver.grpc.streams.StreamRequest;
 
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongConsumer;
 
+/**
+ * Implementation of the {@link PersistentStreamSegment}.
+ */
 public class BufferedPersistentStreamSegment
         extends AbstractBufferedStream<EventWithToken, StreamRequest>
         implements PersistentStreamSegment {
 
     private static final EventWithToken TERMINAL_MESSAGE = EventWithToken.newBuilder().setToken(-1729).build();
 
-    private static final Runnable NO_OP = () -> {
-    };
-
     private final Set<Runnable> onSegmentClosedCallbacks = new CopyOnWriteArraySet<>();
-    private final AtomicReference<Runnable> onAvailableCallback = new AtomicReference<>(NO_OP);
 
     private final int segment;
     private final LongConsumer progressCallback;
 
+    /**
+     * Constructs a {@link BufferedPersistentStreamSegment}.
+     * @param segment          the index of the segment
+     * @param bufferSize       the number of events to buffer locally
+     * @param refillBatch      the number of events to be consumed prior to refilling the buffer
+     * @param progressCallback the callback to invoke for acknowledging processed events
+     */
     public BufferedPersistentStreamSegment(int segment,
                                            int bufferSize,
                                            int refillBatch,
@@ -50,7 +55,6 @@ public class BufferedPersistentStreamSegment
         this.segment = segment;
         this.progressCallback = progressCallback;
     }
-
 
     @Override
     public void onSegmentClosed(Runnable callback) {
@@ -61,7 +65,6 @@ public class BufferedPersistentStreamSegment
     public void onCompleted() {
         super.onCompleted();
         onSegmentClosedCallbacks.forEach(Runnable::run);
-        onAvailableCallback.get().run();
     }
 
     @Override

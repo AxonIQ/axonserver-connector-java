@@ -21,6 +21,9 @@ import java.util.List;
 
 /**
  * Defines the properties for a new persistent stream.
+ *
+ * @author Marc Gathier
+ * @since 2024.0.0
  */
 public class PersistentStreamProperties {
     private final String streamName;

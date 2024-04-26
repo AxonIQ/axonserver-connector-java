@@ -38,6 +38,9 @@ import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import javax.annotation.Nullable;
 
+/**
+ * Implementation of the {@link PersistentStream}.
+ */
 public class PersistentStreamImpl
         implements PersistentStream, ClientResponseObserver<StreamRequest, StreamSignal> {
 
@@ -58,6 +61,14 @@ public class PersistentStreamImpl
     private final int bufferSize;
     private final int refillBatch;
 
+    /**
+     * Constructs a {@link PersistentStreamImpl}.
+     * @param clientId     the identification of the client
+     * @param streamId     the identifier for the persistent stream
+     * @param bufferSize   the number of events to buffer locally
+     * @param refillBatch  the number of events to be consumed prior to refilling the buffer
+     * @param callbacks    the callbacks that are invoked on persistent stream events
+     */
     public PersistentStreamImpl(ClientIdentification clientId, String streamId, int bufferSize, int refillBatch,
                                 PersistentStreamCallbacks callbacks) {
         this.streamId = streamId;
@@ -93,6 +104,7 @@ public class PersistentStreamImpl
         outboundStreamHolder.get().onNext(StreamRequest.newBuilder().setOpen(openRequest.build()).build());
     }
 
+    @Override
     public void close() {
         outboundStreamHolder.get().onCompleted();
     }
@@ -147,7 +159,7 @@ public class PersistentStreamImpl
 
     @Override
     public void onError(Throwable throwable) {
-        logger.warn("Exception on stream {}", streamId, throwable);
+        logger.debug("Exception on stream {}", streamId, throwable);
         close(throwable);
     }
 

@@ -17,6 +17,9 @@ package io.axoniq.axonserver.connector.event;
 
 /**
  * A connection to a persistent stream. Axon Server can assign zero or more segments to this connection.
+ *
+ *  @author Marc Gathier
+ *  @since 2024.0.0
  */
 public interface PersistentStream {
 

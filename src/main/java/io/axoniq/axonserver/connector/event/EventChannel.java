@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020. AxonIQ
+ * Copyright (c) 2024. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -392,7 +392,10 @@ public interface EventChannel {
 
     /**
      * Opens the persistent stream identified by {@code streamId}. Fails if the stream does not exist.
-     * @param streamId the unique identification of a persistent stream
+     * @param streamId    the unique identification of a persistent stream
+     * @param bufferSize  the number of events to buffer locally
+     * @param refillBatch the number of events to be consumed prior to refilling the buffer
+     * @param callbacks   the callbacks that are invoked on persistent stream events
      * @return a PersistedStream streaming events per segment
      */
     PersistentStream openPersistentStream(String streamId, int bufferSize, int refillBatch,
@@ -401,14 +404,16 @@ public interface EventChannel {
     /**
      * Opens the persistent stream identified by {@code streamId}. If the stream does not exist it will be
      * created with the properties specified in {@code creationProperties}.
-     * @param streamId the unique identification of a persistent stream
+     * @param streamId           the unique identification of a persistent stream
+     * @param bufferSize         the number of events to buffer locally
+     * @param refillBatch        the number of events to be consumed prior to refilling the buffer
+     * @param callbacks          the callbacks that are invoked on persistent stream events
      * @param creationProperties properties to initialize the persistent stream if it does not exist yet
      * @return a PersistentStream streaming events per segment
      */
     PersistentStream openPersistentStream(String streamId, int bufferSize, int refillBatch,
                                           PersistentStreamCallbacks callbacks,
                                           PersistentStreamProperties creationProperties);
-
 
     /**
      * Deletes a persistent stream. If the stream does not exist the operation completes successfully.

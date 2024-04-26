@@ -20,6 +20,9 @@ import io.axoniq.axonserver.grpc.event.EventWithToken;
 
 /**
  * An event stream producing events for one segment of a persistent stream.
+ *
+ * @author Marc Gathier
+ * @since 2024.0.0
  */
 public interface PersistentStreamSegment extends ResultStream<EventWithToken> {
 

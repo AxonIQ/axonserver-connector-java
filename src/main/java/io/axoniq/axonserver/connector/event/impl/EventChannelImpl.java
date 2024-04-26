@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021. AxonIQ
+ * Copyright (c) 2020-2024. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -276,6 +276,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
                                        .build();
     }
 
+    @Override
     public CompletableFuture<Void> deletePersistentStream(String streamId) {
         FutureStreamObserver<Empty> futureResult = new FutureStreamObserver<>(null);
         persistentStreamService.deleteStream(DeleteStreamRequest.newBuilder().setStreamId(streamId).build(),
