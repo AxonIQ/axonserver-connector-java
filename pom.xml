@@ -60,7 +60,7 @@
         <junit.jupiter.version>5.10.2</junit.jupiter.version>
         <mockito.version>4.11.0</mockito.version>
         <testcontainers.version>1.19.7</testcontainers.version>
-        <testng.version>7.10.1</testng.version>
+        <testng.version>7.10.2</testng.version>
 
         <httpclient5.version>5.3.1</httpclient5.version>
         <toxiproxy.version>2.1.7</toxiproxy.version>
@@ -369,7 +369,7 @@
             </plugin>
             <plugin>
                 <artifactId>maven-deploy-plugin</artifactId>
-                <version>3.1.1</version>
+                <version>3.1.2</version>
             </plugin>
             <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
