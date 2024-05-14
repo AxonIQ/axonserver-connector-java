@@ -63,11 +63,12 @@ public class PersistentStreamImpl
 
     /**
      * Constructs a {@link PersistentStreamImpl}.
-     * @param clientId     the identification of the client
-     * @param streamId     the identifier for the persistent stream
-     * @param bufferSize   the number of events to buffer locally
-     * @param refillBatch  the number of events to be consumed prior to refilling the buffer
-     * @param callbacks    the callbacks that are invoked on persistent stream events
+     *
+     * @param clientId    the identification of the client
+     * @param streamId    the identifier for the persistent stream
+     * @param bufferSize  the number of events to buffer locally
+     * @param refillBatch the number of events to be consumed prior to refilling the buffer
+     * @param callbacks   the callbacks that are invoked on persistent stream events
      */
     public PersistentStreamImpl(ClientIdentification clientId, String streamId, int bufferSize, int refillBatch,
                                 PersistentStreamCallbacks callbacks) {
@@ -159,7 +160,7 @@ public class PersistentStreamImpl
 
     @Override
     public void onError(Throwable throwable) {
-        logger.debug("Exception on stream {}", streamId, throwable);
+        logger.warn("Exception on stream {}", streamId, throwable);
         close(throwable);
     }
 
@@ -175,10 +176,14 @@ public class PersistentStreamImpl
 
     private void close(Throwable throwable) {
         openSegments.forEach((segment, buffer) -> {
-            if (throwable != null) {
-                buffer.onError(throwable);
-            } else {
-                buffer.onCompleted();
+            try {
+                if (throwable != null) {
+                    buffer.onError(throwable);
+                } else {
+                    buffer.onCompleted();
+                }
+            } catch (Exception ex) {
+                logger.debug("{}: Exception while completing segment {}", streamId, buffer.segment(), ex);
             }
         });
         onClosedCallback.get().accept(throwable);
@@ -194,7 +199,7 @@ public class PersistentStreamImpl
 
         @Override
         public void cancel(@Nullable String s, @Nullable Throwable throwable) {
-            clientCallStreamObserver.cancel(s, throwable);
+            logger.debug("Ignore cancel: {}", s, throwable);
         }
 
         @Override
@@ -236,12 +241,20 @@ public class PersistentStreamImpl
 
         @Override
         public void onError(Throwable throwable) {
-            clientCallStreamObserver.onError(throwable);
+            try {
+                clientCallStreamObserver.onError(throwable);
+            } catch (IllegalStateException ex) {
+                // ignore exceptions on error
+            }
         }
 
         @Override
         public void onCompleted() {
-            clientCallStreamObserver.onCompleted();
+            try {
+                clientCallStreamObserver.onCompleted();
+            } catch (IllegalStateException ex) {
+                // ignore exceptions on close
+            }
         }
     }
 }
