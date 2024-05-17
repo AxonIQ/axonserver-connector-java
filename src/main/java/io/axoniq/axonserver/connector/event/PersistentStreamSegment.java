@@ -41,6 +41,9 @@ public interface PersistentStreamSegment extends ResultStream<EventWithToken> {
      */
     void acknowledge(long token);
 
+
+    void error(String error);
+
     /**
      * Returns the segment number of the stream.
      * @return the segment number of this stream

@@ -22,6 +22,7 @@ import io.axoniq.axonserver.grpc.control.ClientIdentification;
 import io.axoniq.axonserver.grpc.streams.InitializationProperties;
 import io.axoniq.axonserver.grpc.streams.Open;
 import io.axoniq.axonserver.grpc.streams.ProgressAcknowledgement;
+import io.axoniq.axonserver.grpc.streams.SegmentError;
 import io.axoniq.axonserver.grpc.streams.StreamRequest;
 import io.axoniq.axonserver.grpc.streams.StreamSignal;
 import io.grpc.stub.ClientCallStreamObserver;
@@ -55,8 +56,8 @@ public class PersistentStreamImpl
     private final AtomicReference<ClientCallStreamObserver<StreamRequest>> outboundStreamHolder = new AtomicReference<>();
     private final AtomicReference<Consumer<Throwable>> onClosedCallback = new AtomicReference<>(NO_OP);
     private final Set<Consumer<PersistentStreamSegment>> onSegmentOpenedCallbacks = new CopyOnWriteArraySet<>();
-    private final Set<IntConsumer> segmentOnAvailable = new CopyOnWriteArraySet<>();
-    private final Set<IntConsumer> segmentOnClose = new CopyOnWriteArraySet<>();
+    private final Set<Consumer<PersistentStreamSegment>> segmentOnAvailable = new CopyOnWriteArraySet<>();
+    private final Set<Consumer<PersistentStreamSegment>> segmentOnClose = new CopyOnWriteArraySet<>();
 
     private final int bufferSize;
     private final int refillBatch;
@@ -126,7 +127,9 @@ public class PersistentStreamImpl
                                                                                                bufferSize,
                                                                                                refillBatch,
                                                                                                progress -> acknowledge(s,
-                                                                                                                       progress));
+                                                                                                                       progress),
+                                                                                               error -> sendError(s,
+                                                                                                                  error));
                                                                                        stream.beforeStart(
                                                                                                outboundStreamHolder.get());
                                                                                        stream.enableFlowControl();
@@ -134,8 +137,8 @@ public class PersistentStreamImpl
                                                                                    });
             if (isNew) {
                 onSegmentOpenedCallbacks.forEach(callback -> callback.accept(segment));
-                segmentOnAvailable.forEach(a -> segment.onAvailable(() -> a.accept(segment.segment())));
-                segmentOnClose.forEach(a -> segment.onSegmentClosed(() -> a.accept(segment.segment())));
+                segmentOnAvailable.forEach(a -> segment.onAvailable(() -> a.accept(segment)));
+                segmentOnClose.forEach(a -> segment.onSegmentClosed(() -> a.accept(segment)));
             }
             segment.onNext(streamSignal.getEvent());
         }
@@ -155,6 +158,15 @@ public class PersistentStreamImpl
                                                                                                       .setPosition(
                                                                                                               progress)
                                                                                                       .build())
+                                                       .build());
+    }
+
+    private void sendError(int segment, String error) {
+        outboundStreamHolder.get().onNext(StreamRequest.newBuilder()
+                                                       .setError(SegmentError.newBuilder()
+                                                                             .setSegment(segment)
+                                                                             .setError(error)
+                                                                             .build())
                                                        .build());
     }
 

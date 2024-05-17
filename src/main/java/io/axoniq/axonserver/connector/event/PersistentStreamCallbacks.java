@@ -28,8 +28,8 @@ public class PersistentStreamCallbacks {
 
     private final Consumer<PersistentStreamSegment> onSegmentOpened;
 
-    private final IntConsumer onSegmentClosed;
-    private final IntConsumer onAvailable;
+    private final Consumer<PersistentStreamSegment> onSegmentClosed;
+    private final Consumer<PersistentStreamSegment> onAvailable;
 
     private final Consumer<Throwable> onClosed;
 
@@ -42,8 +42,8 @@ public class PersistentStreamCallbacks {
      *                        segment
      * @param onClosed        callback that the connector invokes when the persistent stream is closed
      */
-    public PersistentStreamCallbacks(Consumer<PersistentStreamSegment> onSegmentOpened, IntConsumer onSegmentClosed,
-                                     IntConsumer onAvailable,
+    public PersistentStreamCallbacks(Consumer<PersistentStreamSegment> onSegmentOpened, Consumer<PersistentStreamSegment> onSegmentClosed,
+                                     Consumer<PersistentStreamSegment> onAvailable,
                                      Consumer<Throwable> onClosed) {
         this.onSegmentOpened = onSegmentOpened;
         this.onSegmentClosed = onSegmentClosed;
@@ -74,7 +74,7 @@ public class PersistentStreamCallbacks {
      *
      * @return callback that the connector invokes when a persistent stream segment is closed
      */
-    public IntConsumer onSegmentClosed() {
+    public Consumer<PersistentStreamSegment> onSegmentClosed() {
         return onSegmentClosed;
     }
 
@@ -83,7 +83,7 @@ public class PersistentStreamCallbacks {
      *
      * @return callback that the connector invokes when an event is available on a persistent stream segment
      */
-    public IntConsumer onAvailable() {
+    public Consumer<PersistentStreamSegment> onAvailable() {
         return onAvailable;
     }
 }

@@ -23,7 +23,10 @@ import io.axoniq.axonserver.grpc.streams.Requests;
 import io.axoniq.axonserver.grpc.streams.StreamRequest;
 
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.function.LongConsumer;
 
 /**
@@ -39,6 +42,8 @@ public class BufferedPersistentStreamSegment
 
     private final int segment;
     private final LongConsumer progressCallback;
+    private final Consumer<String> errorCallback;
+    private final AtomicBoolean closed = new AtomicBoolean();
 
     /**
      * Constructs a {@link BufferedPersistentStreamSegment}.
@@ -50,10 +55,12 @@ public class BufferedPersistentStreamSegment
     public BufferedPersistentStreamSegment(int segment,
                                            int bufferSize,
                                            int refillBatch,
-                                           LongConsumer progressCallback) {
+                                           LongConsumer progressCallback,
+                                           Consumer<String> errorCallback) {
         super("ignoredClientId", bufferSize, refillBatch);
         this.segment = segment;
         this.progressCallback = progressCallback;
+        this.errorCallback = errorCallback;
     }
 
     @Override
@@ -64,14 +71,23 @@ public class BufferedPersistentStreamSegment
     @Override
     public void onCompleted() {
         super.onCompleted();
+        closed.set(true);
         onSegmentClosedCallbacks.forEach(Runnable::run);
     }
 
     @Override
     public void acknowledge(long token) {
-        if (!isClosed()) {
-            progressCallback.accept(token);
-        }
+        progressCallback.accept(token);
+    }
+
+    @Override
+    public void error(String error) {
+        errorCallback.accept(error);
+    }
+
+    @Override
+    public boolean isClosed() {
+        return closed.get();
     }
 
     @Override
@@ -93,5 +109,10 @@ public class BufferedPersistentStreamSegment
                                                  .setRequests((int) flowControl.getPermits()))
 
                             .build();
+    }
+
+    @Override
+    public String toString() {
+        return "" + segment;
     }
 }
