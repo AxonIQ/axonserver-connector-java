@@ -126,7 +126,7 @@ class PersistentStreamImplTest {
         PersistentStreamCallbacks callbacks = new PersistentStreamCallbacks(null,
                                                                             null,
                                                                             segment -> availableCounter.computeIfAbsent(
-                                                                                                               segment,
+                                                                                                               segment.segment(),
                                                                                                                s -> new AtomicInteger())
                                                                                                        .incrementAndGet(),
                                                                             null);
