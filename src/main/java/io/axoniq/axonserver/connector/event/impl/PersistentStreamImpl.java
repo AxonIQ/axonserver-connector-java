@@ -168,6 +168,8 @@ public class PersistentStreamImpl
                                                                                        return stream;
                                                                                    });
             if (isNew) {
+                logger.debug("Received: {} is new", streamSignal.getEvent().getToken());
+
                 onSegmentOpenedCallbacks.forEach(callback -> callback.accept(segment));
                 segmentOnAvailable.forEach(a -> segment.onAvailable(() -> a.accept(segment)));
                 segmentOnClose.forEach(a -> segment.onSegmentClosed(() -> a.accept(segment)));
@@ -176,6 +178,7 @@ public class PersistentStreamImpl
             segment.onNext(streamSignal.getEvent());
         }
         if (streamSignal.getClosed()) {
+            logger.debug("Received: {} - closed", streamSignal.getSegment());
             BufferedPersistentStreamSegment segment = openSegments.remove(streamSignal.getSegment());
             if (segment != null) {
                 segment.onCompleted();
@@ -295,6 +298,7 @@ public class PersistentStreamImpl
         public void onNext(StreamRequest streamRequest) {
             // requests need to be synchronized as multiple segments use this stream observer
             synchronized (outboundStreamHolder) {
+                logger.trace("Send {}", streamRequest);
                 clientCallStreamObserver.onNext(streamRequest);
             }
         }

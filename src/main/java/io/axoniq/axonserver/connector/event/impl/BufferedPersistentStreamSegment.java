@@ -26,7 +26,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.LongConsumer;
@@ -113,22 +112,6 @@ public class BufferedPersistentStreamSegment
             logger.info("{}: Close segment {}", streamId, segment);
             localOnAvailableCallback.run();
         }
-    }
-
-    @Override
-    public EventWithToken nextIfAvailable(long timeout, TimeUnit unit) throws InterruptedException {
-        if (closed.get()) {
-            return null;
-        }
-        return super.nextIfAvailable(timeout, unit);
-    }
-
-    @Override
-    public EventWithToken nextIfAvailable() {
-        if (closed.get()) {
-            return null;
-        }
-        return super.nextIfAvailable();
     }
 
     @Override
