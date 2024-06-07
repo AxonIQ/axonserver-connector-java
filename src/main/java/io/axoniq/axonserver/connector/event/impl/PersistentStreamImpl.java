@@ -30,13 +30,15 @@ import io.grpc.stub.ClientResponseObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
-import java.util.function.IntConsumer;
 import javax.annotation.Nullable;
 
 /**
@@ -58,7 +60,9 @@ public class PersistentStreamImpl
     private final Set<Consumer<PersistentStreamSegment>> onSegmentOpenedCallbacks = new CopyOnWriteArraySet<>();
     private final Set<Consumer<PersistentStreamSegment>> segmentOnAvailable = new CopyOnWriteArraySet<>();
     private final Set<Consumer<PersistentStreamSegment>> segmentOnClose = new CopyOnWriteArraySet<>();
+    private final Set<Integer> closeConfirmationsSent = new CopyOnWriteArraySet<>();
 
+    private final AtomicBoolean closed = new AtomicBoolean();
     private final int bufferSize;
     private final int refillBatch;
 
@@ -91,10 +95,20 @@ public class PersistentStreamImpl
         }
     }
 
+    /**
+     * Sends an open request to Axon Server to start a persistent stream connection.
+     * The connection is closed with an error if the persistent stream does not exist.
+     */
     public void openConnection() {
         openConnection(null);
     }
 
+    /**
+     * Sends an open request to Axon Server to start a persistent stream connection.
+     * If {@code initializationProperties} are provided these are added to the request
+     * to create the persistent stream if it does not exist.
+     * @param initializationProperties optional properties to create the persistent stream
+     */
     public void openConnection(InitializationProperties initializationProperties) {
         Open.Builder openRequest = Open.newBuilder()
                                        .setStreamId(streamId)
@@ -108,7 +122,24 @@ public class PersistentStreamImpl
 
     @Override
     public void close() {
-        outboundStreamHolder.get().onCompleted();
+        if (closed.compareAndSet(false, true)) {
+            Instant timeout = Instant.now().plus(Duration.ofSeconds(2));
+            openSegments.forEach((segmentNumber, segment) -> segment.close());
+            while (closeConfirmationsSent.size() != openSegments.size() && Instant.now().isBefore(timeout)) {
+                try {
+                    logger.debug("{}: Waiting for segments to complete {} of {}",
+                                streamId,
+                                closeConfirmationsSent.size(),
+                                openSegments.size());
+                    Thread.sleep(50);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(e);
+                }
+            }
+            logger.debug("{}: Waited for segments to complete {}", streamId, closeConfirmationsSent);
+            sendCompleted();
+        }
     }
 
     @Override
@@ -123,6 +154,7 @@ public class PersistentStreamImpl
             BufferedPersistentStreamSegment segment = openSegments.computeIfAbsent(streamSignal.getSegment(),
                                                                                    s -> {
                                                                                        BufferedPersistentStreamSegment stream = new BufferedPersistentStreamSegment(
+                                                                                               streamId,
                                                                                                streamSignal.getSegment(),
                                                                                                bufferSize,
                                                                                                refillBatch,
@@ -139,6 +171,7 @@ public class PersistentStreamImpl
                 onSegmentOpenedCallbacks.forEach(callback -> callback.accept(segment));
                 segmentOnAvailable.forEach(a -> segment.onAvailable(() -> a.accept(segment)));
                 segmentOnClose.forEach(a -> segment.onSegmentClosed(() -> a.accept(segment)));
+                closeConfirmationsSent.remove(segment.segment());
             }
             segment.onNext(streamSignal.getEvent());
         }
@@ -159,6 +192,10 @@ public class PersistentStreamImpl
                                                                                                               progress)
                                                                                                       .build())
                                                        .build());
+        if (progress == PersistentStreamSegment.PENDING_WORK_DONE_MARKER) {
+            logger.info("{}: Close confirmed for segment {}", streamId, segment);
+            closeConfirmationsSent.add(segment);
+        }
     }
 
     private void sendError(int segment, String error) {
@@ -172,21 +209,26 @@ public class PersistentStreamImpl
 
     @Override
     public void onError(Throwable throwable) {
-        logger.warn("Exception on stream {}", streamId, throwable);
+        logger.warn("{}: Error on stream: {}", streamId, throwable.getMessage(), throwable);
         close(throwable);
     }
 
     @Override
     public void onCompleted() {
+        sendCompleted();
+        close(null);
+    }
+
+    private void sendCompleted() {
         try {
             outboundStreamHolder.get().onCompleted();
         } catch (Exception ex) {
             // Ignore exception
         }
-        close(null);
     }
 
     private void close(Throwable throwable) {
+        closed.set(true);
         openSegments.forEach((segment, buffer) -> {
             try {
                 if (throwable != null) {
@@ -201,6 +243,11 @@ public class PersistentStreamImpl
         onClosedCallback.get().accept(throwable);
     }
 
+    /**
+     * Wrapper for the provided ClientCallStreamObserver. As a persistent stream uses one StreamObserver for all
+     * segments, it should not cancel the stream observer when one of the segments is cancelled.
+     * Also, it uses flow control per segment, so overriding the auto inbound flow control is disabled
+     */
     private class StreamRequestClientCallStreamObserver extends ClientCallStreamObserver<StreamRequest> {
 
         private final ClientCallStreamObserver<StreamRequest> clientCallStreamObserver;
@@ -211,7 +258,7 @@ public class PersistentStreamImpl
 
         @Override
         public void cancel(@Nullable String s, @Nullable Throwable throwable) {
-            logger.debug("Ignore cancel: {}", s, throwable);
+            logger.debug("{}: Ignore cancel: {}", streamId, s, throwable);
         }
 
         @Override
@@ -236,7 +283,7 @@ public class PersistentStreamImpl
 
         @Override
         public void disableAutoInboundFlowControl() {
-            clientCallStreamObserver.disableAutoInboundFlowControl();
+            // all assigned segments for a persistent stream use the same stream observer
         }
 
         @Override
@@ -246,6 +293,7 @@ public class PersistentStreamImpl
 
         @Override
         public void onNext(StreamRequest streamRequest) {
+            // requests need to be synchronized as multiple segments use this stream observer
             synchronized (outboundStreamHolder) {
                 clientCallStreamObserver.onNext(streamRequest);
             }

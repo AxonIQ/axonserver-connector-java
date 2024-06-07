@@ -21,10 +21,12 @@ import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.event.EventWithToken;
 import io.axoniq.axonserver.grpc.streams.Requests;
 import io.axoniq.axonserver.grpc.streams.StreamRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.LongConsumer;
@@ -35,29 +37,34 @@ import java.util.function.LongConsumer;
 public class BufferedPersistentStreamSegment
         extends AbstractBufferedStream<EventWithToken, StreamRequest>
         implements PersistentStreamSegment {
-
+    private static final Logger logger = LoggerFactory.getLogger(BufferedPersistentStreamSegment.class);
     private static final EventWithToken TERMINAL_MESSAGE = EventWithToken.newBuilder().setToken(-1729).build();
 
     private final Set<Runnable> onSegmentClosedCallbacks = new CopyOnWriteArraySet<>();
 
+    private final String streamId;
     private final int segment;
     private final LongConsumer progressCallback;
     private final Consumer<String> errorCallback;
     private final AtomicBoolean closed = new AtomicBoolean();
+    private Runnable localOnAvailableCallback = () -> {};
 
     /**
      * Constructs a {@link BufferedPersistentStreamSegment}.
+     * @param streamId         the id of the persistent stream
      * @param segment          the index of the segment
      * @param bufferSize       the number of events to buffer locally
      * @param refillBatch      the number of events to be consumed prior to refilling the buffer
      * @param progressCallback the callback to invoke for acknowledging processed events
      */
-    public BufferedPersistentStreamSegment(int segment,
+    public BufferedPersistentStreamSegment(String streamId,
+                                           int segment,
                                            int bufferSize,
                                            int refillBatch,
                                            LongConsumer progressCallback,
                                            Consumer<String> errorCallback) {
         super("ignoredClientId", bufferSize, refillBatch);
+        this.streamId = streamId;
         this.segment = segment;
         this.progressCallback = progressCallback;
         this.errorCallback = errorCallback;
@@ -77,6 +84,10 @@ public class BufferedPersistentStreamSegment
 
     @Override
     public void acknowledge(long token) {
+        if (closed.get()) {
+            logger.debug("{}: Acknowledging position {} for segment {} after closing the segment",
+                         streamId, token, segment);
+        }
         progressCallback.accept(token);
     }
 
@@ -95,6 +106,36 @@ public class BufferedPersistentStreamSegment
         return segment;
     }
 
+    @Override
+    public void close() {
+        super.close();
+        if (closed.compareAndSet(false, true)) {
+            logger.info("{}: Close segment {}", streamId, segment);
+            localOnAvailableCallback.run();
+        }
+    }
+
+    @Override
+    public EventWithToken nextIfAvailable(long timeout, TimeUnit unit) throws InterruptedException {
+        if (closed.get()) {
+            return null;
+        }
+        return super.nextIfAvailable(timeout, unit);
+    }
+
+    @Override
+    public EventWithToken nextIfAvailable() {
+        if (closed.get()) {
+            return null;
+        }
+        return super.nextIfAvailable();
+    }
+
+    @Override
+    public void onAvailable(Runnable callback) {
+        super.onAvailable(callback);
+        localOnAvailableCallback = callback;
+    }
 
     @Override
     protected EventWithToken terminalMessage() {
@@ -113,6 +154,6 @@ public class BufferedPersistentStreamSegment
 
     @Override
     public String toString() {
-        return "" + segment;
+        return streamId + "[" + segment + "]";
     }
 }

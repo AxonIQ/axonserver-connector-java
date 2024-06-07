@@ -27,6 +27,11 @@ import io.axoniq.axonserver.grpc.event.EventWithToken;
 public interface PersistentStreamSegment extends ResultStream<EventWithToken> {
 
     /**
+     * Acknowledgement value to indicate that all events processed after a segment is closed
+     */
+    long PENDING_WORK_DONE_MARKER = -45;
+
+    /**
      * Registers a callback that will be invoked when Axon Server closes the segment within the persistent
      * stream connection. This happens when the number of segments in the persistent stream has changed or when
      * Axon Server assigns a segment to another client.
