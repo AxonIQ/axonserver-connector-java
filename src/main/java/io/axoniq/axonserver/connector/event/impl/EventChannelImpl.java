@@ -61,6 +61,9 @@ import io.axoniq.axonserver.grpc.streams.DeleteStreamRequest;
 import io.axoniq.axonserver.grpc.streams.InitializationProperties;
 import io.axoniq.axonserver.grpc.streams.ListStreamsRequest;
 import io.axoniq.axonserver.grpc.streams.PersistentStreamServiceGrpc;
+import io.axoniq.axonserver.grpc.streams.ResetStreamConfiguration;
+import io.axoniq.axonserver.grpc.streams.ResetStreamRequest;
+import io.axoniq.axonserver.grpc.streams.ResetType;
 import io.axoniq.axonserver.grpc.streams.SequencingPolicy;
 import io.axoniq.axonserver.grpc.streams.StreamStatus;
 import io.axoniq.axonserver.grpc.streams.UpdateStreamRequest;
@@ -264,8 +267,8 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
         return InitializationProperties.newBuilder()
                                        .setInitialPosition(creationProperties.initialPosition())
                                        .setSegments(creationProperties.segments())
-                                       .setStreamName(nonNullOrDefault(creationProperties.streamName(),""))
-                                       .setFilter(nonNullOrDefault(creationProperties.filter(),""))
+                                       .setStreamName(nonNullOrDefault(creationProperties.streamName(), ""))
+                                       .setFilter(nonNullOrDefault(creationProperties.filter(), ""))
                                        .setSequencingPolicy(SequencingPolicy.newBuilder()
                                                                             .setPolicyName(
                                                                                     creationProperties.sequencingPolicyName())
@@ -312,6 +315,60 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
         FutureListStreamObserver<StreamStatus> futureList = new FutureListStreamObserver<>();
         persistentStreamService.listStreams(ListStreamsRequest.getDefaultInstance(), futureList);
         return futureList;
+    }
+
+    @Override
+    public CompletableFuture<Void> resetPersistentStreamAtHead(String streamId) {
+        FutureStreamObserver<Empty> futureResult = new FutureStreamObserver<>(null);
+        ResetStreamRequest request =
+                ResetStreamRequest.newBuilder()
+                                  .setStreamId(streamId)
+                                  .setOptions(ResetStreamConfiguration.newBuilder()
+                                                                      .setType(ResetType.HEAD))
+                                  .build();
+        persistentStreamService.resetStream(request, futureResult);
+        return futureResult.thenApply(e -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> resetPersistentStreamAtTail(String streamId) {
+        FutureStreamObserver<Empty> futureResult = new FutureStreamObserver<>(null);
+        ResetStreamRequest request =
+                ResetStreamRequest.newBuilder()
+                                  .setStreamId(streamId)
+                                  .setOptions(ResetStreamConfiguration.newBuilder()
+                                                                      .setType(ResetType.TAIL))
+                                  .build();
+        persistentStreamService.resetStream(request, futureResult);
+        return futureResult.thenApply(e -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> resetPersistentStreamAtPosition(String streamId, long position) {
+        FutureStreamObserver<Empty> futureResult = new FutureStreamObserver<>(null);
+        ResetStreamRequest request =
+                ResetStreamRequest.newBuilder()
+                                  .setStreamId(streamId)
+                                  .setOptions(ResetStreamConfiguration.newBuilder()
+                                                                      .setType(ResetType.POSITION)
+                                                                      .setPosition(position))
+                                  .build();
+        persistentStreamService.resetStream(request, futureResult);
+        return futureResult.thenApply(e -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> resetPersistentStreamAtTime(String streamId, long instant) {
+        FutureStreamObserver<Empty> futureResult = new FutureStreamObserver<>(null);
+        ResetStreamRequest request =
+                ResetStreamRequest.newBuilder()
+                                  .setStreamId(streamId)
+                                  .setOptions(ResetStreamConfiguration.newBuilder()
+                                                                      .setType(ResetType.DATETIME)
+                                                                      .setInstant(instant))
+                                  .build();
+        persistentStreamService.resetStream(request, futureResult);
+        return futureResult.thenApply(e -> null);
     }
 
     @Override

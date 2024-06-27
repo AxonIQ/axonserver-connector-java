@@ -18,6 +18,8 @@ package io.axoniq.axonserver.connector.event;
 import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.grpc.event.EventWithToken;
 
+import java.util.Optional;
+
 /**
  * An event stream producing events for one segment of a persistent stream.
  *
@@ -54,4 +56,8 @@ public interface PersistentStreamSegment extends ResultStream<EventWithToken> {
      * @return the segment number of this stream
      */
     int segment();
+
+    default long resetPosition() {
+        return -1;
+    }
 }

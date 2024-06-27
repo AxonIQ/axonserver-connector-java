@@ -158,6 +158,7 @@ public class PersistentStreamImpl
                                                                                                streamSignal.getSegment(),
                                                                                                bufferSize,
                                                                                                refillBatch,
+                                                                                               streamSignal.getResetPosition(),
                                                                                                progress -> acknowledge(s,
                                                                                                                        progress),
                                                                                                error -> sendError(s,

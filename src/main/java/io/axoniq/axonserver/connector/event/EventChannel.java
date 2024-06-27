@@ -444,4 +444,13 @@ public interface EventChannel {
      */
     CompletableFuture<List<StreamStatus>> persistentStreams();
 
+    CompletableFuture<Void> resetPersistentStreamAtHead(String streamId);
+
+    CompletableFuture<Void> resetPersistentStreamAtTail(String streamId);
+
+    CompletableFuture<Void> resetPersistentStreamAtPosition(String streamId, long position);
+
+    CompletableFuture<Void> resetPersistentStreamAtTime(String streamId, long instant);
+
+
 }

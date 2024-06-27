@@ -24,6 +24,7 @@ import io.axoniq.axonserver.grpc.streams.StreamRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -43,6 +44,7 @@ public class BufferedPersistentStreamSegment
 
     private final String streamId;
     private final int segment;
+    private final long resetPosition;
     private final LongConsumer progressCallback;
     private final Consumer<String> errorCallback;
     private final AtomicBoolean closed = new AtomicBoolean();
@@ -60,11 +62,13 @@ public class BufferedPersistentStreamSegment
                                            int segment,
                                            int bufferSize,
                                            int refillBatch,
+                                           long resetPosition,
                                            LongConsumer progressCallback,
                                            Consumer<String> errorCallback) {
         super("ignoredClientId", bufferSize, refillBatch);
         this.streamId = streamId;
         this.segment = segment;
+        this.resetPosition = resetPosition;
         this.progressCallback = progressCallback;
         this.errorCallback = errorCallback;
     }
@@ -103,6 +107,11 @@ public class BufferedPersistentStreamSegment
     @Override
     public int segment() {
         return segment;
+    }
+
+    @Override
+    public long resetPosition() {
+        return resetPosition;
     }
 
     @Override
