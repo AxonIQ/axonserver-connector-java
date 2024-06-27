@@ -96,17 +96,17 @@ public class PersistentStreamImpl
     }
 
     /**
-     * Sends an open request to Axon Server to start a persistent stream connection.
-     * The connection is closed with an error if the persistent stream does not exist.
+     * Sends an open request to Axon Server to start a persistent stream connection. The connection is closed with an
+     * error if the persistent stream does not exist.
      */
     public void openConnection() {
         openConnection(null);
     }
 
     /**
-     * Sends an open request to Axon Server to start a persistent stream connection.
-     * If {@code initializationProperties} are provided these are added to the request
-     * to create the persistent stream if it does not exist.
+     * Sends an open request to Axon Server to start a persistent stream connection. If {@code initializationProperties}
+     * are provided these are added to the request to create the persistent stream if it does not exist.
+     *
      * @param initializationProperties optional properties to create the persistent stream
      */
     public void openConnection(InitializationProperties initializationProperties) {
@@ -128,9 +128,9 @@ public class PersistentStreamImpl
             while (closeConfirmationsSent.size() != openSegments.size() && Instant.now().isBefore(timeout)) {
                 try {
                     logger.debug("{}: Waiting for segments to complete {} of {}",
-                                streamId,
-                                closeConfirmationsSent.size(),
-                                openSegments.size());
+                                 streamId,
+                                 closeConfirmationsSent.size(),
+                                 openSegments.size());
                     Thread.sleep(50);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -149,33 +149,11 @@ public class PersistentStreamImpl
 
     @Override
     public void onNext(StreamSignal streamSignal) {
+        if (streamSignal.hasOpen()) {
+            getPersistentStreamSegment(streamSignal.getSegment(), streamSignal.getOpen().getPositionAtReset());
+        }
         if (streamSignal.hasEvent()) {
-            boolean isNew = !openSegments.containsKey(streamSignal.getSegment());
-            BufferedPersistentStreamSegment segment = openSegments.computeIfAbsent(streamSignal.getSegment(),
-                                                                                   s -> {
-                                                                                       BufferedPersistentStreamSegment stream = new BufferedPersistentStreamSegment(
-                                                                                               streamId,
-                                                                                               streamSignal.getSegment(),
-                                                                                               bufferSize,
-                                                                                               refillBatch,
-                                                                                               streamSignal.getResetPosition(),
-                                                                                               progress -> acknowledge(s,
-                                                                                                                       progress),
-                                                                                               error -> sendError(s,
-                                                                                                                  error));
-                                                                                       stream.beforeStart(
-                                                                                               outboundStreamHolder.get());
-                                                                                       stream.enableFlowControl();
-                                                                                       return stream;
-                                                                                   });
-            if (isNew) {
-                logger.debug("Received: {} is new", streamSignal.getEvent().getToken());
-
-                onSegmentOpenedCallbacks.forEach(callback -> callback.accept(segment));
-                segmentOnAvailable.forEach(a -> segment.onAvailable(() -> a.accept(segment)));
-                segmentOnClose.forEach(a -> segment.onSegmentClosed(() -> a.accept(segment)));
-                closeConfirmationsSent.remove(segment.segment());
-            }
+            BufferedPersistentStreamSegment segment = getPersistentStreamSegment(streamSignal.getSegment(), -1);
             segment.onNext(streamSignal.getEvent());
         }
         if (streamSignal.getClosed()) {
@@ -185,6 +163,32 @@ public class PersistentStreamImpl
                 segment.onCompleted();
             }
         }
+    }
+
+    private BufferedPersistentStreamSegment getPersistentStreamSegment(int segmentNr, long positionAtReset) {
+        boolean isNew = !openSegments.containsKey(segmentNr);
+        BufferedPersistentStreamSegment segment =
+                openSegments.computeIfAbsent(segmentNr,
+                                             s -> {
+                                                 BufferedPersistentStreamSegment stream = new BufferedPersistentStreamSegment(
+                                                         streamId,
+                                                         segmentNr,
+                                                         bufferSize,
+                                                         refillBatch,
+                                                         positionAtReset,
+                                                         progress -> acknowledge(s,progress),
+                                                         error -> sendError(s,error));
+                                                 stream.beforeStart(outboundStreamHolder.get());
+                                                 stream.enableFlowControl();
+                                                 return stream;
+                                             });
+        if (isNew) {
+            onSegmentOpenedCallbacks.forEach(callback -> callback.accept(segment));
+            segmentOnAvailable.forEach(a -> segment.onAvailable(() -> a.accept(segment)));
+            segmentOnClose.forEach(a -> segment.onSegmentClosed(() -> a.accept(segment)));
+            closeConfirmationsSent.remove(segment.segment());
+        }
+        return segment;
     }
 
     private void acknowledge(int segment, long progress) {
@@ -249,8 +253,8 @@ public class PersistentStreamImpl
 
     /**
      * Wrapper for the provided ClientCallStreamObserver. As a persistent stream uses one StreamObserver for all
-     * segments, it should not cancel the stream observer when one of the segments is cancelled.
-     * Also, it uses flow control per segment, so overriding the auto inbound flow control is disabled
+     * segments, it should not cancel the stream observer when one of the segments is cancelled. Also, it uses flow
+     * control per segment, so overriding the auto inbound flow control is disabled
      */
     private class StreamRequestClientCallStreamObserver extends ClientCallStreamObserver<StreamRequest> {
 
