@@ -63,10 +63,10 @@ import io.axoniq.axonserver.grpc.streams.ListStreamsRequest;
 import io.axoniq.axonserver.grpc.streams.PersistentStreamServiceGrpc;
 import io.axoniq.axonserver.grpc.streams.ResetStreamConfiguration;
 import io.axoniq.axonserver.grpc.streams.ResetStreamRequest;
-import io.axoniq.axonserver.grpc.streams.ResetType;
 import io.axoniq.axonserver.grpc.streams.SequencingPolicy;
 import io.axoniq.axonserver.grpc.streams.StreamStatus;
 import io.axoniq.axonserver.grpc.streams.UpdateStreamRequest;
+import io.axoniq.axonserver.grpc.streams.WrappedInt64;
 import io.grpc.stub.StreamObserver;
 
 import java.time.Instant;
@@ -324,7 +324,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
                 ResetStreamRequest.newBuilder()
                                   .setStreamId(streamId)
                                   .setOptions(ResetStreamConfiguration.newBuilder()
-                                                                      .setType(ResetType.HEAD))
+                                                      .setHead(Empty.getDefaultInstance()))
                                   .build();
         persistentStreamService.resetStream(request, futureResult);
         return futureResult.thenApply(e -> null);
@@ -337,7 +337,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
                 ResetStreamRequest.newBuilder()
                                   .setStreamId(streamId)
                                   .setOptions(ResetStreamConfiguration.newBuilder()
-                                                                      .setType(ResetType.TAIL))
+                                                      .setTail(Empty.getDefaultInstance()))
                                   .build();
         persistentStreamService.resetStream(request, futureResult);
         return futureResult.thenApply(e -> null);
@@ -350,8 +350,9 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
                 ResetStreamRequest.newBuilder()
                                   .setStreamId(streamId)
                                   .setOptions(ResetStreamConfiguration.newBuilder()
-                                                                      .setType(ResetType.POSITION)
-                                                                      .setPosition(position))
+                                                                      .setPosition(WrappedInt64.newBuilder()
+                                                                                               .setValue(position)
+                                                                                               .build()))
                                   .build();
         persistentStreamService.resetStream(request, futureResult);
         return futureResult.thenApply(e -> null);
@@ -364,8 +365,9 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
                 ResetStreamRequest.newBuilder()
                                   .setStreamId(streamId)
                                   .setOptions(ResetStreamConfiguration.newBuilder()
-                                                                      .setType(ResetType.DATETIME)
-                                                                      .setInstant(instant))
+                                                                      .setDatetime(WrappedInt64.newBuilder()
+                                                                                               .setValue(instant)
+                                                                                               .build()))
                                   .build();
         persistentStreamService.resetStream(request, futureResult);
         return futureResult.thenApply(e -> null);
