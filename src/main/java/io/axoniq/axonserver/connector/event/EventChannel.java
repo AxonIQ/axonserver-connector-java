@@ -444,13 +444,30 @@ public interface EventChannel {
      */
     CompletableFuture<List<StreamStatus>> persistentStreams();
 
+    /**
+     * Resets the position of a persistent stream to the head (most recent) event in the event store.
+     * @param streamId the unique identification of a persistent stream
+     */
     CompletableFuture<Void> resetPersistentStreamAtHead(String streamId);
 
+    /**
+     * Resets the position of a persistent stream to the first (oldest) event in the event store.
+     * @param streamId the unique identification of a persistent stream
+     */
     CompletableFuture<Void> resetPersistentStreamAtTail(String streamId);
 
+    /**
+     * Resets the position of a persistent stream to the event at given position (global index) in the event store.
+     * @param streamId the unique identification of a persistent stream
+     * @param position the global index of the first event to be returned
+     */
     CompletableFuture<Void> resetPersistentStreamAtPosition(String streamId, long position);
 
+    /**
+     * Resets the position of a persistent stream to the event at or after the given timestamp in the event store.
+     * @param streamId the unique identification of a persistent stream
+     * @param instant the timestamp of the first event to be included in the stream
+     */
     CompletableFuture<Void> resetPersistentStreamAtTime(String streamId, long instant);
-
 
 }
