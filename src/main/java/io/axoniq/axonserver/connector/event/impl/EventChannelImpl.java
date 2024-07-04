@@ -57,6 +57,9 @@ import io.axoniq.axonserver.grpc.event.RowResponse;
 import io.axoniq.axonserver.grpc.event.ScheduleEventRequest;
 import io.axoniq.axonserver.grpc.event.ScheduleToken;
 import io.axoniq.axonserver.grpc.event.TrackingToken;
+import io.axoniq.axonserver.grpc.streams.CreateResult;
+import io.axoniq.axonserver.grpc.streams.CreateStreamRequest;
+import io.axoniq.axonserver.grpc.streams.CreateStreamResponse;
 import io.axoniq.axonserver.grpc.streams.DeleteStreamRequest;
 import io.axoniq.axonserver.grpc.streams.InitializationProperties;
 import io.axoniq.axonserver.grpc.streams.ListStreamsRequest;
@@ -226,6 +229,21 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     }
 
     @Override
+    public CompletableFuture<CreateResult> createPersistentStream(String streamId,
+                                                                  PersistentStreamProperties creationProperties) {
+        AssertUtils.assertParameter(streamId != null, "streamId must not be null");
+        AssertUtils.assertParameter(creationProperties != null, "creationProperties must not be null");
+        FutureStreamObserver<CreateStreamResponse> result = new FutureStreamObserver<>(null);
+        CreateStreamRequest request = CreateStreamRequest.newBuilder()
+                                                         .setStreamId(streamId)
+                                                         .setInitializationProperties(initializationProperties(
+                                                                 creationProperties))
+                                                         .build();
+        persistentStreamService.createStream(request, result);
+        return result.thenApply(r -> r == null ? null : r.getResult());
+    }
+
+    @Override
     public PersistentStream openPersistentStream(String streamId, int bufferSize, int refillBatch,
                                                  PersistentStreamCallbacks callbacks) {
         AssertUtils.assertParameter(streamId != null, "streamId must not be null");
@@ -323,7 +341,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
                 ResetStreamRequest.newBuilder()
                                   .setStreamId(streamId)
                                   .setOptions(ResetStreamConfiguration.newBuilder()
-                                                      .setHead(Empty.getDefaultInstance()))
+                                                                      .setHead(Empty.getDefaultInstance()))
                                   .build();
         persistentStreamService.resetStream(request, futureResult);
         return futureResult.thenApply(e -> null);
@@ -336,7 +354,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
                 ResetStreamRequest.newBuilder()
                                   .setStreamId(streamId)
                                   .setOptions(ResetStreamConfiguration.newBuilder()
-                                                      .setTail(Empty.getDefaultInstance()))
+                                                                      .setTail(Empty.getDefaultInstance()))
                                   .build();
         persistentStreamService.resetStream(request, futureResult);
         return futureResult.thenApply(e -> null);
