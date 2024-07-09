@@ -20,6 +20,8 @@ import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.event.Confirmation;
 import io.axoniq.axonserver.grpc.event.Event;
+import io.axoniq.axonserver.grpc.streams.CreateResult;
+import io.axoniq.axonserver.grpc.streams.CreateStreamResponse;
 import io.axoniq.axonserver.grpc.streams.StreamStatus;
 
 import java.time.Duration;
@@ -390,6 +392,15 @@ public interface EventChannel {
         throw new UnsupportedOperationException();
     }
 
+    /**
+     * Opens the persistent stream identified by {@code streamId}. If the stream does not exist it will be
+     * created with the properties specified in {@code creationProperties}.
+     * @param streamId           the unique identification of a persistent stream
+     * @param creationProperties properties to initialize the persistent stream if it does not exist yet
+     * @return a result indicating if the stream has been created or it already existed
+     */
+    CompletableFuture<CreateResult> createPersistentStream(String streamId,
+                                        PersistentStreamProperties creationProperties);
     /**
      * Opens the persistent stream identified by {@code streamId}. Fails if the stream does not exist.
      * @param streamId    the unique identification of a persistent stream

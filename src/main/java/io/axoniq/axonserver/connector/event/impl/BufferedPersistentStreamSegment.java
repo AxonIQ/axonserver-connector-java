@@ -19,6 +19,7 @@ import io.axoniq.axonserver.connector.event.PersistentStreamSegment;
 import io.axoniq.axonserver.connector.impl.AbstractBufferedStream;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.event.EventWithToken;
+import io.axoniq.axonserver.grpc.streams.PersistentStreamEvent;
 import io.axoniq.axonserver.grpc.streams.Requests;
 import io.axoniq.axonserver.grpc.streams.StreamRequest;
 import org.slf4j.Logger;
@@ -35,23 +36,26 @@ import java.util.function.LongConsumer;
  * Implementation of the {@link PersistentStreamSegment}.
  */
 public class BufferedPersistentStreamSegment
-        extends AbstractBufferedStream<EventWithToken, StreamRequest>
+        extends AbstractBufferedStream<PersistentStreamEvent, StreamRequest>
         implements PersistentStreamSegment {
+
     private static final Logger logger = LoggerFactory.getLogger(BufferedPersistentStreamSegment.class);
-    private static final EventWithToken TERMINAL_MESSAGE = EventWithToken.newBuilder().setToken(-1729).build();
+    private static final PersistentStreamEvent TERMINAL_MESSAGE = PersistentStreamEvent.newBuilder().setEvent(
+            EventWithToken.newBuilder().setToken(-1729).build()).build();
 
     private final Set<Runnable> onSegmentClosedCallbacks = new CopyOnWriteArraySet<>();
 
     private final String streamId;
     private final int segment;
-    private final long resetPosition;
     private final LongConsumer progressCallback;
     private final Consumer<String> errorCallback;
     private final AtomicBoolean closed = new AtomicBoolean();
-    private Runnable localOnAvailableCallback = () -> {};
+    private Runnable localOnAvailableCallback = () -> {
+    };
 
     /**
      * Constructs a {@link BufferedPersistentStreamSegment}.
+     *
      * @param streamId         the id of the persistent stream
      * @param segment          the index of the segment
      * @param bufferSize       the number of events to buffer locally
@@ -62,13 +66,11 @@ public class BufferedPersistentStreamSegment
                                            int segment,
                                            int bufferSize,
                                            int refillBatch,
-                                           long resetPosition,
                                            LongConsumer progressCallback,
                                            Consumer<String> errorCallback) {
         super("ignoredClientId", bufferSize, refillBatch);
         this.streamId = streamId;
         this.segment = segment;
-        this.resetPosition = resetPosition;
         this.progressCallback = progressCallback;
         this.errorCallback = errorCallback;
     }
@@ -110,11 +112,6 @@ public class BufferedPersistentStreamSegment
     }
 
     @Override
-    public long resetPosition() {
-        return resetPosition;
-    }
-
-    @Override
     public void close() {
         super.close();
         if (closed.compareAndSet(false, true)) {
@@ -130,7 +127,7 @@ public class BufferedPersistentStreamSegment
     }
 
     @Override
-    protected EventWithToken terminalMessage() {
+    protected PersistentStreamEvent terminalMessage() {
         return TERMINAL_MESSAGE;
     }
 
