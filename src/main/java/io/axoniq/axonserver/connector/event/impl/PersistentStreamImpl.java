@@ -150,10 +150,10 @@ public class PersistentStreamImpl
     @Override
     public void onNext(StreamSignal streamSignal) {
         if (streamSignal.hasOpen()) {
-            getPersistentStreamSegment(streamSignal.getSegment(), streamSignal.getOpen().getPositionAtReset());
+            getPersistentStreamSegment(streamSignal.getSegment());
         }
         if (streamSignal.hasEvent()) {
-            BufferedPersistentStreamSegment segment = getPersistentStreamSegment(streamSignal.getSegment(), -1);
+            BufferedPersistentStreamSegment segment = getPersistentStreamSegment(streamSignal.getSegment());
             segment.onNext(streamSignal.getEvent());
         }
         if (streamSignal.getClosed()) {
@@ -165,7 +165,7 @@ public class PersistentStreamImpl
         }
     }
 
-    private BufferedPersistentStreamSegment getPersistentStreamSegment(int segmentNr, long positionAtReset) {
+    private BufferedPersistentStreamSegment getPersistentStreamSegment(int segmentNr) {
         boolean isNew = !openSegments.containsKey(segmentNr);
         BufferedPersistentStreamSegment segment =
                 openSegments.computeIfAbsent(segmentNr,
@@ -175,7 +175,6 @@ public class PersistentStreamImpl
                                                          segmentNr,
                                                          bufferSize,
                                                          refillBatch,
-                                                         positionAtReset,
                                                          progress -> acknowledge(s,progress),
                                                          error -> sendError(s,error));
                                                  stream.beforeStart(outboundStreamHolder.get());

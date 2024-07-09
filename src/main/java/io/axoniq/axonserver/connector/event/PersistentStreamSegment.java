@@ -17,6 +17,7 @@ package io.axoniq.axonserver.connector.event;
 
 import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.grpc.event.EventWithToken;
+import io.axoniq.axonserver.grpc.streams.PersistentStreamEvent;
 
 import java.util.Optional;
 
@@ -26,7 +27,7 @@ import java.util.Optional;
  * @author Marc Gathier
  * @since 2024.0.0
  */
-public interface PersistentStreamSegment extends ResultStream<EventWithToken> {
+public interface PersistentStreamSegment extends ResultStream<PersistentStreamEvent> {
 
     /**
      * Acknowledgement value to indicate that all events processed after a segment is closed
@@ -57,7 +58,4 @@ public interface PersistentStreamSegment extends ResultStream<EventWithToken> {
      */
     int segment();
 
-    default long resetPosition() {
-        return -1;
-    }
 }
