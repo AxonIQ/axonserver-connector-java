@@ -23,6 +23,7 @@ import io.axoniq.axonserver.grpc.control.ClientIdentification;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.EventWithToken;
 import io.axoniq.axonserver.grpc.streams.InitializationProperties;
+import io.axoniq.axonserver.grpc.streams.PersistentStreamEvent;
 import io.axoniq.axonserver.grpc.streams.SequencingPolicy;
 import io.axoniq.axonserver.grpc.streams.StreamRequest;
 import io.axoniq.axonserver.grpc.streams.StreamSignal;
@@ -48,9 +49,9 @@ class PersistentStreamImplTest {
     private final ClientIdentification clientIdentification = ClientIdentification.getDefaultInstance();
     private final String streamId = "test-stream";
     private final PersistentStreamCallbacks callbacks = new PersistentStreamCallbacks(null,
-                                                                                null,
-                                                                                null,
-                                                                                null);
+                                                                                      null,
+                                                                                      null,
+                                                                                      null);
     private final PersistentStreamImpl testSubject = new PersistentStreamImpl(clientIdentification, streamId, 100, 50,
                                                                               callbacks);
     private final TestClientCallStreamObserver clientCallStreamObserver = new TestClientCallStreamObserver();
@@ -111,8 +112,8 @@ class PersistentStreamImplTest {
         PersistentStreamSegment segment = segments.get(0);
         assertNotNull(segment);
         assertNotNull(segment.peek());
-        EventWithToken next = segment.next();
-        assertEquals(100, next.getToken());
+        PersistentStreamEvent next = segment.next();
+        assertEquals(100, next.getEvent().getToken());
 
         segment.acknowledge(100);
         assertEquals(3, clientCallStreamObserver.requests.size());
@@ -153,15 +154,15 @@ class PersistentStreamImplTest {
 
         PersistentStreamSegment segment = segments.get(0);
         assertNotNull(segment);
-        EventWithToken next = segment.next();
-        assertEquals(100, next.getToken());
+        PersistentStreamEvent next = segment.next();
+        assertEquals(100, next.getEvent().getToken());
         assertNull(segment.nextIfAvailable());
         Executors.newSingleThreadScheduledExecutor()
                  .schedule(() -> testSubject.onNext(eventSignal(0, 101)), 50, TimeUnit.MILLISECONDS);
 
         next = segment.nextIfAvailable(100, TimeUnit.MILLISECONDS);
         assertNotNull(next);
-        assertEquals(101, next.getToken());
+        assertEquals(101, next.getEvent().getToken());
     }
 
     @Test
@@ -258,10 +259,11 @@ class PersistentStreamImplTest {
     private static StreamSignal eventSignal(int segment, long token) {
         return StreamSignal.newBuilder()
                            .setSegment(segment)
-                           .setEvent(EventWithToken.newBuilder()
-                                                   .setToken(token)
-                                                   .setEvent(Event.getDefaultInstance())
-                                                   .build())
+                           .setEvent(PersistentStreamEvent.newBuilder()
+                                                          .setEvent(EventWithToken.newBuilder()
+                                                                                  .setToken(token)
+                                                                                  .setEvent(Event.getDefaultInstance())
+                                                                                  .build()))
                            .build();
     }
 
