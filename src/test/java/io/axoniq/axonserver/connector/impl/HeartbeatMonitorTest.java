@@ -33,7 +33,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Matchers.*;
 import static org.mockito.Mockito.*;
 
 class HeartbeatMonitorTest {
@@ -53,10 +52,10 @@ class HeartbeatMonitorTest {
         elapseTime(0);
         executor = mock(ScheduledExecutorService.class);
         doAnswer(inv -> {
-            nextCheckBeat = () -> {nextCheckBeat = null ; inv.getArgumentAt(0, Runnable.class).run();};
+            nextCheckBeat = () -> {nextCheckBeat = null ; inv.getArgument(0, Runnable.class).run();};
             return null;
         }).when(executor).schedule(any(Runnable.class), anyLong(), any(TimeUnit.class));
-        doAnswer(inv -> nextCheckBeat = () -> {nextCheckBeat = null ; inv.getArgumentAt(0, Runnable.class).run();}).when(executor).execute(any(Runnable.class));
+        doAnswer(inv -> nextCheckBeat = () -> {nextCheckBeat = null ; inv.getArgument(0, Runnable.class).run();}).when(executor).execute(any(Runnable.class));
         HeartbeatSender mockSender = () -> {
             CompletableFuture<Void> newBeat = new CompletableFuture<>();
             sentBeats.add(newBeat);
