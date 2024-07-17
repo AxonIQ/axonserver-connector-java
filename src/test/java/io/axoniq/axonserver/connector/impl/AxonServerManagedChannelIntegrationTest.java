@@ -48,8 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyLong;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 
@@ -68,14 +67,14 @@ class AxonServerManagedChannelIntegrationTest extends AbstractAxonServerIntegrat
         doAnswer(inv -> {
             nextConnectTask = () -> {
                 nextConnectTask = null;
-                inv.getArgumentAt(0, Runnable.class).run();
+                inv.getArgument(0, Runnable.class).run();
             };
             return null;
         }).when(mockExecutor)
           .schedule(any(Runnable.class), anyLong(), any(TimeUnit.class));
         doAnswer(inv -> nextConnectTask = () -> {
             nextConnectTask = null;
-            inv.getArgumentAt(0, Runnable.class).run();
+            inv.getArgument(0, Runnable.class).run();
         }).when(mockExecutor)
           .execute(any(Runnable.class));
         localConnection = () -> NettyChannelBuilder.forAddress(axonServerAddress.getHostName(), axonServerAddress.getGrpcPort())

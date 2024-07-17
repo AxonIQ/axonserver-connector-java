@@ -48,7 +48,7 @@ class FlowControlledReplyChannelWriterTest {
     void setUp() {
         source = mock(DisposableReadonlyBuffer.class);
         doAnswer(invocation -> {
-            Runnable onAvailable = invocation.getArgumentAt(0, Runnable.class);
+            Runnable onAvailable = invocation.getArgument(0, Runnable.class);
             onAvailableRef.set(onAvailable);
             return null;
         }).when(source).onAvailable(any(Runnable.class));
