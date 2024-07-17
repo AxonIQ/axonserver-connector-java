@@ -46,7 +46,7 @@
 
         <axonserver.api.version>2024.1.0-SNAPSHOT</axonserver.api.version>
 
-        <grpc.version>1.59.1</grpc.version>
+        <grpc.version>1.65.1</grpc.version>
 
         <slf4j.version>1.7.36</slf4j.version>
         <log4j.version>2.23.1</log4j.version>
