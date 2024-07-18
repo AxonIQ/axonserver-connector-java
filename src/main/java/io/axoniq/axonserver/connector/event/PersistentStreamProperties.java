@@ -17,7 +17,6 @@ package io.axoniq.axonserver.connector.event;
 
 import io.axoniq.axonserver.connector.impl.AssertUtils;
 
-import java.text.ParseException;
 import java.util.List;
 
 /**
@@ -27,7 +26,14 @@ import java.util.List;
  * @since 2024.0.0
  */
 public class PersistentStreamProperties {
+
+    /**
+     * Indicator for setting the initial position of a persistent stream to the head of the event store.
+     */
     public static final String HEAD_POSITION = "HEAD";
+    /**
+     * Indicator for setting the initial position of a persistent stream to the tail of the event store.
+     */
     public static final String TAIL_POSITION = "TAIL";
     private final String streamName;
     private final int segments;

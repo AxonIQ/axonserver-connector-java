@@ -96,7 +96,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     private static final ReadHighestSequenceNrResponse UNKNOWN_HIGHEST_SEQ =
             ReadHighestSequenceNrResponse.newBuilder().setToSequenceNr(-1).build();
     private static final TrackingToken NO_TOKEN_AVAILABLE = TrackingToken.newBuilder().setToken(-1).build();
-    public static final int HEAD_POSITION_INDICATOR = -99;
+    private static final int HEAD_POSITION_INDICATOR = -99;
 
     private final EventStoreGrpc.EventStoreStub eventStore;
     private final EventSchedulerGrpc.EventSchedulerStub eventScheduler;
