@@ -96,6 +96,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     private static final ReadHighestSequenceNrResponse UNKNOWN_HIGHEST_SEQ =
             ReadHighestSequenceNrResponse.newBuilder().setToSequenceNr(-1).build();
     private static final TrackingToken NO_TOKEN_AVAILABLE = TrackingToken.newBuilder().setToken(-1).build();
+    private static final int HEAD_POSITION_INDICATOR = -99;
 
     private final EventStoreGrpc.EventStoreStub eventStore;
     private final EventSchedulerGrpc.EventSchedulerStub eventScheduler;
@@ -282,7 +283,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
 
     private InitializationProperties initializationProperties(PersistentStreamProperties creationProperties) {
         return InitializationProperties.newBuilder()
-                                       .setInitialPosition(creationProperties.initialPosition())
+                                       .setInitialPosition(initialPosition(creationProperties.initialPosition()))
                                        .setSegments(creationProperties.segments())
                                        .setStreamName(nonNullOrDefault(creationProperties.streamName(), ""))
                                        .setFilter(nonNullOrDefault(creationProperties.filter(), ""))
@@ -294,6 +295,17 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
                                                                                             creationProperties.sequencingPolicyParameters(),
                                                                                             Collections.emptyList())))
                                        .build();
+    }
+
+    private long initialPosition(String initialPosition) {
+        if (PersistentStreamProperties.HEAD_POSITION.equals(initialPosition)) {
+            return HEAD_POSITION_INDICATOR;
+        }
+        if (PersistentStreamProperties.TAIL_POSITION.equals(initialPosition)) {
+            return 0;
+        }
+
+        return Long.parseLong(initialPosition);
     }
 
     @Override

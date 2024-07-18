@@ -26,11 +26,20 @@ import java.util.List;
  * @since 2024.0.0
  */
 public class PersistentStreamProperties {
+
+    /**
+     * Indicator for setting the initial position of a persistent stream to the head of the event store.
+     */
+    public static final String HEAD_POSITION = "HEAD";
+    /**
+     * Indicator for setting the initial position of a persistent stream to the tail of the event store.
+     */
+    public static final String TAIL_POSITION = "TAIL";
     private final String streamName;
     private final int segments;
     private final String sequencingPolicyName;
     private final List<String> sequencingPolicyParameters;
-    private final long initialPosition;
+    private final String initialPosition;
     private final String filter;
 
     /**
@@ -40,13 +49,13 @@ public class PersistentStreamProperties {
      * @param segments                   the number of segments, must be larger than 0
      * @param sequencingPolicyName       the sequencing policy name, must be a name known in Axon Server
      * @param sequencingPolicyParameters optional parameters for the sequencing policy
-     * @param initialPosition            first token to read
+     * @param initialPosition            first token to read or HEAD or TAIL
      * @param filter                     an optional filter to filter events on Axon Server side
      */
     public PersistentStreamProperties(String streamName, int segments, String sequencingPolicyName,
-                                      List<String> sequencingPolicyParameters, long initialPosition, String filter) {
+                                      List<String> sequencingPolicyParameters, String initialPosition, String filter) {
         AssertUtils.assertParameter(segments > 0, "Segments must be > 0");
-        AssertUtils.assertParameter(initialPosition >= 0, "initialPosition must be >= 0");
+        AssertUtils.assertParameter(valid(initialPosition), "initialPosition must be >= 0 or 'HEAD' or 'TAIL'");
         AssertUtils.assertParameter(sequencingPolicyName != null,
                                     "sequencingPolicyName must not be null");
 
@@ -56,6 +65,19 @@ public class PersistentStreamProperties {
         this.sequencingPolicyParameters = sequencingPolicyParameters;
         this.initialPosition = initialPosition;
         this.filter = filter;
+    }
+
+    private boolean valid(String initialPosition) {
+        if (HEAD_POSITION.equals(initialPosition) || TAIL_POSITION.equals(initialPosition)) {
+            return true;
+        }
+
+        try {
+            long initial = Long.parseLong(initialPosition);
+            return initial >= 0;
+        } catch (NumberFormatException ex) {
+            return false;
+        }
     }
 
     /**
@@ -95,7 +117,7 @@ public class PersistentStreamProperties {
      * Returns the first token to read.
      * @return first token to read
      */
-    public long initialPosition() {
+    public String initialPosition() {
         return initialPosition;
     }
 
