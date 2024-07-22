@@ -16,7 +16,7 @@ updates:
       - "schananas"
       - "smcvb"
       - "trimoq"
-    milestone: 30
+    milestone: 31
     groups:
       github-dependencies:
         update-types:
@@ -39,7 +39,7 @@ updates:
       - "schananas"
       - "smcvb"
       - "trimoq"
-    milestone: 30
+    milestone: 31
     groups:
       maven-dependencies:
         update-types:
