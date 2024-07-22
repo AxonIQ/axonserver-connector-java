@@ -59,8 +59,8 @@
         <jacoco-maven-plugin.version>0.8.12</jacoco-maven-plugin.version>
         <junit.jupiter.version>5.10.3</junit.jupiter.version>
         <mockito.version>4.11.0</mockito.version>
-        <testcontainers.version>1.19.8</testcontainers.version>
-        <testng.version>7.5.1</testng.version>
+        <testcontainers.version>1.20.0</testcontainers.version>
+        <testng.version>7.5.1</testng.version><!-- Don't upgrade due to JDK8 -->
 
         <httpclient5.version>5.3.1</httpclient5.version>
         <toxiproxy.version>2.1.7</toxiproxy.version>
@@ -394,7 +394,7 @@
             </plugin>
             <plugin>
                 <artifactId>maven-release-plugin</artifactId>
-                <version>3.1.0</version>
+                <version>3.1.1</version>
                 <configuration>
                     <!-- prepare goal configuration -->
                     <mavenExecutorId>forked-path</mavenExecutorId>
@@ -428,7 +428,7 @@
             </plugin>
             <plugin>
                 <artifactId>maven-javadoc-plugin</artifactId>
-                <version>3.7.0</version>
+                <version>3.8.0</version>
                 <executions>
                     <execution>
                         <id>attach-javadoc</id>
