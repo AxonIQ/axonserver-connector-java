@@ -60,7 +60,7 @@
         <junit.jupiter.version>5.10.3</junit.jupiter.version>
         <mockito.version>4.11.0</mockito.version>
         <testcontainers.version>1.20.0</testcontainers.version>
-        <testng.version>7.10.2</testng.version>
+        <testng.version>7.5.1</testng.version><!-- Don't upgrade due to JDK8 -->
 
         <httpclient5.version>5.3.1</httpclient5.version>
         <toxiproxy.version>2.1.7</toxiproxy.version>
