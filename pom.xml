@@ -62,7 +62,7 @@
         <testcontainers.version>1.20.1</testcontainers.version>
         <testng.version>7.5.1</testng.version><!-- Don't upgrade due to JDK8 -->
 
-        <httpclient5.version>5.3.1</httpclient5.version>
+        <httpclient5.version>5.4</httpclient5.version>
         <toxiproxy.version>2.1.7</toxiproxy.version>
         <maven.surefire.plugin.version>3.5.0</maven.surefire.plugin.version>
     </properties>
