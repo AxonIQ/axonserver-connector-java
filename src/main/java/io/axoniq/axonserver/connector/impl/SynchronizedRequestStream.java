@@ -19,7 +19,6 @@ package io.axoniq.axonserver.connector.impl;
 import io.grpc.stub.ClientCallStreamObserver;
 
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Lock-based synchronized implementation of a {@link ClientCallStreamObserver}. Acts as a wrapper of another {@code
@@ -31,7 +30,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public class SynchronizedRequestStream<T> extends ClientCallStreamObserver<T> {
 
     private final ClientCallStreamObserver<T> delegate;
-    private final ReentrantLock lock = new ReentrantLock();
+    private final AtomicBoolean lock = new AtomicBoolean(false);
     private final AtomicBoolean halfClosed = new AtomicBoolean(false);
 
     /**
@@ -101,13 +100,15 @@ public class SynchronizedRequestStream<T> extends ClientCallStreamObserver<T> {
     }
 
     private void inLock(Runnable action) {
+        while (!lock.compareAndSet(false, true)) {
+            Thread.yield();
+        }
         try {
-            lock.lock();
             if (!halfClosed.get()) {
                 action.run();
             }
         } finally {
-            lock.unlock();
+            lock.set(false);
         }
     }
 }
