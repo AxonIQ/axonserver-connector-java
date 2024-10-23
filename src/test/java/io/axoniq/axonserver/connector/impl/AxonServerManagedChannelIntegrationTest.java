@@ -34,6 +34,7 @@ import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -203,10 +204,11 @@ class AxonServerManagedChannelIntegrationTest extends AbstractAxonServerIntegrat
 
         nextConnectTask.run();
 
-        assertEquals(asList(new ServerAddress("server1"),
-                            new ServerAddress("server2"),
-                            new ServerAddress("server3")),
-                     connectAttempts);
+        // we don't care in which order the connects happened, as long as all hosts have been tried
+        assertEquals(new HashSet<>(asList(new ServerAddress("server1"),
+                                          new ServerAddress("server2"),
+                                          new ServerAddress("server3"))),
+                     new HashSet<>(connectAttempts));
 
         axonServerProxy.enable();
 
