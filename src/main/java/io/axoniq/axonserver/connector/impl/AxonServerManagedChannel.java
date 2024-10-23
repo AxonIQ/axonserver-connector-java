@@ -31,11 +31,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -102,7 +104,12 @@ public class AxonServerManagedChannel extends ManagedChannel {
 
     private ManagedChannel connectChannel() {
         ManagedChannel connection = null;
-        for (ServerAddress nodeInfo : routingServers) {
+
+        // reorder the addresses to avoid a misbehaving platform server to prevent connections
+        List<ServerAddress> routingCandidates = new ArrayList<>(routingServers);
+        Collections.shuffle(routingCandidates, ThreadLocalRandom.current());
+
+        for (ServerAddress nodeInfo : routingCandidates) {
             ManagedChannel candidate = null;
             try {
                 candidate = connectionFactory.apply(nodeInfo, context);
@@ -214,7 +221,8 @@ public class AxonServerManagedChannel extends ManagedChannel {
 
     @Override
     public String authority() {
-        return routingServers.get(0).toString();
+        ManagedChannel activeChannel = this.activeChannel.get();
+        return activeChannel != null ? activeChannel.authority() : routingServers.get(0).toString();
     }
 
     @Override
