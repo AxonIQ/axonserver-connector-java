@@ -25,13 +25,14 @@ import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
 import io.axoniq.axonserver.connector.impl.FutureStreamObserver;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
-import io.axoniq.axonserver.grpc.event.dcb.AppendEventsRequest;
-import io.axoniq.axonserver.grpc.event.dcb.AppendEventsResponse;
+import io.axoniq.axonserver.grpc.event.dcb.AppendRequest;
+import io.axoniq.axonserver.grpc.event.dcb.AppendResponse;
 import io.axoniq.axonserver.grpc.event.dcb.ConsistencyCondition;
 import io.axoniq.axonserver.grpc.event.dcb.DcbEventStoreGrpc;
-import io.axoniq.axonserver.grpc.event.dcb.ServerSentEvent;
-import io.axoniq.axonserver.grpc.event.dcb.StreamQuery;
-import io.axoniq.axonserver.grpc.event.dcb.TaggedEvent;
+import io.axoniq.axonserver.grpc.event.dcb.SourceRequest;
+import io.axoniq.axonserver.grpc.event.dcb.SourceResponse;
+import io.axoniq.axonserver.grpc.event.dcb.StreamRequest;
+import io.axoniq.axonserver.grpc.event.dcb.StreamResponse;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
@@ -41,7 +42,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * {@link DcbEventChannel} implementation, serving as the event connection between Axon Server and a client application.
+ * {@link DcbEventChannel} implementation, serving as the event connection between Axon Server and a client
+ * application.
  *
  * @author Milan Savic
  * @since 2024.1.0
@@ -90,40 +92,61 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
 
     @Override
     public AppendTransaction startTransaction() {
-        FutureStreamObserver<AppendEventsResponse> result = new FutureStreamObserver<>(null);
-        StreamObserver<AppendEventsRequest> clientStream = eventStore.appendEvent(result);
-        return new AppendTransactionImpl(clientStream, result);
+        FutureStreamObserver<AppendResponse> response = new FutureStreamObserver<>(null);
+        StreamObserver<AppendRequest> clientStream = eventStore.append(response);
+        return new AppendTransactionImpl(clientStream, response);
     }
 
     @Override
-    public ResultStream<ServerSentEvent> events(StreamQuery query) {
-        AbstractBufferedStream<ServerSentEvent, Empty> result =
-                new AbstractBufferedStream<ServerSentEvent, Empty>(clientIdentification.getClientId(),
-                                                                   BUFFER_SIZE,
-                                                                   REFILL_BATCH) {
+    public ResultStream<StreamResponse> stream(StreamRequest request) {
+        AbstractBufferedStream<StreamResponse, Empty> result =
+                new AbstractBufferedStream<StreamResponse, Empty>(clientIdentification.getClientId(),
+                                                                  BUFFER_SIZE,
+                                                                  REFILL_BATCH) {
                     @Override
                     protected Empty buildFlowControlMessage(FlowControl flowControl) {
                         return null;
                     }
 
                     @Override
-                    protected ServerSentEvent terminalMessage() {
-                        return ServerSentEvent.newBuilder()
-                                              .build();
+                    protected StreamResponse terminalMessage() {
+                        return StreamResponse.newBuilder()
+                                             .build();
                     }
                 };
-        eventStore.events(query, result);
+        eventStore.stream(request, result);
+        return result;
+    }
+
+    @Override
+    public ResultStream<SourceResponse> source(SourceRequest request) {
+        AbstractBufferedStream<SourceResponse, Empty> result = 
+                new AbstractBufferedStream<SourceResponse, Empty>(clientIdentification.getClientId(),
+                                                                  BUFFER_SIZE,
+                                                                  REFILL_BATCH) {
+                    @Override
+                    protected SourceResponse terminalMessage() {
+                        return SourceResponse.newBuilder()
+                                             .build();
+                    }
+
+                    @Override
+                    protected Empty buildFlowControlMessage(FlowControl flowControl) {
+                        return null;
+                    }
+                };
+        eventStore.source(request, result);
         return result;
     }
 
     private static class AppendTransactionImpl implements AppendTransaction {
 
-        private final StreamObserver<AppendEventsRequest> stream;
-        private final CompletableFuture<AppendEventsResponse> result;
+        private final StreamObserver<AppendRequest> stream;
+        private final CompletableFuture<AppendResponse> result;
         private final AtomicBoolean conditionSet = new AtomicBoolean(false);
 
-        AppendTransactionImpl(StreamObserver<AppendEventsRequest> stream,
-                              CompletableFuture<AppendEventsResponse> result) {
+        AppendTransactionImpl(StreamObserver<AppendRequest> stream,
+                              CompletableFuture<AppendResponse> result) {
             this.stream = stream;
             this.result = result;
         }
@@ -131,24 +154,24 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
         @Override
         public AppendTransaction condition(ConsistencyCondition condition) {
             if (conditionSet.compareAndSet(false, true)) {
-                stream.onNext(AppendEventsRequest.newBuilder()
-                                                 .setCondition(condition)
-                                                 .build());
+                stream.onNext(AppendRequest.newBuilder()
+                                           .setCondition(condition)
+                                           .build());
                 return this;
             }
             throw new IllegalStateException("Consistency Condition already set.");
         }
 
         @Override
-        public AppendTransaction append(TaggedEvent taggedEvent) {
-            stream.onNext(AppendEventsRequest.newBuilder()
-                                             .setEvent(taggedEvent)
-                                             .build());
+        public AppendTransaction append(AppendRequest.Event taggedEvent) {
+            stream.onNext(AppendRequest.newBuilder()
+                                       .setEvent(taggedEvent)
+                                       .build());
             return this;
         }
 
         @Override
-        public CompletableFuture<AppendEventsResponse> commit() {
+        public CompletableFuture<AppendResponse> commit() {
             stream.onCompleted();
             return result;
         }
