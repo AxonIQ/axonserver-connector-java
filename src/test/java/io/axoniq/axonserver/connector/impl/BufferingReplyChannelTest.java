@@ -43,14 +43,14 @@ class BufferingReplyChannelTest {
     void bufferSend() {
         bufferingReplyChannel.send("message");
         verify(buffer).put("message");
-        verifyZeroInteractions(delegate);
+        verifyNoInteractions(delegate);
     }
 
     @Test
     void bufferComplete() {
         bufferingReplyChannel.complete();
         verify(buffer).close();
-        verifyZeroInteractions(delegate);
+        verifyNoInteractions(delegate);
     }
 
     @Test
@@ -65,14 +65,14 @@ class BufferingReplyChannelTest {
                                                       .setMessage("msg")
                                                       .build());
 
-        verifyZeroInteractions(delegate);
+        verifyNoInteractions(delegate);
     }
 
     @Test
     void delegateAck() {
         bufferingReplyChannel.sendAck();
         verify(delegate).sendAck();
-        verifyZeroInteractions(buffer);
+        verifyNoInteractions(buffer);
     }
 
     @Test
@@ -80,6 +80,6 @@ class BufferingReplyChannelTest {
         ErrorMessage errorMessage = ErrorMessage.getDefaultInstance();
         bufferingReplyChannel.sendNack(errorMessage);
         verify(delegate).sendNack(errorMessage);
-        verifyZeroInteractions(buffer);
+        verifyNoInteractions(buffer);
     }
 }

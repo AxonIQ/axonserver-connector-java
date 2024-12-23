@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021. AxonIQ
+ * Copyright (c) 2020-2024. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 package io.axoniq.axonserver.connector.event.impl;
 
+import com.google.protobuf.Empty;
 import io.axoniq.axonserver.connector.AxonServerException;
 import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.ResultStream;
@@ -24,9 +25,14 @@ import io.axoniq.axonserver.connector.event.AppendEventsTransaction;
 import io.axoniq.axonserver.connector.event.EventChannel;
 import io.axoniq.axonserver.connector.event.EventQueryResultEntry;
 import io.axoniq.axonserver.connector.event.EventStream;
+import io.axoniq.axonserver.connector.event.PersistentStream;
+import io.axoniq.axonserver.connector.event.PersistentStreamCallbacks;
+import io.axoniq.axonserver.connector.event.PersistentStreamProperties;
 import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
 import io.axoniq.axonserver.connector.impl.AbstractBufferedStream;
+import io.axoniq.axonserver.connector.impl.AssertUtils;
 import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
+import io.axoniq.axonserver.connector.impl.FutureListStreamObserver;
 import io.axoniq.axonserver.connector.impl.FutureStreamObserver;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.InstructionAck;
@@ -51,9 +57,22 @@ import io.axoniq.axonserver.grpc.event.RowResponse;
 import io.axoniq.axonserver.grpc.event.ScheduleEventRequest;
 import io.axoniq.axonserver.grpc.event.ScheduleToken;
 import io.axoniq.axonserver.grpc.event.TrackingToken;
+import io.axoniq.axonserver.grpc.streams.CreateResult;
+import io.axoniq.axonserver.grpc.streams.CreateStreamRequest;
+import io.axoniq.axonserver.grpc.streams.CreateStreamResponse;
+import io.axoniq.axonserver.grpc.streams.DeleteStreamRequest;
+import io.axoniq.axonserver.grpc.streams.InitializationProperties;
+import io.axoniq.axonserver.grpc.streams.ListStreamsRequest;
+import io.axoniq.axonserver.grpc.streams.PersistentStreamServiceGrpc;
+import io.axoniq.axonserver.grpc.streams.ResetStreamConfiguration;
+import io.axoniq.axonserver.grpc.streams.ResetStreamRequest;
+import io.axoniq.axonserver.grpc.streams.SequencingPolicy;
+import io.axoniq.axonserver.grpc.streams.StreamStatus;
+import io.axoniq.axonserver.grpc.streams.UpdateStreamRequest;
 import io.grpc.stub.StreamObserver;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -66,6 +85,9 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static io.axoniq.axonserver.connector.impl.AssertUtils.assertParameter;
+import static io.axoniq.axonserver.connector.impl.ObjectUtils.nonNullOrDefault;
+
 /**
  * {@link EventChannel} implementation, serving as the event connection between AxonServer and a client application.
  */
@@ -74,10 +96,13 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     private static final ReadHighestSequenceNrResponse UNKNOWN_HIGHEST_SEQ =
             ReadHighestSequenceNrResponse.newBuilder().setToSequenceNr(-1).build();
     private static final TrackingToken NO_TOKEN_AVAILABLE = TrackingToken.newBuilder().setToken(-1).build();
+    private static final int HEAD_POSITION_INDICATOR = -99;
 
     private final EventStoreGrpc.EventStoreStub eventStore;
     private final EventSchedulerGrpc.EventSchedulerStub eventScheduler;
+    private final PersistentStreamServiceGrpc.PersistentStreamServiceStub persistentStreamService;
     private final Set<BufferedEventStream> buffers = ConcurrentHashMap.newKeySet();
+    private final Set<PersistentStreamImpl> persistedEventStreams = ConcurrentHashMap.newKeySet();
     private final ClientIdentification clientId;
     // guarded by -this-
 
@@ -93,6 +118,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
         clientId = clientIdentification;
         eventStore = EventStoreGrpc.newStub(channel);
         eventScheduler = EventSchedulerGrpc.newStub(channel);
+        persistentStreamService = PersistentStreamServiceGrpc.newStub(channel);
     }
 
     @Override
@@ -113,6 +139,8 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     private void closeEventStreams() {
         buffers.forEach(BufferedEventStream::close);
         buffers.clear();
+        persistedEventStreams.forEach(PersistentStreamImpl::close);
+        persistedEventStreams.clear();
     }
 
     @Override
@@ -199,6 +227,175 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
         }
         buffer.enableFlowControl();
         return buffer;
+    }
+
+    @Override
+    public CompletableFuture<CreateResult> createPersistentStream(String streamId,
+                                                                  PersistentStreamProperties creationProperties) {
+        AssertUtils.assertParameter(streamId != null, "streamId must not be null");
+        AssertUtils.assertParameter(creationProperties != null, "creationProperties must not be null");
+        FutureStreamObserver<CreateStreamResponse> result = new FutureStreamObserver<>(null);
+        CreateStreamRequest request = CreateStreamRequest.newBuilder()
+                                                         .setStreamId(streamId)
+                                                         .setInitializationProperties(initializationProperties(
+                                                                 creationProperties))
+                                                         .build();
+        persistentStreamService.createStream(request, result);
+        return result.thenApply(r -> r == null ? null : r.getResult());
+    }
+
+    @Override
+    public PersistentStream openPersistentStream(String streamId, int bufferSize, int refillBatch,
+                                                 PersistentStreamCallbacks callbacks) {
+        AssertUtils.assertParameter(streamId != null, "streamId must not be null");
+        return openPersistentStream(clientId, streamId, bufferSize, refillBatch, callbacks, null);
+    }
+
+    @Override
+    public PersistentStream openPersistentStream(String streamId, int bufferSize, int refillBatch,
+                                                 PersistentStreamCallbacks callbacks,
+                                                 PersistentStreamProperties creationProperties) {
+        AssertUtils.assertParameter(streamId != null, "streamId must not be null");
+        AssertUtils.assertParameter(creationProperties != null, "creationProperties must not be null");
+        return openPersistentStream(clientId,
+                                    streamId,
+                                    bufferSize,
+                                    refillBatch,
+                                    callbacks,
+                                    initializationProperties(creationProperties));
+    }
+
+    private PersistentStream openPersistentStream(ClientIdentification clientId, String streamId,
+                                                  int bufferSize, int refillBatch,
+                                                  PersistentStreamCallbacks callbacks,
+                                                  InitializationProperties initializationProperties) {
+        assertParameter(bufferSize > 0, "Buffer size must be > 0");
+        assertParameter(refillBatch > 0, "Refill batch must be > 0");
+        assertParameter(refillBatch <= bufferSize, "The refillBatch must be smaller than the buffer size");
+
+        PersistentStreamImpl buffer = new PersistentStreamImpl(clientId, streamId, bufferSize, refillBatch, callbacks);
+        //noinspection ResultOfMethodCallIgnored
+        persistentStreamService.openStream(buffer);
+        buffer.openConnection(initializationProperties);
+        persistedEventStreams.add(buffer);
+        return buffer;
+    }
+
+    private InitializationProperties initializationProperties(PersistentStreamProperties creationProperties) {
+        return InitializationProperties.newBuilder()
+                                       .setInitialPosition(initialPosition(creationProperties.initialPosition()))
+                                       .setSegments(creationProperties.segments())
+                                       .setStreamName(nonNullOrDefault(creationProperties.streamName(), ""))
+                                       .setFilter(nonNullOrDefault(creationProperties.filter(), ""))
+                                       .setSequencingPolicy(SequencingPolicy.newBuilder()
+                                                                            .setPolicyName(
+                                                                                    creationProperties.sequencingPolicyName())
+                                                                            .addAllParameter(
+                                                                                    nonNullOrDefault(
+                                                                                            creationProperties.sequencingPolicyParameters(),
+                                                                                            Collections.emptyList())))
+                                       .build();
+    }
+
+    private long initialPosition(String initialPosition) {
+        if (PersistentStreamProperties.HEAD_POSITION.equals(initialPosition)) {
+            return HEAD_POSITION_INDICATOR;
+        }
+        if (PersistentStreamProperties.TAIL_POSITION.equals(initialPosition)) {
+            return 0;
+        }
+
+        return Long.parseLong(initialPosition);
+    }
+
+    @Override
+    public CompletableFuture<Void> deletePersistentStream(String streamId) {
+        FutureStreamObserver<Empty> futureResult = new FutureStreamObserver<>(null);
+        persistentStreamService.deleteStream(DeleteStreamRequest.newBuilder().setStreamId(streamId).build(),
+                                             futureResult);
+        return futureResult.thenApply(e -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> updatePersistentStreamName(String streamId, String streamName) {
+        FutureStreamObserver<Empty> futureResult = new FutureStreamObserver<>(null);
+        UpdateStreamRequest request = UpdateStreamRequest.newBuilder()
+                                                         .setStreamId(streamId)
+                                                         .setStreamName(nonNullOrDefault(streamName, ""))
+                                                         .build();
+        persistentStreamService.updateStream(request, futureResult);
+        return futureResult.thenApply(e -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> setPersistentStreamSegments(String streamId, int segments) {
+        AssertUtils.assertParameter(segments > 0, "Segments must be > 0");
+        FutureStreamObserver<Empty> futureResult = new FutureStreamObserver<>(null);
+        UpdateStreamRequest request = UpdateStreamRequest.newBuilder()
+                                                         .setStreamId(streamId)
+                                                         .setSegments(segments)
+                                                         .build();
+        persistentStreamService.updateStream(request, futureResult);
+        return futureResult.thenApply(e -> null);
+    }
+
+    @Override
+    public CompletableFuture<List<StreamStatus>> persistentStreams() {
+        FutureListStreamObserver<StreamStatus> futureList = new FutureListStreamObserver<>();
+        persistentStreamService.listStreams(ListStreamsRequest.getDefaultInstance(), futureList);
+        return futureList;
+    }
+
+    @Override
+    public CompletableFuture<Void> resetPersistentStreamAtHead(String streamId) {
+        FutureStreamObserver<Empty> futureResult = new FutureStreamObserver<>(null);
+        ResetStreamRequest request =
+                ResetStreamRequest.newBuilder()
+                                  .setStreamId(streamId)
+                                  .setOptions(ResetStreamConfiguration.newBuilder()
+                                                                      .setHead(Empty.getDefaultInstance()))
+                                  .build();
+        persistentStreamService.resetStream(request, futureResult);
+        return futureResult.thenApply(e -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> resetPersistentStreamAtTail(String streamId) {
+        FutureStreamObserver<Empty> futureResult = new FutureStreamObserver<>(null);
+        ResetStreamRequest request =
+                ResetStreamRequest.newBuilder()
+                                  .setStreamId(streamId)
+                                  .setOptions(ResetStreamConfiguration.newBuilder()
+                                                                      .setTail(Empty.getDefaultInstance()))
+                                  .build();
+        persistentStreamService.resetStream(request, futureResult);
+        return futureResult.thenApply(e -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> resetPersistentStreamAtPosition(String streamId, long position) {
+        FutureStreamObserver<Empty> futureResult = new FutureStreamObserver<>(null);
+        ResetStreamRequest request =
+                ResetStreamRequest.newBuilder()
+                                  .setStreamId(streamId)
+                                  .setOptions(ResetStreamConfiguration.newBuilder()
+                                                                      .setPosition(position))
+                                  .build();
+        persistentStreamService.resetStream(request, futureResult);
+        return futureResult.thenApply(e -> null);
+    }
+
+    @Override
+    public CompletableFuture<Void> resetPersistentStreamAtTime(String streamId, long instant) {
+        FutureStreamObserver<Empty> futureResult = new FutureStreamObserver<>(null);
+        ResetStreamRequest request =
+                ResetStreamRequest.newBuilder()
+                                  .setStreamId(streamId)
+                                  .setOptions(ResetStreamConfiguration.newBuilder()
+                                                                      .setDatetime(instant))
+                                  .build();
+        persistentStreamService.resetStream(request, futureResult);
+        return futureResult.thenApply(e -> null);
     }
 
     @Override
@@ -320,7 +517,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
             this.query = query;
             this.liveStream = liveStream;
             this.querySnapshots = querySnapshots;
-            this.contextName = contextName == null ? "": contextName;
+            this.contextName = contextName == null ? "" : contextName;
         }
 
         @Override

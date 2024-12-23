@@ -13,12 +13,10 @@ updates:
     reviewers:
       - "m1l4n54v1c"
       - "MGathier"
-      - "sandjelkovic"
-      - "saratry"
       - "schananas"
       - "smcvb"
       - "trimoq"
-    milestone: 30
+    milestone: 31
     groups:
       github-dependencies:
         update-types:
@@ -38,12 +36,10 @@ updates:
     reviewers:
       - "m1l4n54v1c"
       - "MGathier"
-      - "sandjelkovic"
-      - "saratry"
       - "schananas"
       - "smcvb"
       - "trimoq"
-    milestone: 30
+    milestone: 31
     groups:
       maven-dependencies:
         update-types:
