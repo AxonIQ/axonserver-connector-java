@@ -80,7 +80,7 @@ class AxonServerConnectionFactoryTest {
         assertFalse(downloadMessage.isEmpty());
 
         ServerAddress customAddress = new ServerAddress("my-host", 4218);
-        AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient(TEST_COMPONENT_NAME)
+        testSubject = AxonServerConnectionFactory.forClient(TEST_COMPONENT_NAME)
                                                                              .routingServers(customAddress)
                                                                              .build();
 
@@ -94,7 +94,7 @@ class AxonServerConnectionFactoryTest {
         assertFalse(downloadMessage.isEmpty());
 
         System.setProperty("axon.axonserver.suppressDownloadMessage", "true");
-        AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient(TEST_COMPONENT_NAME)
+        testSubject = AxonServerConnectionFactory.forClient(TEST_COMPONENT_NAME)
                                                                              .routingServers(ServerAddress.DEFAULT)
                                                                              .build();
 
