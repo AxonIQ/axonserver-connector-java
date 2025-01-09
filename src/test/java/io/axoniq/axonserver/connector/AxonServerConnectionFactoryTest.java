@@ -41,6 +41,7 @@ class AxonServerConnectionFactoryTest {
     private final PrintStream originalSystemOut = System.out;
 
     private String downloadMessage;
+    private AxonServerConnectionFactory testSubject;
 
     @BeforeEach
     void setUp() throws IOException {
@@ -54,6 +55,9 @@ class AxonServerConnectionFactoryTest {
 
     @AfterEach
     void tearDown() {
+        if (testSubject != null) {
+            testSubject.shutdown();
+        }
         System.setOut(originalSystemOut);
         System.clearProperty("axon.axonserver.suppressDownloadMessage");
     }
@@ -62,7 +66,7 @@ class AxonServerConnectionFactoryTest {
     void downloadMessageIsNotSuppressedForDefaultServerAddress() {
         assertFalse(downloadMessage.isEmpty());
 
-        AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient(TEST_COMPONENT_NAME)
+        testSubject = AxonServerConnectionFactory.forClient(TEST_COMPONENT_NAME)
                                                                              .routingServers(ServerAddress.DEFAULT)
                                                                              .build();
 
@@ -76,7 +80,7 @@ class AxonServerConnectionFactoryTest {
         assertFalse(downloadMessage.isEmpty());
 
         ServerAddress customAddress = new ServerAddress("my-host", 4218);
-        AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient(TEST_COMPONENT_NAME)
+        testSubject = AxonServerConnectionFactory.forClient(TEST_COMPONENT_NAME)
                                                                              .routingServers(customAddress)
                                                                              .build();
 
@@ -90,7 +94,7 @@ class AxonServerConnectionFactoryTest {
         assertFalse(downloadMessage.isEmpty());
 
         System.setProperty("axon.axonserver.suppressDownloadMessage", "true");
-        AxonServerConnectionFactory testSubject = AxonServerConnectionFactory.forClient(TEST_COMPONENT_NAME)
+        testSubject = AxonServerConnectionFactory.forClient(TEST_COMPONENT_NAME)
                                                                              .routingServers(ServerAddress.DEFAULT)
                                                                              .build();
 
