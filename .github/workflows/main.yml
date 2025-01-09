@@ -16,12 +16,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - java-version: 8
-            sonar-enabled: false
-            deploy-enabled: true
           - java-version: 11
             sonar-enabled: false
-            deploy-enabled: false
+            deploy-enabled: true
           - java-version: 17
             sonar-enabled: true
             deploy-enabled: false
