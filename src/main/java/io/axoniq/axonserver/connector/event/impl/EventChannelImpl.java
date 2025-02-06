@@ -129,18 +129,20 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
     @Override
     public void reconnect() {
         closeEventStreams();
+        persistedEventStreams.forEach(PersistentStreamImpl::triggerReconnect);
+        persistedEventStreams.clear();
     }
 
     @Override
     public void disconnect() {
         closeEventStreams();
+        persistedEventStreams.forEach(PersistentStreamImpl::close);
+        persistedEventStreams.clear();
     }
 
     private void closeEventStreams() {
         buffers.forEach(BufferedEventStream::close);
         buffers.clear();
-        persistedEventStreams.forEach(PersistentStreamImpl::close);
-        persistedEventStreams.clear();
     }
 
     @Override

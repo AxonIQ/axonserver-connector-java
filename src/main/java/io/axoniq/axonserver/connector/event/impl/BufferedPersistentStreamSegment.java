@@ -113,7 +113,6 @@ public class BufferedPersistentStreamSegment
 
     @Override
     public void close() {
-        super.close();
         if (closed.compareAndSet(false, true)) {
             logger.info("{}: Close segment {}", streamId, segment);
             localOnAvailableCallback.run();
