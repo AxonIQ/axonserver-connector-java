@@ -15,6 +15,8 @@
  */
 package io.axoniq.axonserver.connector.event.impl;
 
+import io.axoniq.axonserver.connector.AxonServerException;
+import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.event.PersistentStream;
 import io.axoniq.axonserver.connector.event.PersistentStreamCallbacks;
 import io.axoniq.axonserver.connector.event.PersistentStreamSegment;
@@ -27,6 +29,7 @@ import io.axoniq.axonserver.grpc.streams.StreamRequest;
 import io.axoniq.axonserver.grpc.streams.StreamSignal;
 import io.grpc.stub.ClientCallStreamObserver;
 import io.grpc.stub.ClientResponseObserver;
+import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,6 +43,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import javax.annotation.Nullable;
+
+import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
 
 /**
  * Implementation of the {@link PersistentStream}.
@@ -120,6 +125,16 @@ public class PersistentStreamImpl
         outboundStreamHolder.get().onNext(StreamRequest.newBuilder().setOpen(openRequest.build()).build());
     }
 
+    public void triggerReconnect() {
+        // first, close gracefully
+        close();
+        AxonServerException reconnectRequested = new AxonServerException(ErrorCategory.OTHER,
+                                                                         "Client initiated reconnect",
+                                                                         "client");
+        // notify clients that the connection "failed" and should be reconnected
+        onClosedCallback.get().accept(reconnectRequested);
+    }
+
     @Override
     public void close() {
         if (closed.compareAndSet(false, true)) {
@@ -175,8 +190,8 @@ public class PersistentStreamImpl
                                                          segmentNr,
                                                          bufferSize,
                                                          refillBatch,
-                                                         progress -> acknowledge(s,progress),
-                                                         error -> sendError(s,error));
+                                                         progress -> acknowledge(s, progress),
+                                                         error -> sendError(s, error));
                                                  stream.beforeStart(outboundStreamHolder.get());
                                                  stream.enableFlowControl();
                                                  return stream;
@@ -191,14 +206,17 @@ public class PersistentStreamImpl
     }
 
     private void acknowledge(int segment, long progress) {
-        outboundStreamHolder.get().onNext(StreamRequest.newBuilder()
-                                                       .setAcknowledgeProgress(ProgressAcknowledgement.newBuilder()
-                                                                                                      .setSegment(
-                                                                                                              segment)
-                                                                                                      .setPosition(
-                                                                                                              progress)
-                                                                                                      .build())
-                                                       .build());
+        try {
+            doIfNotNull(outboundStreamHolder.get(), call -> call.onNext(
+                    StreamRequest.newBuilder()
+                                 .setAcknowledgeProgress(ProgressAcknowledgement.newBuilder()
+                                                                                .setSegment(segment)
+                                                                                .setPosition(progress)
+                                                                                .build())
+                                 .build()));
+        } catch (Exception e) {
+            logger.debug("Failed to send acknowledgement.", e);
+        }
         if (progress == PersistentStreamSegment.PENDING_WORK_DONE_MARKER) {
             logger.info("{}: Close confirmed for segment {}", streamId, segment);
             closeConfirmationsSent.add(segment);
@@ -206,12 +224,13 @@ public class PersistentStreamImpl
     }
 
     private void sendError(int segment, String error) {
-        outboundStreamHolder.get().onNext(StreamRequest.newBuilder()
-                                                       .setError(SegmentError.newBuilder()
-                                                                             .setSegment(segment)
-                                                                             .setError(error)
-                                                                             .build())
-                                                       .build());
+        doIfNotNull(outboundStreamHolder.get(),
+                    osh -> osh.onNext(StreamRequest.newBuilder()
+                                                   .setError(SegmentError.newBuilder()
+                                                                         .setSegment(segment)
+                                                                         .setError(error)
+                                                                         .build())
+                                                   .build()));
     }
 
     @Override
@@ -228,7 +247,7 @@ public class PersistentStreamImpl
 
     private void sendCompleted() {
         try {
-            outboundStreamHolder.get().onCompleted();
+            doIfNotNull(outboundStreamHolder.getAndSet(null), StreamObserver::onCompleted);
         } catch (Exception ex) {
             // Ignore exception
         }
