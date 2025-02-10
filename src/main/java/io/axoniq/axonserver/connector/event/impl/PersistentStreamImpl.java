@@ -125,6 +125,11 @@ public class PersistentStreamImpl
         outboundStreamHolder.get().onNext(StreamRequest.newBuilder().setOpen(openRequest.build()).build());
     }
 
+    /**
+     * Close this stream and signal downstream consumer that the stream is closed "erroneously" in order to trigger
+     * reconnect mechanisms. This is to ensure that consumers of this stream can distinguish between regularly closed
+     * streams, and those closed with the intent to re-establish a connection.
+     */
     public void triggerReconnect() {
         // first, close gracefully
         close();
