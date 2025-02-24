@@ -60,7 +60,7 @@
         <jacoco-maven-plugin.version>0.8.12</jacoco-maven-plugin.version>
         <junit.jupiter.version>5.11.4</junit.jupiter.version>
         <mockito.version>5.14.2</mockito.version>
-        <testcontainers.version>1.20.4</testcontainers.version>
+        <testcontainers.version>1.20.5</testcontainers.version>
         <testng.version>7.10.2</testng.version>
 
         <httpclient5.version>5.4.2</httpclient5.version>
@@ -387,7 +387,7 @@
             </plugin>
             <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.13.0</version>
+                <version>3.14.0</version>
                 <configuration>
                     <source>11</source>
                     <target>11</target>
