@@ -61,7 +61,7 @@
         <junit.jupiter.version>5.12.1</junit.jupiter.version>
         <mockito.version>5.14.2</mockito.version>
         <testcontainers.version>1.20.6</testcontainers.version>
-        <testng.version>7.10.2</testng.version>
+        <testng.version>7.11.0</testng.version>
 
         <httpclient5.version>5.4.2</httpclient5.version>
         <toxiproxy.version>2.1.7</toxiproxy.version>
@@ -91,11 +91,6 @@
                 <scope>import</scope>
             </dependency>
             <dependency>
-                <groupId>org.mockito</groupId>
-                <artifactId>mockito-core</artifactId>
-                <version>${mockito.version}</version>
-            </dependency>
-            <dependency>
                 <groupId>org.slf4j</groupId>
                 <artifactId>slf4j-api</artifactId>
                 <version>${slf4j.version}</version>
@@ -106,24 +101,22 @@
                 <version>${slf4j.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.junit.jupiter</groupId>
-                <artifactId>junit-jupiter-api</artifactId>
-                <version>${junit.jupiter.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.junit.jupiter</groupId>
-                <artifactId>junit-jupiter-params</artifactId>
-                <version>${junit.jupiter.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.junit.jupiter</groupId>
-                <artifactId>junit-jupiter-engine</artifactId>
-                <version>${junit.jupiter.version}</version>
-            </dependency>
-            <dependency>
                 <groupId>org.reactivestreams</groupId>
                 <artifactId>reactive-streams</artifactId>
                 <version>${reactive.streams.version}</version>
+            </dependency>
+            <!-- Testing -->
+            <dependency>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>${junit.jupiter.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.mockito</groupId>
+                <artifactId>mockito-core</artifactId>
+                <version>${mockito.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.projectreactor</groupId>
@@ -145,9 +138,9 @@
                 <scope>test</scope>
             </dependency>
             <dependency>
-                <groupId>com.github.testng-team</groupId>
-                <artifactId>testng-junit5</artifactId>
-                <version>1.0.4</version>
+                <groupId>org.junit.support</groupId>
+                <artifactId>testng-engine</artifactId>
+                <version>1.0.5</version>
                 <scope>test</scope>
             </dependency>
         </dependencies>
@@ -248,17 +241,7 @@
         <!-- Testing -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-api</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-params</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-engine</artifactId>
+            <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -433,13 +416,6 @@
                         <include>**/*Tests_*.java</include>
                     </includes>
                 </configuration>
-                <dependencies>
-                    <dependency>
-                        <groupId>org.apache.maven.surefire</groupId>
-                        <artifactId>surefire-junit-platform</artifactId>
-                        <version>${maven.surefire.plugin.version}</version>
-                    </dependency>
-                </dependencies>
             </plugin>
             <plugin>
                 <artifactId>maven-javadoc-plugin</artifactId>
