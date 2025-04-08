@@ -19,13 +19,21 @@ package io.axoniq.axonserver.connector.event;
 import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.grpc.event.dcb.AppendEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.ConsistencyCondition;
+import io.axoniq.axonserver.grpc.event.dcb.GetHeadRequest;
+import io.axoniq.axonserver.grpc.event.dcb.GetHeadResponse;
+import io.axoniq.axonserver.grpc.event.dcb.GetTagsRequest;
+import io.axoniq.axonserver.grpc.event.dcb.GetTagsResponse;
+import io.axoniq.axonserver.grpc.event.dcb.GetTailRequest;
+import io.axoniq.axonserver.grpc.event.dcb.GetTailResponse;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.StreamEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.StreamEventsResponse;
+import io.axoniq.axonserver.grpc.event.dcb.Tag;
 import io.axoniq.axonserver.grpc.event.dcb.TaggedEvent;
 
 import java.util.Collection;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -60,6 +68,30 @@ public interface DcbEventChannel {
      * append new events to the event store
      */
     ResultStream<SourceEventsResponse> source(SourceEventsRequest request);
+
+    /**
+     * Provides tags for an event at the given global sequence.
+     *
+     * @param request the sequence of an event
+     * @return the tags fo the event
+     */
+    CompletableFuture<GetTagsResponse> tagsFor(GetTagsRequest request);
+
+    /**
+     * Provides the head of the event store.
+     *
+     * @param request empty request
+     * @return the head of the event store
+     */
+    CompletableFuture<GetHeadResponse> head(GetHeadRequest request);
+
+    /**
+     * Provides the tail of the event store.
+     *
+     * @param request empty request
+     * @return the tail of the event store
+     */
+    CompletableFuture<GetTailResponse> tail(GetTailRequest request);
 
     /**
      * Provides operations to interact with a Transaction to append events and a condition onto the Event Store.

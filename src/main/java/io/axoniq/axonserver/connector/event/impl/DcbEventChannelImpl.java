@@ -29,6 +29,12 @@ import io.axoniq.axonserver.grpc.event.dcb.AppendEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.AppendEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.ConsistencyCondition;
 import io.axoniq.axonserver.grpc.event.dcb.DcbEventStoreGrpc;
+import io.axoniq.axonserver.grpc.event.dcb.GetHeadRequest;
+import io.axoniq.axonserver.grpc.event.dcb.GetHeadResponse;
+import io.axoniq.axonserver.grpc.event.dcb.GetTagsRequest;
+import io.axoniq.axonserver.grpc.event.dcb.GetTagsResponse;
+import io.axoniq.axonserver.grpc.event.dcb.GetTailRequest;
+import io.axoniq.axonserver.grpc.event.dcb.GetTailResponse;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.StreamEventsRequest;
@@ -37,10 +43,13 @@ import io.axoniq.axonserver.grpc.event.dcb.TaggedEvent;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * {@link DcbEventChannel} implementation, serving as the event connection between Axon Server and a client
@@ -50,6 +59,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @since 2024.1.0
  */
 public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> implements DcbEventChannel {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(DcbEventChannelImpl.class);
 
     private static final int BUFFER_SIZE = 32;
     private static final int REFILL_BATCH = 8;
@@ -138,6 +149,54 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
                 };
         eventStore.source(request, result);
         return result;
+    }
+
+    @Override
+    public CompletableFuture<GetTagsResponse> tagsFor(GetTagsRequest request) {
+        CompletableFuture<GetTagsResponse> future = new CompletableFuture<>();
+        eventStore.getTags(request, new CompletableFutureStreamObserver<>(future));
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<GetHeadResponse> head(GetHeadRequest request) {
+        CompletableFuture<GetHeadResponse> future = new CompletableFuture<>();
+        eventStore.getHead(request, new CompletableFutureStreamObserver<>(future));
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<GetTailResponse> tail(GetTailRequest request) {
+        CompletableFuture<GetTailResponse> future = new CompletableFuture<>();
+        eventStore.getTail(request, new CompletableFutureStreamObserver<>(future));
+        return future;
+    }
+
+    private static class CompletableFutureStreamObserver<T> implements StreamObserver<T> {
+
+        private final CompletableFuture<T> future;
+        private final AtomicReference<T> response = new AtomicReference<>();
+
+        private CompletableFutureStreamObserver(CompletableFuture<T> future) {
+            this.future = future;
+        }
+
+        @Override
+        public void onNext(T t) {
+            if (!response.compareAndSet(null, t)) {
+                LOGGER.warn("onNext should yield only one response.");
+            }
+        }
+
+        @Override
+        public void onError(Throwable throwable) {
+            future.completeExceptionally(throwable);
+        }
+
+        @Override
+        public void onCompleted() {
+            future.complete(response.get());
+        }
     }
 
     private static class AppendEventsTransactionImpl implements AppendEventsTransaction {
