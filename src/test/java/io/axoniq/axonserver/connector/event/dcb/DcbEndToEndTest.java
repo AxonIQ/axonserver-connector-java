@@ -1,18 +1,23 @@
 package io.axoniq.axonserver.connector.event.dcb;
 
+import com.google.common.collect.ImmutableList;
 import com.google.protobuf.ByteString;
 import io.axoniq.axonserver.connector.AbstractAxonServerIntegrationTest;
 import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
-import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.ResultStreamPublisher;
 import io.axoniq.axonserver.connector.event.DcbEventChannel;
 import io.axoniq.axonserver.grpc.event.dcb.Criterion;
 import io.axoniq.axonserver.grpc.event.dcb.Event;
+import io.axoniq.axonserver.grpc.event.dcb.GetHeadRequest;
+import io.axoniq.axonserver.grpc.event.dcb.GetTagsRequest;
+import io.axoniq.axonserver.grpc.event.dcb.GetTagsResponse;
+import io.axoniq.axonserver.grpc.event.dcb.GetTailRequest;
+import io.axoniq.axonserver.grpc.event.dcb.GetTailResponse;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.StreamEventsRequest;
-import io.axoniq.axonserver.grpc.event.dcb.StreamEventsResponse;
+import io.axoniq.axonserver.grpc.event.dcb.Tag;
 import io.axoniq.axonserver.grpc.event.dcb.TaggedEvent;
 import io.axoniq.axonserver.grpc.event.dcb.TagsAndNamesCriterion;
 import org.junit.jupiter.api.*;
@@ -24,14 +29,17 @@ import reactor.core.publisher.Flux;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
+import static java.lang.String.format;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.*;
 
 class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
-
 
     private static final Logger logger = LoggerFactory.getLogger(DcbEndToEndTest.class.getName());
 
@@ -46,6 +54,8 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
                                             .routingServers(axonServerAddress)
                                             .build();
         connection = client.connect("default");
+        Slf4jLogConsumer logConsumer = new Slf4jLogConsumer(logger);
+        axonServerContainer.followOutput(logConsumer);
     }
 
     @AfterEach
@@ -55,74 +65,113 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
-    void append() {
-        Slf4jLogConsumer logConsumer = new Slf4jLogConsumer(logger);
-        axonServerContainer.followOutput(logConsumer);
-        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
-        ResultStream<StreamEventsResponse> stream = dcbEventChannel.stream(StreamEventsRequest.newBuilder()
-                                                                                              .setFromSequence(0L)
-                                                                                              .build());
-        Flux.from(new ResultStreamPublisher<>(() -> stream))
-            .subscribe(e -> {
-                if (e.getEvent().getSequence() % 10_000 == 0) {
-                    System.out.println(e.getEvent().getSequence());
-                }
-            });
-        Instant start = Instant.now();
-        int num = 100_000;
-        for (int i = 0; i < num; i++) {
-            String id = UUID.randomUUID().toString();
-            TaggedEvent taggedEvent = TaggedEvent.newBuilder()
-                                                 .setEvent(Event.newBuilder()
-                                                                .setIdentifier(id)
-                                                                .setName("my-event")
-                                                                .setPayload(ByteString.empty())
-                                                                .setTimestamp(Instant.now().toEpochMilli())
-                                                                .setVersion("0.0.1")
-                                                                .build())
-                                                 .build();
-            dcbEventChannel.startTransaction()
-                           .append(taggedEvent)
-                           .commit()
-                           .join();
-        }
-        logger.info("Appended {} events in: {}", num, Duration.between(start, Instant.now()));
+    void stream() {
+        long head = retrieveHead();
+        Tag tag = tag(UUID.randomUUID().toString(), UUID.randomUUID().toString());
+        Criterion criterion = Criterion.newBuilder()
+                                       .setTagsAndNames(TagsAndNamesCriterion.newBuilder()
+                                                                             .addTag(tag))
+                                       .build();
+        StreamEventsRequest streamRequest = StreamEventsRequest.newBuilder()
+                                                               .setFromSequence(head)
+                                                               .addCriterion(
+                                                                       criterion)
+                                                               .build();
 
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+
+        AtomicLong received = new AtomicLong();
+        int num = 1_000;
+        ExecutorService executorService = Executors.newFixedThreadPool(16);
+        try {
+            for (int i = 0; i < num; i++) {
+                String id = UUID.randomUUID().toString();
+                TaggedEvent taggedEvent = taggedEvent(anEvent(id, "event-to-be-streamed"), tag);
+                executorService.submit(() -> appendEvent(taggedEvent));
+            }
+
+            Flux.from(new ResultStreamPublisher<>(() -> dcbEventChannel.stream(streamRequest)))
+                .take(num)
+                .doOnNext(e -> {
+                    long expected = head + received.getAndIncrement();
+                    long current = e.getEvent().getSequence();
+                    if (expected != current) {
+                        throw new AssertionError(format("Expected %d received %d", expected, current));
+                    }
+                })
+                .blockLast(Duration.ofMinutes(1));
+
+            assertEquals(num, received.get());
+        } finally {
+            executorService.shutdown();
+        }
     }
+
 
     @Test
     void noConditionAppend() throws InterruptedException {
-        Slf4jLogConsumer logConsumer = new Slf4jLogConsumer(logger);
-        axonServerContainer.followOutput(logConsumer);
-
         DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
-        String eventId = "what";
-        String myName = "myUniqueNameNobodyElseWillUse" + UUID.randomUUID();
+        String eventName = "myUniqueNameNobodyElseWillUse" + UUID.randomUUID();
 
-        TaggedEvent taggedEvent = TaggedEvent.newBuilder()
-                                             .setEvent(Event.newBuilder()
-                                                            .setIdentifier(eventId)
-                                                            .setName(myName)
-                                                            .setPayload(ByteString.empty())
-                                                            .setTimestamp(Instant.now().toEpochMilli())
-                                                            .setVersion("0.0.1")
-                                                            .build())
-                                             .build();
-        dcbEventChannel.startTransaction()
-                       .append(taggedEvent)
-                       .commit()
-                       .join();
+        TaggedEvent taggedEvent = taggedEvent(anEvent(UUID.randomUUID().toString(), eventName));
+        appendEvent(taggedEvent);
 
-        Criterion typeCriterion = criterionWithOnlyName(myName);
+        Criterion typeCriterion = criterionWithOnlyName(eventName);
         SourceEventsResponse sourceResponse = dcbEventChannel.source(SourceEventsRequest.newBuilder()
                                                                                         .addCriterion(typeCriterion)
                                                                                         .build())
                                                              .nextIfAvailable(1, SECONDS);
         Event receivedEvent = sourceResponse.getEvent().getEvent();
-        assertEquals(myName, receivedEvent.getName());
-        assertEquals(eventId, receivedEvent.getIdentifier());
+        assertEquals(taggedEvent.getEvent(), receivedEvent);
     }
 
+    @Test
+    void tagsFor() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+
+        Tag tag = tag(UUID.randomUUID().toString(), UUID.randomUUID().toString());
+        TaggedEvent taggedEvent = taggedEvent(anEvent(UUID.randomUUID().toString(), "myName"), tag);
+        appendEvent(taggedEvent);
+
+        GetTagsResponse response = dcbEventChannel.tagsFor(GetTagsRequest.newBuilder()
+                                                                         .setSequence(0L)
+                                                                         .build())
+                                                  .join();
+        assertEquals(ImmutableList.of(tag), response.getTagList());
+    }
+
+    @Test
+    void head() {
+        assertEquals(0, retrieveHead());
+
+        TaggedEvent taggedEvent = taggedEvent(anEvent(UUID.randomUUID().toString(), "myName"));
+        appendEvent(taggedEvent);
+
+        assertEquals(1, retrieveHead());
+    }
+
+    @Test
+    void tail() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        GetTailResponse response = dcbEventChannel.tail(GetTailRequest.getDefaultInstance())
+                                                  .join();
+        assertEquals(0, response.getSequence());
+    }
+
+    private long retrieveHead() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        return dcbEventChannel.head(GetHeadRequest.getDefaultInstance())
+                              .join()
+                              .getSequence();
+    }
+
+    private void appendEvent(TaggedEvent taggedEvent) {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        dcbEventChannel.startTransaction()
+                       .append(taggedEvent)
+                       .commit()
+                       .join();
+    }
 
     @Test
     void twoNonClashingAppends() {
@@ -220,11 +269,40 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
 
     }
 
+    private static Tag tag(String key, String value) {
+        return Tag.newBuilder()
+                  .setKey(ByteString.copyFromUtf8(key))
+                  .setValue(ByteString.copyFromUtf8(value))
+                  .build();
+    }
+
+    private static TaggedEvent taggedEvent(Event event, Tag tag) {
+        return TaggedEvent.newBuilder()
+                          .setEvent(event)
+                          .addTag(tag)
+                          .build();
+    }
+
+    private static TaggedEvent taggedEvent(Event event) {
+        return TaggedEvent.newBuilder()
+                          .setEvent(event)
+                          .build();
+    }
 
     private static Criterion criterionWithOnlyName(String myname) {
         TagsAndNamesCriterion ttc = TagsAndNamesCriterion.newBuilder()
                                                          .addName(myname)
                                                          .build();
         return Criterion.newBuilder().setTagsAndNames(ttc).build();
+    }
+
+    private static Event anEvent(String eventId, String eventName) {
+        return Event.newBuilder()
+                    .setIdentifier(eventId)
+                    .setName(eventName)
+                    .setPayload(ByteString.empty())
+                    .setTimestamp(Instant.now().toEpochMilli())
+                    .setVersion("0.0.1")
+                    .build();
     }
 }
