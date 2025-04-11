@@ -49,7 +49,6 @@ import org.slf4j.LoggerFactory;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * {@link DcbEventChannel} implementation, serving as the event connection between Axon Server and a client
@@ -153,50 +152,23 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
 
     @Override
     public CompletableFuture<GetTagsResponse> tagsFor(GetTagsRequest request) {
-        CompletableFuture<GetTagsResponse> future = new CompletableFuture<>();
-        eventStore.getTags(request, new CompletableFutureStreamObserver<>(future));
+        FutureStreamObserver<GetTagsResponse> future = new FutureStreamObserver<>(null);
+        eventStore.getTags(request, future);
         return future;
     }
 
     @Override
     public CompletableFuture<GetHeadResponse> head(GetHeadRequest request) {
-        CompletableFuture<GetHeadResponse> future = new CompletableFuture<>();
-        eventStore.getHead(request, new CompletableFutureStreamObserver<>(future));
+        FutureStreamObserver<GetHeadResponse> future = new FutureStreamObserver<>(null);
+        eventStore.getHead(request, future);
         return future;
     }
 
     @Override
     public CompletableFuture<GetTailResponse> tail(GetTailRequest request) {
-        CompletableFuture<GetTailResponse> future = new CompletableFuture<>();
-        eventStore.getTail(request, new CompletableFutureStreamObserver<>(future));
+        FutureStreamObserver<GetTailResponse> future = new FutureStreamObserver<>(null);
+        eventStore.getTail(request, future);
         return future;
-    }
-
-    private static class CompletableFutureStreamObserver<T> implements StreamObserver<T> {
-
-        private final CompletableFuture<T> future;
-        private final AtomicReference<T> response = new AtomicReference<>();
-
-        private CompletableFutureStreamObserver(CompletableFuture<T> future) {
-            this.future = future;
-        }
-
-        @Override
-        public void onNext(T t) {
-            if (!response.compareAndSet(null, t)) {
-                LOGGER.warn("onNext should yield only one response.");
-            }
-        }
-
-        @Override
-        public void onError(Throwable throwable) {
-            future.completeExceptionally(throwable);
-        }
-
-        @Override
-        public void onCompleted() {
-            future.complete(response.get());
-        }
     }
 
     private static class AppendEventsTransactionImpl implements AppendEventsTransaction {

@@ -25,16 +25,28 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
 import reactor.core.publisher.Flux;
+import reactor.test.StepVerifier;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.LongStream;
 
-import static java.lang.String.format;
+import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.*;
@@ -74,13 +86,11 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
                                        .build();
         StreamEventsRequest streamRequest = StreamEventsRequest.newBuilder()
                                                                .setFromSequence(head)
-                                                               .addCriterion(
-                                                                       criterion)
+                                                               .addCriterion(criterion)
                                                                .build();
 
         DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
 
-        AtomicLong received = new AtomicLong();
         int num = 1_000;
         ExecutorService executorService = Executors.newFixedThreadPool(16);
         try {
@@ -90,23 +100,102 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
                 executorService.submit(() -> appendEvent(taggedEvent));
             }
 
-            Flux.from(new ResultStreamPublisher<>(() -> dcbEventChannel.stream(streamRequest)))
-                .take(num)
-                .doOnNext(e -> {
-                    long expected = head + received.getAndIncrement();
-                    long current = e.getEvent().getSequence();
-                    if (expected != current) {
-                        throw new AssertionError(format("Expected %d received %d", expected, current));
-                    }
-                })
-                .blockLast(Duration.ofMinutes(1));
-
-            assertEquals(num, received.get());
+            StepVerifier.create(Flux.from(new ResultStreamPublisher<>(() -> dcbEventChannel.stream(streamRequest)))
+                                    .take(num)
+                                    .map(r -> r.getEvent().getSequence()))
+                        .expectNextSequence(LongStream.range(head, head + num)
+                                                      .boxed()
+                                                      .collect(Collectors.toList()))
+                        .verifyComplete();
         } finally {
             executorService.shutdown();
         }
     }
 
+    @Test
+    void source() {
+        long head = retrieveHead();
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        Tag tag = aTag();
+        String eventName = aString();
+        int num = 6;
+        List<Event> events = new ArrayList<>();
+        for (int i = 0; i < num; i++) {
+            TaggedEvent taggedEvent = i % 2 == 0
+                    ? taggedEvent(anEvent(aString(), eventName), tag)
+                    : taggedEvent(anEvent(aString(), eventName));
+            events.add(taggedEvent.getEvent());
+            appendEvent(taggedEvent);
+        }
+
+        Criterion criterion = Criterion.newBuilder()
+                                       .setTagsAndNames(TagsAndNamesCriterion.newBuilder()
+                                                                             .addTag(tag)
+                                                                             .addName(eventName))
+                                       .build();
+        SourceEventsRequest request = SourceEventsRequest.newBuilder()
+                                                         .addCriterion(criterion)
+                                                         .build();
+        StepVerifier.create(new ResultStreamPublisher<>(() -> dcbEventChannel.source(request)))
+                    .expectNextMatches(response -> 0 == response.getEvent().getSequence()
+                            && response.getEvent().getEvent().equals(events.get(0)))
+                    .expectNextMatches(response -> 2 == response.getEvent().getSequence()
+                            && response.getEvent().getEvent().equals(events.get(2)))
+                    .expectNextMatches(response -> 4 == response.getEvent().getSequence()
+                            && response.getEvent().getEvent().equals(events.get(4)))
+                    .expectNextMatches(response -> head + num == response.getConsistencyMarker())
+                    .verifyComplete();
+    }
+
+    @Test
+    void sourceAnEmptyEventStore() {
+        long head = retrieveHead();
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        Tag tag = aTag();
+        String eventName = aString();
+
+        Criterion criterion = Criterion.newBuilder()
+                                       .setTagsAndNames(TagsAndNamesCriterion.newBuilder()
+                                                                             .addTag(tag)
+                                                                             .addName(eventName))
+                                       .build();
+        SourceEventsRequest request = SourceEventsRequest.newBuilder()
+                                                         .addCriterion(criterion)
+                                                         .build();
+        StepVerifier.create(new ResultStreamPublisher<>(() -> dcbEventChannel.source(request)))
+                    .expectNextMatches(response -> head == response.getConsistencyMarker())
+                    .verifyComplete();
+    }
+
+    @Test
+    void sourceSingleTagAndEventName() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        String eventName = aString();
+        Tag tag = aTag();
+
+        long head = retrieveHead();
+        TaggedEvent taggedEvent = taggedEvent(anEvent(aString(), eventName), tag);
+        appendEvent(taggedEvent);
+
+        Criterion typeAndTagCriterion = Criterion.newBuilder()
+                                                 .setTagsAndNames(
+                                                         TagsAndNamesCriterion.newBuilder()
+                                                                              .addTag(tag)
+                                                                              .addName(eventName)
+                                                                              .build()
+                                                 ).build();
+
+        StepVerifier.create(new ResultStreamPublisher<>(
+                () -> dcbEventChannel.source(SourceEventsRequest.newBuilder()
+                                                                .addCriterion(typeAndTagCriterion)
+                                                                .build())))
+                    .expectNextMatches(sourceRes ->
+                                               (Objects.equals(sourceRes.getEvent().getEvent(), taggedEvent.getEvent()))
+                                                       && (sourceRes.getEvent().getSequence() == head)
+                    )
+                    .expectNext(SourceEventsResponse.newBuilder().setConsistencyMarker(head + 1).build())
+                    .verifyComplete();
+    }
 
     @Test
     void noConditionAppend() throws InterruptedException {
@@ -117,6 +206,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
         appendEvent(taggedEvent);
 
         Criterion typeCriterion = criterionWithOnlyName(eventName);
+
         SourceEventsResponse sourceResponse = dcbEventChannel.source(SourceEventsRequest.newBuilder()
                                                                                         .addCriterion(typeCriterion)
                                                                                         .build())
@@ -158,91 +248,9 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
         assertEquals(0, response.getSequence());
     }
 
-    private long retrieveHead() {
-        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
-        return dcbEventChannel.head(GetHeadRequest.getDefaultInstance())
-                              .join()
-                              .getSequence();
-    }
-
-    private void appendEvent(TaggedEvent taggedEvent) {
-        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
-        dcbEventChannel.startTransaction()
-                       .append(taggedEvent)
-                       .commit()
-                       .join();
-    }
-
     @Test
     void twoNonClashingAppends() {
-//        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
-//        String eventId = "what";
-//        String myType = "myTypeThatIsNotTheSameAsInTheCriterion";
-//
-//        TypedEventPayload typedEventPayload = typedEventPayload(eventId, myType);
-//
-//        TaggedEventPayload taggedEvent = TaggedEventPayload.newBuilder()
-//                                                           .setTypedEvent(typedEventPayload)
-//                                                           .build();
-//
-//
-//        AppendRequest.Event event = AppendRequest.Event.newBuilder()
-//                                                       .setEvent(taggedEvent)
-//                                                       .build();
-//        String key1 = "key1";
-//        String value1 = "value1";
-//        Criterion criterion1 = criterionWithOneTag(key1, value1);
-//        Position consistencyMarker = Position.newBuilder()
-//                                             .setSequence(0L)
-//                                             .build();
-//        ConsistencyCondition condition1 = ConsistencyCondition.newBuilder()
-//                                                              .setConsistencyMarker(consistencyMarker)
-//                                                              .addCriterion(criterion1)
-//                                                              .build();
-//        AppendResponse response1 = dcbEventChannel.startTransaction()
-//                                                  .append(event)
-//                                                  .condition(condition1)
-//                                                  .commit()
-//                                                  .join();
-//
-//        assertEquals(0L, response1.getLastPosition().getSequence());
-//
-//        Tag tag2 = Tag.newBuilder()
-//                      .setKey(ByteString.copyFromUtf8("key2"))
-//                      .setValue(ByteString.copyFromUtf8("value2"))
-//                      .build();
-//        Criterion criterion2 = Criterion.newBuilder()
-//                                        .setTagsAndTypes(TagsAndTypesCriterion.newBuilder()
-//                                                                              .addType("type")
-//                                                                              .addTag(tag2)
-//                                                                              .build())
-//                                        .build();
-//        ConsistencyCondition condition2 = ConsistencyCondition.newBuilder()
-//                                                              .setConsistencyMarker(consistencyMarker)
-//                                                              .addCriterion(criterion2)
-//                                                              .build();
-//        AppendResponse response2 = dcbEventChannel.startTransaction()
-//                                                  .append(event)
-//                                                  .condition(condition2)
-//                                                  .commit()
-//                                                  .join();
-//
-//        assertEquals(1L, response2.getLastPosition().getSequence());
     }
-
-//    private static @NotNull Criterion criterionWithOneTag(String key1, String value1) {
-//        Tag tag1 = Tag.newBuilder()
-//                      .setKey(ByteString.copyFromUtf8(key1))
-//                      .setValue(ByteString.copyFromUtf8(value1))
-//                      .build();
-//        Criterion criterion1 = Criterion.newBuilder()
-//                                        .setTagsAndTypes(TagsAndTypesCriterion.newBuilder()
-//                                                                              .addType("type")
-//                                                                              .addTag(tag1)
-//                                                                              .build())
-//                                        .build();
-//        return criterion1;
-//    }
 
     @Test
     void twoClashingAppends() {
@@ -250,18 +258,76 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
-    void concurrentAppends() {
+    void concurrentAppends() throws InterruptedException {
+        long head = retrieveHead();
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        Tag tag = aTag();
+        String eventName = aString();
+        int num = 1_000;
+        ExecutorService executorService = Executors.newFixedThreadPool(16);
 
+        Criterion criterion = Criterion.newBuilder()
+                                       .setTagsAndNames(TagsAndNamesCriterion.newBuilder()
+                                                                             .addName(eventName)
+                                                                             .addTag(tag)
+                                                                             .build())
+                                       .build();
+
+        ConcurrentSkipListSet<String> successfulIds = new ConcurrentSkipListSet<>();
+        CountDownLatch latch = new CountDownLatch(num);
+
+        try {
+            for (int i = 0; i < num; i++) {
+                String id = aString();
+                TaggedEvent taggedEvent = taggedEvent(anEvent(id, eventName), tag);
+                long consistencyMarker = head + (i % 100);
+                ConsistencyCondition condition = ConsistencyCondition.newBuilder()
+                                                                     .setConsistencyMarker(consistencyMarker)
+                                                                     .addCriterion(criterion)
+                                                                     .build();
+                executorService.submit(() -> {
+                    try {
+                        appendEvent(taggedEvent, condition);
+                        successfulIds.add(id);
+                    } finally {
+                        latch.countDown();
+                    }
+                });
+            }
+            latch.await();
+            Set<String> receivedIds = sourceFlux(head)
+                                          .filter(SourceEventsResponse::hasEvent)
+                                          .map(r -> r.getEvent().getEvent().getIdentifier())
+                                          .collect(Collectors.toSet())
+                                          .block();
+
+            assertEquals(successfulIds, receivedIds);
+        } finally {
+            executorService.shutdown();
+        }
     }
 
     @Test
     void transactionRollback() {
-
+        long head = retrieveHead();
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        TaggedEvent taggedEvent = taggedEvent(anEvent(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
+        dcbEventChannel.startTransaction()
+                       .append(taggedEvent)
+                       .rollback();
+        StepVerifier.create(sourceFlux(head))
+                    .expectNextMatches(r -> head == r.getConsistencyMarker())
+                    .verifyComplete();
     }
 
     @Test
-    void sourceEmptyEventStore() {
+    void sourceAtTheHead() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        long head = retrieveHead();
 
+        StepVerifier.create(sourceFlux(head))
+                    .expectNextMatches(r -> r.getConsistencyMarker() == head)
+                    .verifyComplete();
     }
 
     @Test
@@ -304,5 +370,36 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
                     .setTimestamp(Instant.now().toEpochMilli())
                     .setVersion("0.0.1")
                     .build();
+    }
+
+    private long retrieveHead() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        return dcbEventChannel.head(GetHeadRequest.getDefaultInstance())
+                              .join()
+                              .getSequence();
+    }
+
+    private void appendEvent(TaggedEvent taggedEvent) {
+        appendEventAsync(taggedEvent).join();
+    }
+
+    private void appendEvent(TaggedEvent taggedEvent, ConsistencyCondition condition) {
+        appendEventAsync(taggedEvent, condition).join();
+    }
+
+    private CompletableFuture<AppendEventsResponse> appendEventAsync(TaggedEvent taggedEvent) {
+        return connection.dcbEventChannel()
+                         .startTransaction()
+                         .append(taggedEvent)
+                         .commit();
+    }
+
+    private CompletableFuture<AppendEventsResponse> appendEventAsync(TaggedEvent taggedEvent,
+                                                                     ConsistencyCondition condition) {
+        return connection.dcbEventChannel()
+                         .startTransaction()
+                         .append(taggedEvent)
+                         .condition(condition)
+                         .commit();
     }
 }
