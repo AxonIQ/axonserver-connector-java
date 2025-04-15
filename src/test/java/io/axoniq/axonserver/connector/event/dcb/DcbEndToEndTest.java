@@ -30,9 +30,7 @@ import reactor.test.StepVerifier;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -45,10 +43,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
-import static java.util.Arrays.asList;
-import static java.util.Collections.singletonList;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.*;
 
 class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
@@ -72,7 +67,6 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
 
     @AfterEach
     void tearDown() {
-        connection.disconnect();
         client.shutdown();
     }
 
@@ -100,9 +94,9 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
                 executorService.submit(() -> appendEvent(taggedEvent));
             }
 
-            StepVerifier.create(Flux.from(new ResultStreamPublisher<>(() -> dcbEventChannel.stream(streamRequest)))
-                                    .take(num)
-                                    .map(r -> r.getEvent().getSequence()))
+            StepVerifier.create(fluxStream(() -> dcbEventChannel.stream(streamRequest))
+                                        .take(num)
+                                        .map(r -> r.getEvent().getSequence()))
                         .expectNextSequence(LongStream.range(head, head + num)
                                                       .boxed()
                                                       .collect(Collectors.toList()))
@@ -185,20 +179,18 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
                                                                               .build()
                                                  ).build();
 
-        StepVerifier.create(new ResultStreamPublisher<>(
-                () -> dcbEventChannel.source(SourceEventsRequest.newBuilder()
-                                                                .addCriterion(typeAndTagCriterion)
-                                                                .build())))
-                    .expectNextMatches(sourceRes ->
-                                               (Objects.equals(sourceRes.getEvent().getEvent(), taggedEvent.getEvent()))
-                                                       && (sourceRes.getEvent().getSequence() == head)
-                    )
+        SourceEventsRequest request = SourceEventsRequest.newBuilder()
+                                                         .addCriterion(typeAndTagCriterion)
+                                                         .build();
+        StepVerifier.create(new ResultStreamPublisher<>(() -> dcbEventChannel.source(request)))
+                    .expectNextMatches(r -> r.getEvent().getEvent().equals(taggedEvent.getEvent())
+                            && r.getEvent().getSequence() == head)
                     .expectNext(SourceEventsResponse.newBuilder().setConsistencyMarker(head + 1).build())
                     .verifyComplete();
     }
 
     @Test
-    void noConditionAppend() throws InterruptedException {
+    void noConditionAppend() {
         DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
         String eventName = "myUniqueNameNobodyElseWillUse" + UUID.randomUUID();
 
@@ -207,12 +199,14 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
 
         Criterion typeCriterion = criterionWithOnlyName(eventName);
 
-        SourceEventsResponse sourceResponse = dcbEventChannel.source(SourceEventsRequest.newBuilder()
-                                                                                        .addCriterion(typeCriterion)
-                                                                                        .build())
-                                                             .nextIfAvailable(1, SECONDS);
-        Event receivedEvent = sourceResponse.getEvent().getEvent();
-        assertEquals(taggedEvent.getEvent(), receivedEvent);
+        SourceEventsRequest request = SourceEventsRequest.newBuilder()
+                                                         .addCriterion(typeCriterion)
+                                                         .build();
+
+        StepVerifier.create(new ResultStreamPublisher<>(() -> dcbEventChannel.source(request)))
+                    .expectNextMatches(r -> r.getEvent().getEvent().equals(taggedEvent.getEvent()))
+                    .expectNextMatches(r -> r.getConsistencyMarker() == 1L)
+                    .verifyComplete();
     }
 
     @Test
@@ -250,6 +244,31 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
 
     @Test
     void twoNonClashingAppends() {
+        Tag tag1 = aTag();
+        Tag tag2 = aTag();
+        TaggedEvent taggedEvent1 = taggedEvent(anEvent(aString(), aString()), tag1);
+        TaggedEvent taggedEvent2 = taggedEvent(anEvent(aString(), aString()), tag2);
+        ConsistencyCondition condition1 =
+                ConsistencyCondition.newBuilder()
+                                    .addCriterion(Criterion.newBuilder()
+                                                           .setTagsAndNames(TagsAndNamesCriterion.newBuilder()
+                                                                                                 .addTag(tag1)))
+                                    .build();
+        ConsistencyCondition condition2 =
+                ConsistencyCondition.newBuilder()
+                                    .addCriterion(Criterion.newBuilder()
+                                                           .setTagsAndNames(TagsAndNamesCriterion.newBuilder()
+                                                                                                 .addTag(tag2)))
+                                    .build();
+        appendEvent(taggedEvent1, condition1);
+        appendEvent(taggedEvent2, condition2);
+
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        StepVerifier.create(new ResultStreamPublisher<>(() -> dcbEventChannel.source(sourceEventsRequest(0L))))
+                    .expectNextMatches(e -> e.getEvent().getEvent().equals(taggedEvent1.getEvent()))
+                    .expectNextMatches(e -> e.getEvent().getEvent().equals(taggedEvent2.getEvent()))
+                    .expectNextMatches(e -> e.getConsistencyMarker() == 2L)
+                    .verifyComplete();
     }
 
     @Test
@@ -260,7 +279,6 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     @Test
     void concurrentAppends() throws InterruptedException {
         long head = retrieveHead();
-        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
         Tag tag = aTag();
         String eventName = aString();
         int num = 1_000;
@@ -296,10 +314,10 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
             }
             latch.await();
             Set<String> receivedIds = sourceFlux(head)
-                                          .filter(SourceEventsResponse::hasEvent)
-                                          .map(r -> r.getEvent().getEvent().getIdentifier())
-                                          .collect(Collectors.toSet())
-                                          .block();
+                    .filter(SourceEventsResponse::hasEvent)
+                    .map(r -> r.getEvent().getEvent().getIdentifier())
+                    .collect(Collectors.toSet())
+                    .block();
 
             assertEquals(successfulIds, receivedIds);
         } finally {
@@ -322,7 +340,6 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
 
     @Test
     void sourceAtTheHead() {
-        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
         long head = retrieveHead();
 
         StepVerifier.create(sourceFlux(head))
