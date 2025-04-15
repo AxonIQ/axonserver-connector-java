@@ -5,8 +5,11 @@ import com.google.protobuf.ByteString;
 import io.axoniq.axonserver.connector.AbstractAxonServerIntegrationTest;
 import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
+import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.ResultStreamPublisher;
 import io.axoniq.axonserver.connector.event.DcbEventChannel;
+import io.axoniq.axonserver.grpc.event.dcb.AppendEventsResponse;
+import io.axoniq.axonserver.grpc.event.dcb.ConsistencyCondition;
 import io.axoniq.axonserver.grpc.event.dcb.Criterion;
 import io.axoniq.axonserver.grpc.event.dcb.Event;
 import io.axoniq.axonserver.grpc.event.dcb.GetHeadRequest;
@@ -17,6 +20,7 @@ import io.axoniq.axonserver.grpc.event.dcb.GetTailResponse;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.StreamEventsRequest;
+import io.axoniq.axonserver.grpc.event.dcb.StreamEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.Tag;
 import io.axoniq.axonserver.grpc.event.dcb.TaggedEvent;
 import io.axoniq.axonserver.grpc.event.dcb.TagsAndNamesCriterion;
@@ -73,7 +77,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     @Test
     void stream() {
         long head = retrieveHead();
-        Tag tag = tag(UUID.randomUUID().toString(), UUID.randomUUID().toString());
+        Tag tag = aTag();
         Criterion criterion = Criterion.newBuilder()
                                        .setTagsAndNames(TagsAndNamesCriterion.newBuilder()
                                                                              .addTag(tag))
@@ -192,9 +196,9 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     @Test
     void noConditionAppend() {
         DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
-        String eventName = "myUniqueNameNobodyElseWillUse" + UUID.randomUUID();
+        String eventName = aString();
 
-        TaggedEvent taggedEvent = taggedEvent(anEvent(UUID.randomUUID().toString(), eventName));
+        TaggedEvent taggedEvent = taggedEvent(anEvent(aString(), eventName));
         appendEvent(taggedEvent);
 
         Criterion typeCriterion = criterionWithOnlyName(eventName);
@@ -213,8 +217,8 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     void tagsFor() {
         DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
 
-        Tag tag = tag(UUID.randomUUID().toString(), UUID.randomUUID().toString());
-        TaggedEvent taggedEvent = taggedEvent(anEvent(UUID.randomUUID().toString(), "myName"), tag);
+        Tag tag = aTag();
+        TaggedEvent taggedEvent = taggedEvent(anEvent(aString(), "myName"), tag);
         appendEvent(taggedEvent);
 
         GetTagsResponse response = dcbEventChannel.tagsFor(GetTagsRequest.newBuilder()
@@ -228,7 +232,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     void head() {
         assertEquals(0, retrieveHead());
 
-        TaggedEvent taggedEvent = taggedEvent(anEvent(UUID.randomUUID().toString(), "myName"));
+        TaggedEvent taggedEvent = taggedEvent(anEvent(aString(), "myName"));
         appendEvent(taggedEvent);
 
         assertEquals(1, retrieveHead());
@@ -272,8 +276,27 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
-    void twoClashingAppends() {
+    void twoClashingAppendsWithTheSameCondition() {
+        String eventName = aString();
+        long head = retrieveHead();
+        Tag tag = aTag();
 
+        TaggedEvent taggedEvent = taggedEvent(anEvent(aString(), eventName), tag);
+        ConsistencyCondition condition =
+                ConsistencyCondition.newBuilder()
+                                    .setConsistencyMarker(head)
+                                    .addCriterion(Criterion.newBuilder()
+                                                           .setTagsAndNames(TagsAndNamesCriterion.newBuilder()
+                                                                                                 .addTag(tag))
+                                                           .build())
+                                    .build();
+        appendEvent(taggedEvent, condition);
+        appendEventAsync(taggedEvent, condition)
+                .handle((res, err) -> {
+                    assertEquals("CANCELLED: Consistency condition is not met.", err.getMessage());
+                    return null;
+                })
+                .join();
     }
 
     @Test
@@ -348,8 +371,45 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
-    void streamEmptyEventStore() {
+    void streamAtTheHead() {
+        long head = retrieveHead();
 
+        StepVerifier.create(streamFlux(head).take(Duration.ofSeconds(5)))
+                    .verifyComplete();
+    }
+
+    private Flux<SourceEventsResponse> sourceFlux(long start) {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        return fluxStream(() -> dcbEventChannel.source(sourceEventsRequest(start)));
+    }
+
+    private Flux<StreamEventsResponse> streamFlux(long start) {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        return fluxStream(() -> dcbEventChannel.stream(streamEventsRequest(start)));
+    }
+
+    private <T> Flux<T> fluxStream(Supplier<ResultStream<T>> stream) {
+        return Flux.from(new ResultStreamPublisher<>(stream));
+    }
+
+    private static Tag aTag() {
+        return tag(UUID.randomUUID().toString(), UUID.randomUUID().toString());
+    }
+
+    private static String aString() {
+        return UUID.randomUUID().toString();
+    }
+
+    private static StreamEventsRequest streamEventsRequest(long from) {
+        return StreamEventsRequest.newBuilder()
+                                  .setFromSequence(from)
+                                  .build();
+    }
+
+    private static SourceEventsRequest sourceEventsRequest(long from) {
+        return SourceEventsRequest.newBuilder()
+                                  .setFromSequence(from)
+                                  .build();
     }
 
     private static Tag tag(String key, String value) {
