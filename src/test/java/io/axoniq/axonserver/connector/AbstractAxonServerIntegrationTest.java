@@ -31,21 +31,18 @@ import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.core5.http.ClassicHttpRequest;
 import org.apache.hc.core5.http.ParseException;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.*;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.images.PullPolicy;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.MountableFile;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.util.function.Function;
 
@@ -66,9 +63,7 @@ public abstract class AbstractAxonServerIntegrationTest {
                     .withEnv("AXONIQ_AXONSERVER_DEVMODE_ENABLED", "true")
                     .withEnv("AXONIQ_AXONSERVER_ACCESSCONTROL_TOKEN", "user-token")
                     .withEnv("AXONIQ_AXONSERVER_ACCESSCONTROL_ADMIN_TOKEN", "admin-token")
-                    .withEnv("LOGGING_LEVEL_ROOT", "INFO")
                     .withImagePullPolicy(PullPolicy.ageBased(Duration.ofDays(1)))
-                    .withCopyFileToContainer(MountableFile.forHostPath("/home/milansavic/work/axoniq/axon-server/package-axonserver-enterprise/target/axonserver.jar"), "/axonserver/axonserver.jar")
                     .withNetwork(network)
                     .withNetworkAliases("axonserver")
                     .waitingFor(Wait.forHttp("/actuator/health").forPort(8024));
