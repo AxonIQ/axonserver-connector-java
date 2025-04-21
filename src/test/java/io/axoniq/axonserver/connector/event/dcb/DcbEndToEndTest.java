@@ -34,11 +34,13 @@ import reactor.test.StepVerifier;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -75,7 +77,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
-    void stream() {
+    void streamWhileAppendingWithASingleTagCriterion() {
         long head = retrieveHead();
         Tag tag = aTag();
         Criterion criterion = Criterion.newBuilder()
@@ -97,6 +99,159 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
                 TaggedEvent taggedEvent = taggedEvent(anEvent(id, "event-to-be-streamed"), tag);
                 executorService.submit(() -> appendEvent(taggedEvent));
             }
+
+            StepVerifier.create(fluxStream(() -> dcbEventChannel.stream(streamRequest))
+                                        .take(num)
+                                        .map(r -> r.getEvent().getSequence()))
+                        .expectNextSequence(LongStream.range(head, head + num)
+                                                      .boxed()
+                                                      .collect(Collectors.toList()))
+                        .verifyComplete();
+        } finally {
+            executorService.shutdown();
+        }
+    }
+
+    @Test
+    void streamWhileAppendingWithTwoCriterionsWithTwoTags() {
+        long head = retrieveHead();
+        Tag tag1 = aTag();
+        Tag tag2 = aTag();
+        Tag tag3 = aTag();
+        Tag tag4 = aTag();
+        Criterion criterion1 = Criterion.newBuilder()
+                                        .setTagsAndNames(TagsAndNamesCriterion.newBuilder()
+                                                                              .addTag(tag1)
+                                                                              .addTag(tag2))
+                                        .build();
+        Criterion criterion2 = Criterion.newBuilder()
+                                        .setTagsAndNames(TagsAndNamesCriterion.newBuilder()
+                                                                              .addTag(tag3)
+                                                                              .addTag(tag4))
+                                        .build();
+        StreamEventsRequest streamRequest = StreamEventsRequest.newBuilder()
+                                                               .setFromSequence(head)
+                                                               .addCriterion(criterion1)
+                                                               .addCriterion(criterion2)
+                                                               .build();
+
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+
+        int num = 1_000;
+        ExecutorService executorService = Executors.newFixedThreadPool(16);
+        try {
+            for (int i = 0; i < num; i++) {
+                String id = UUID.randomUUID().toString();
+                Event event = anEvent(id, "event-to-be-streamed");
+                TaggedEvent taggedEvent = i % 2 == 0 ? taggedEvent(event, tag1, tag2) : taggedEvent(event, tag3, tag4);
+                executorService.submit(() -> appendEvent(taggedEvent));
+            }
+
+            StepVerifier.create(fluxStream(() -> dcbEventChannel.stream(streamRequest))
+                                        .take(num)
+                                        .map(r -> r.getEvent().getSequence()))
+                        .expectNextSequence(LongStream.range(head, head + num)
+                                                      .boxed()
+                                                      .collect(Collectors.toList()))
+                        .verifyComplete();
+        } finally {
+            executorService.shutdown();
+        }
+    }
+
+    @Test
+    void streamWhileAppendingWithNoCriteria() {
+        long head = retrieveHead();
+        Tag tag = aTag();
+        StreamEventsRequest streamRequest = StreamEventsRequest.newBuilder()
+                                                               .setFromSequence(head)
+                                                               .build();
+
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+
+        int num = 1_000;
+        ExecutorService executorService = Executors.newFixedThreadPool(16);
+        try {
+            for (int i = 0; i < num; i++) {
+                String id = UUID.randomUUID().toString();
+                TaggedEvent taggedEvent = taggedEvent(anEvent(id, "event-to-be-streamed"), tag);
+                executorService.submit(() -> appendEvent(taggedEvent));
+            }
+
+            StepVerifier.create(fluxStream(() -> dcbEventChannel.stream(streamRequest))
+                                        .take(num)
+                                        .map(r -> r.getEvent().getSequence()))
+                        .expectNextSequence(LongStream.range(head, head + num)
+                                                      .boxed()
+                                                      .collect(Collectors.toList()))
+                        .verifyComplete();
+        } finally {
+            executorService.shutdown();
+        }
+    }
+
+    @Test
+    void streamBeforeAppends() throws InterruptedException {
+        long head = retrieveHead();
+        Tag tag = aTag();
+        StreamEventsRequest streamRequest = StreamEventsRequest.newBuilder()
+                                                               .setFromSequence(head)
+                                                               .build();
+
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+
+        int num = 1_000;
+        CountDownLatch latch = new CountDownLatch(1);
+        List<Long> receivedSequences = new CopyOnWriteArrayList<>();
+
+        fluxStream(() -> dcbEventChannel.stream(streamRequest))
+                .take(num)
+                .map(r -> r.getEvent().getSequence())
+                .doOnNext(receivedSequences::add)
+                .doOnComplete(latch::countDown)
+                .subscribe();
+        ExecutorService executorService = Executors.newFixedThreadPool(16);
+        try {
+            for (int i = 0; i < num; i++) {
+                String id = UUID.randomUUID().toString();
+                TaggedEvent taggedEvent = taggedEvent(anEvent(id, "event-to-be-streamed"), tag);
+                executorService.submit(() -> appendEvent(taggedEvent));
+            }
+
+            assertTrue(latch.await(10, TimeUnit.SECONDS));
+            List<Long> expectedSequences = LongStream.range(head, head + num)
+                                                     .boxed()
+                                                     .collect(Collectors.toList());
+            assertEquals(expectedSequences, receivedSequences);
+        } finally {
+            executorService.shutdown();
+        }
+    }
+
+    @Test
+    void streamAfterAppends() throws InterruptedException {
+        long head = retrieveHead();
+        Tag tag = aTag();
+        StreamEventsRequest streamRequest = StreamEventsRequest.newBuilder()
+                                                               .setFromSequence(head)
+                                                               .build();
+
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+
+        int num = 1_000;
+        CountDownLatch latch = new CountDownLatch(num);
+        ExecutorService executorService = Executors.newFixedThreadPool(16);
+        try {
+            for (int i = 0; i < num; i++) {
+                String id = UUID.randomUUID().toString();
+                TaggedEvent taggedEvent = taggedEvent(anEvent(id, "event-to-be-streamed"), tag);
+                executorService.submit(() -> {
+                    appendEvent(taggedEvent);
+                    latch.countDown();
+                });
+            }
+
+            assertTrue(latch.await(10, TimeUnit.SECONDS));
 
             StepVerifier.create(fluxStream(() -> dcbEventChannel.stream(streamRequest))
                                         .take(num)
@@ -419,10 +574,10 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
                   .build();
     }
 
-    private static TaggedEvent taggedEvent(Event event, Tag tag) {
+    private static TaggedEvent taggedEvent(Event event, Tag... tag) {
         return TaggedEvent.newBuilder()
                           .setEvent(event)
-                          .addTag(tag)
+                          .addAllTag(Arrays.asList(tag))
                           .build();
     }
 
