@@ -295,11 +295,11 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
                                                          .addCriterion(criterion)
                                                          .build();
         StepVerifier.create(new ResultStreamPublisher<>(() -> dcbEventChannel.source(request)))
-                    .expectNextMatches(response -> 0 == response.getEvent().getSequence()
+                    .expectNextMatches(response -> head == response.getEvent().getSequence()
                             && response.getEvent().getEvent().equals(events.get(0)))
-                    .expectNextMatches(response -> 2 == response.getEvent().getSequence()
+                    .expectNextMatches(response -> head + 2 == response.getEvent().getSequence()
                             && response.getEvent().getEvent().equals(events.get(2)))
-                    .expectNextMatches(response -> 4 == response.getEvent().getSequence()
+                    .expectNextMatches(response -> head + 4 == response.getEvent().getSequence()
                             && response.getEvent().getEvent().equals(events.get(4)))
                     .expectNextMatches(response -> head + num == response.getConsistencyMarker())
                     .verifyComplete();
@@ -355,6 +355,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
 
     @Test
     void noConditionAppend() {
+        long head = retrieveHead();
         DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
         String eventName = aString();
 
@@ -369,7 +370,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
 
         StepVerifier.create(new ResultStreamPublisher<>(() -> dcbEventChannel.source(request)))
                     .expectNextMatches(r -> r.getEvent().getEvent().equals(taggedEvent.getEvent()))
-                    .expectNextMatches(r -> r.getConsistencyMarker() == 1L)
+                    .expectNextMatches(r -> r.getConsistencyMarker() == head + 1L)
                     .verifyComplete();
     }
 
@@ -379,10 +380,10 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
 
         Tag tag = aTag();
         TaggedEvent taggedEvent = taggedEvent(anEvent(aString(), "myName"), tag);
-        appendEvent(taggedEvent);
+        long sequence = appendEvent(taggedEvent).getLastPosition();
 
         GetTagsResponse response = dcbEventChannel.tagsFor(GetTagsRequest.newBuilder()
-                                                                         .setSequence(0L)
+                                                                         .setSequence(sequence)
                                                                          .build())
                                                   .join();
         assertEquals(ImmutableList.of(tag), response.getTagList());
@@ -403,6 +404,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
 
     @Test
     void twoNonClashingAppends() {
+        long head = retrieveHead();
         Tag tag1 = aTag();
         Tag tag2 = aTag();
         TaggedEvent taggedEvent1 = taggedEvent(anEvent(aString(), aString()), tag1);
@@ -423,10 +425,10 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
         appendEvent(taggedEvent2, condition2);
 
         DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
-        StepVerifier.create(new ResultStreamPublisher<>(() -> dcbEventChannel.source(sourceEventsRequest(0L))))
+        StepVerifier.create(new ResultStreamPublisher<>(() -> dcbEventChannel.source(sourceEventsRequest(head))))
                     .expectNextMatches(e -> e.getEvent().getEvent().equals(taggedEvent1.getEvent()))
                     .expectNextMatches(e -> e.getEvent().getEvent().equals(taggedEvent2.getEvent()))
-                    .expectNextMatches(e -> e.getConsistencyMarker() == 2L)
+                    .expectNextMatches(e -> e.getConsistencyMarker() == head + 2L)
                     .verifyComplete();
     }
 
@@ -611,12 +613,12 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
                               .getSequence();
     }
 
-    private void appendEvent(TaggedEvent taggedEvent) {
-        appendEventAsync(taggedEvent).join();
+    private AppendEventsResponse appendEvent(TaggedEvent taggedEvent) {
+        return appendEventAsync(taggedEvent).join();
     }
 
-    private void appendEvent(TaggedEvent taggedEvent, ConsistencyCondition condition) {
-        appendEventAsync(taggedEvent, condition).join();
+    private AppendEventsResponse appendEvent(TaggedEvent taggedEvent, ConsistencyCondition condition) {
+        return appendEventAsync(taggedEvent, condition).join();
     }
 
     private CompletableFuture<AppendEventsResponse> appendEventAsync(TaggedEvent taggedEvent) {
