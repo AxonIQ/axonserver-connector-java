@@ -103,7 +103,9 @@ public abstract class AbstractAxonServerIntegrationTest {
             toxic.remove();
         }
         axonServerProxy.enable();
-        AxonServerUtils.purgeEventsFromAxonServer(axonServerHttpPort.getHostName(), axonServerHttpPort.getGrpcPort());
+        AxonServerUtils.purgeEventsFromAxonServer(axonServerHttpPort.getHostName(),
+                                                  axonServerHttpPort.getGrpcPort(),
+                                                  dcbContext());
     }
 
     public static Proxy getOrCreateProxy(ToxiproxyClient client,
@@ -115,6 +117,10 @@ public abstract class AbstractAxonServerIntegrationTest {
             proxy = client.createProxy(proxyName, listen, upstream);
         }
         return proxy;
+    }
+
+    protected boolean dcbContext() {
+        return false;
     }
 
     protected JsonElement sendToAxonServer(Function<String, ClassicHttpRequest> method,

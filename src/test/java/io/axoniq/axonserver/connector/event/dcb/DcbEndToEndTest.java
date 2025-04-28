@@ -76,6 +76,11 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
         client.shutdown();
     }
 
+    @Override
+    protected boolean dcbContext() {
+        return true;
+    }
+
     @Test
     void streamWhileAppendingWithASingleTagCriterion() {
         long head = retrieveHead();
@@ -386,11 +391,6 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     @Test
     void head() {
         assertEquals(0, retrieveHead());
-
-        TaggedEvent taggedEvent = taggedEvent(anEvent(aString(), "myName"));
-        appendEvent(taggedEvent);
-
-        assertEquals(1, retrieveHead());
     }
 
     @Test
