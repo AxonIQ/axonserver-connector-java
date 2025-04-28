@@ -44,7 +44,7 @@
         <sonar.organization>axoniq</sonar.organization>
         <sonar.host.url>https://sonarcloud.io</sonar.host.url>
 
-        <axonserver.api.version>2024.2.0-SNAPSHOT</axonserver.api.version>
+        <axonserver.api.version>2025.1.0-SNAPSHOT</axonserver.api.version>
 
         <grpc.version>1.69.0</grpc.version>
         <protobuf.version>4.30.2</protobuf.version>
