@@ -450,7 +450,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
         appendEvent(taggedEvent, condition);
         appendEventAsync(taggedEvent, condition)
                 .handle((res, err) -> {
-                    assertEquals("CANCELLED: Consistency condition is not met.", err.getMessage());
+                    assertEquals("CANCELLED: io.axoniq.axonserver.eventstore.api.ConsistencyConditionException: Consistency condition is not met.", err.getMessage());
                     return null;
                 })
                 .join();
