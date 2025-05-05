@@ -55,7 +55,7 @@ public abstract class AbstractAxonServerIntegrationTest {
     @SuppressWarnings("resource")
     @Container
     public static GenericContainer<?> axonServerContainer =
-            new GenericContainer<>(System.getProperty("AXON_SERVER_IMAGE", "axoniq/axonserver"))
+            new GenericContainer<>(getDockerImageName())
                     .withExposedPorts(8024, 8124)
                     .withEnv("AXONIQ_AXONSERVER_PREVIEW_EVENT_TRANSFORMATION", "true")
                     .withEnv("AXONIQ_AXONSERVER_NAME", "axonserver")
@@ -67,6 +67,11 @@ public abstract class AbstractAxonServerIntegrationTest {
                     .withNetwork(network)
                     .withNetworkAliases("axonserver")
                     .waitingFor(Wait.forHttp("/actuator/health").forPort(8024));
+
+    private static String getDockerImageName() {
+        String envVariable = System.getenv("AXON_SERVER_IMAGE");
+        return envVariable != null ? envVariable : System.getProperty("AXON_SERVER_IMAGE", "axoniq/axonserver");
+    }
 
     @SuppressWarnings("resource")
     @Container
