@@ -380,7 +380,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
 
         Tag tag = aTag();
         TaggedEvent taggedEvent = taggedEvent(anEvent(aString(), "myName"), tag);
-        long sequence = appendEvent(taggedEvent).getLastPosition();
+        long sequence = appendEvent(taggedEvent).getSequenceOfTheFirstEvent();
 
         GetTagsResponse response = dcbEventChannel.tagsFor(GetTagsRequest.newBuilder()
                                                                          .setSequence(sequence)
@@ -421,8 +421,16 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
                                                            .setTagsAndNames(TagsAndNamesCriterion.newBuilder()
                                                                                                  .addTag(tag2)))
                                     .build();
-        appendEvent(taggedEvent1, condition1);
-        appendEvent(taggedEvent2, condition2);
+        AppendEventsResponse appendEventsResponse1 = appendEvent(taggedEvent1, condition1);
+        AppendEventsResponse appendEventsResponse2 = appendEvent(taggedEvent2, condition2);
+
+        assertEquals(head, appendEventsResponse1.getSequenceOfTheFirstEvent());
+        assertEquals(1, appendEventsResponse1.getTransactionSize());
+        assertEquals(head + 1, appendEventsResponse1.getConsistencyMarker());
+
+        assertEquals(head + 1, appendEventsResponse2.getSequenceOfTheFirstEvent());
+        assertEquals(1, appendEventsResponse2.getTransactionSize());
+        assertEquals(head + 2, appendEventsResponse2.getConsistencyMarker());
 
         DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
         StepVerifier.create(new ResultStreamPublisher<>(() -> dcbEventChannel.source(sourceEventsRequest(head))))
