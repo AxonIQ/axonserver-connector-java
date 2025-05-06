@@ -21,6 +21,8 @@ import io.axoniq.axonserver.grpc.event.dcb.AppendEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.ConsistencyCondition;
 import io.axoniq.axonserver.grpc.event.dcb.GetHeadRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetHeadResponse;
+import io.axoniq.axonserver.grpc.event.dcb.GetSequenceAtRequest;
+import io.axoniq.axonserver.grpc.event.dcb.GetSequenceAtResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetTagsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetTagsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetTailRequest;
@@ -90,6 +92,16 @@ public interface DcbEventChannel {
      * @return the tail of the event store
      */
     CompletableFuture<GetTailResponse> tail(GetTailRequest request);
+
+    /**
+     * Provides the sequence number of the event closest to the given timestamp.
+     * If the timestamp is before the first event, returns the tail sequence.
+     * If the timestamp is after the last event, returns the head sequence.
+     *
+     * @param request the request containing the timestamp to find the sequence for
+     * @return the sequence at the given timestamp
+     */
+    CompletableFuture<GetSequenceAtResponse> getSequenceAt(GetSequenceAtRequest request);
 
     /**
      * Provides operations to interact with a Transaction to append events and a condition onto the Event Store.

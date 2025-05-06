@@ -31,6 +31,8 @@ import io.axoniq.axonserver.grpc.event.dcb.ConsistencyCondition;
 import io.axoniq.axonserver.grpc.event.dcb.DcbEventStoreGrpc;
 import io.axoniq.axonserver.grpc.event.dcb.GetHeadRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetHeadResponse;
+import io.axoniq.axonserver.grpc.event.dcb.GetSequenceAtRequest;
+import io.axoniq.axonserver.grpc.event.dcb.GetSequenceAtResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetTagsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetTagsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetTailRequest;
@@ -168,6 +170,13 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
     public CompletableFuture<GetTailResponse> tail(GetTailRequest request) {
         FutureStreamObserver<GetTailResponse> future = new FutureStreamObserver<>(null);
         eventStore.getTail(request, future);
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<GetSequenceAtResponse> getSequenceAt(GetSequenceAtRequest request) {
+        FutureStreamObserver<GetSequenceAtResponse> future = new FutureStreamObserver<>(null);
+        eventStore.getSequenceAt(request, future);
         return future;
     }
 
