@@ -57,7 +57,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * application.
  *
  * @author Milan Savic
- * @since 2024.1.0
+ * @since 2025.1.0
  */
 public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> implements DcbEventChannel {
 
