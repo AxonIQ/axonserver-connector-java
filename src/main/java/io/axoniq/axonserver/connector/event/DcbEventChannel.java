@@ -139,7 +139,7 @@ public interface DcbEventChannel {
         /**
          * Commits this Transaction.
          *
-         * @return the future that completes once the Axon Server commits this Transaction
+         * @return the future that completes once the Axon Server commits this Transaction, containing the append events response as a result.
          */
         CompletableFuture<AppendEventsResponse> commit();
 
