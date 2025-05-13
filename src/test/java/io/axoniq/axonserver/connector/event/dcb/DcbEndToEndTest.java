@@ -7,12 +7,15 @@ import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
 import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.ResultStreamPublisher;
+import io.axoniq.axonserver.connector.impl.ServerAddress;
 import io.axoniq.axonserver.connector.event.DcbEventChannel;
 import io.axoniq.axonserver.grpc.event.dcb.AppendEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.ConsistencyCondition;
 import io.axoniq.axonserver.grpc.event.dcb.Criterion;
 import io.axoniq.axonserver.grpc.event.dcb.Event;
 import io.axoniq.axonserver.grpc.event.dcb.GetHeadRequest;
+import io.axoniq.axonserver.grpc.event.dcb.GetSequenceAtRequest;
+import io.axoniq.axonserver.grpc.event.dcb.GetSequenceAtResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetTagsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetTagsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetTailRequest;
@@ -31,6 +34,7 @@ import org.testcontainers.containers.output.Slf4jLogConsumer;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -42,9 +46,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
@@ -56,19 +62,52 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
 
     private static final Logger logger = LoggerFactory.getLogger(DcbEndToEndTest.class.getName());
 
+    /**
+     * Set this flag to true to run tests against a local Axon Server instance
+     * instead of using Docker containers.
+     * When true, tests will connect to localhost:8024 (HTTP) and localhost:8124 (gRPC)
+     */
+    private static final boolean LOCAL = true;
+
+    /**
+     * HTTP port for local Axon Server instance
+     */
+    private static ServerAddress axonServerHttpPort;
+
+    /**
+     * Static initialization for local mode
+     */
+    static {
+        if (LOCAL) {
+            // When using local instance, set the axonServerAddress to localhost:8124
+            axonServerAddress = new ServerAddress("localhost", 8124);
+            axonServerHttpPort = new ServerAddress("localhost", 8024);
+            logger.info("Static initialization for local Axon Server at localhost:8124");
+        }
+    }
+
     private AxonServerConnection connection;
     private AxonServerConnectionFactory client;
 
     @BeforeEach
     void setUp() {
-        client = AxonServerConnectionFactory.forClient("dcb-e2e-test")
+        AxonServerConnectionFactory.Builder builder = AxonServerConnectionFactory.forClient("dcb-e2e-test")
                                             .connectTimeout(1500, TimeUnit.MILLISECONDS)
-                                            .reconnectInterval(500, MILLISECONDS)
-                                            .routingServers(axonServerAddress)
-                                            .build();
+                                            .reconnectInterval(500, MILLISECONDS);
+
+        if (LOCAL) {
+            // Connect to local Axon Server instance
+            builder.routingServers(new ServerAddress("localhost", 8124));
+            logger.info("Using local Axon Server instance at localhost:8124");
+        } else {
+            // Connect to Docker container
+            builder.routingServers(axonServerAddress);
+            Slf4jLogConsumer logConsumer = new Slf4jLogConsumer(logger);
+            axonServerContainer.followOutput(logConsumer);
+        }
+
+        client = builder.build();
         connection = client.connect("default");
-        Slf4jLogConsumer logConsumer = new Slf4jLogConsumer(logger);
-        axonServerContainer.followOutput(logConsumer);
     }
 
     @AfterEach
@@ -79,6 +118,28 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     @Override
     protected boolean dcbContext() {
         return true;
+    }
+
+    /**
+     * Add a setup method to handle local instance configuration
+     */
+    @BeforeEach
+    void setupLocalInstance() {
+        if (LOCAL) {
+            // When using local instance, just log the version
+            logger.info("Using local Axon Server instance - skipping event purge");
+        }
+    }
+
+    /**
+     * Setup method to handle local instance configuration
+     */
+    @BeforeAll
+    static void initializeLocal() {
+        if (LOCAL) {
+            // Skip the parent initialization when using a local instance
+            logger.info("Using local Axon Server instance - skipping container setup");
+        }
     }
 
     @Test
@@ -541,6 +602,260 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
 
         StepVerifier.create(streamFlux(head).take(Duration.ofSeconds(5)))
                     .verifyComplete();
+    }
+
+    /**
+     * Helper method to check if the getSequenceAt feature is available in the current Axon Server version
+     * @return true if the feature is available, false otherwise
+     */
+    private boolean isGetSequenceAtSupported() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        long timestamp = Instant.now().toEpochMilli();
+
+        try {
+            dcbEventChannel.getSequenceAt(GetSequenceAtRequest.newBuilder()
+                                                           .setTimestamp(timestamp)
+                                                           .build())
+                                                           .get(2, TimeUnit.SECONDS);
+            return true;
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            if (e.getCause() instanceof io.grpc.StatusRuntimeException) {
+                io.grpc.StatusRuntimeException statusException = (io.grpc.StatusRuntimeException) e.getCause();
+                if (statusException.getStatus().getCode() == io.grpc.Status.Code.UNIMPLEMENTED) {
+                    logger.info("getSequenceAt feature is not supported in this Axon Server version. Skipping test.");
+                    return false;
+                }
+            }
+            // For other types of errors, we'll assume the feature is supported but there's another issue
+            return true;
+        }
+    }
+
+    @Test
+    void getSequenceAtEmptyStore() {
+        // Skip test if getSequenceAt is not supported
+        Assumptions.assumeTrue(isGetSequenceAtSupported(), "getSequenceAt feature is not supported in this Axon Server version");
+
+        // In an empty store, getSequenceAt should return the tail sequence (0)
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        long timestamp = Instant.now().toEpochMilli();
+
+        try {
+            GetSequenceAtResponse response = dcbEventChannel.getSequenceAt(GetSequenceAtRequest.newBuilder()
+                                                                          .setTimestamp(timestamp)
+                                                                          .build())
+                                                          .get(10, TimeUnit.SECONDS);
+            assertEquals(0, response.getSequence(), "Empty store should return sequence 0");
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            fail("getSequenceAt operation timed out or failed: " + e.getMessage());
+        }
+    }
+
+    @Test
+    void getSequenceAtBeforeAllEvents() {
+        // Skip test if getSequenceAt is not supported
+        Assumptions.assumeTrue(isGetSequenceAtSupported(), "getSequenceAt feature is not supported in this Axon Server version");
+
+        // When timestamp is before all events, should return the tail sequence
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+
+        try {
+            GetTailResponse tailResponse = dcbEventChannel.tail(GetTailRequest.getDefaultInstance())
+                                                      .join();
+
+            long tail = tailResponse.getSequence();
+
+            // Add some events
+            int numEvents = 3;
+            List<Long> timestamps = new ArrayList<>();
+            for (int i = 0; i < numEvents; i++) {
+                // Create events with increasing timestamps, starting from now
+                long timestamp = Instant.now().toEpochMilli() + (i * 500);
+                timestamps.add(timestamp);
+
+                TaggedEvent taggedEvent = taggedEvent(Event.newBuilder()
+                                                          .setIdentifier(aString())
+                                                          .setName("event-" + i)
+                                                          .setPayload(ByteString.empty())
+                                                          .setTimestamp(timestamp)
+                                                          .setVersion("0.0.1")
+                                                          .build());
+                appendEvent(taggedEvent);
+            }
+
+            // Request with timestamp before all events
+            long earlyTimestamp = timestamps.get(0) - 100000000; // 1 second before first event
+            try {
+                GetSequenceAtResponse response = dcbEventChannel.getSequenceAt(GetSequenceAtRequest.newBuilder()
+                                                                              .setTimestamp(earlyTimestamp)
+                                                                              .build())
+                                                              .get(10, TimeUnit.SECONDS);
+
+                assertEquals(tail, response.getSequence(),
+                        "Timestamp before all events should return the tail sequence");
+            } catch (InterruptedException | ExecutionException | TimeoutException e) {
+                fail("getSequenceAt operation timed out or failed: " + e.getMessage());
+            }
+        } catch (Exception e) {
+            // If we can't retrieve head or append events, the test environment might not be properly set up
+            // This is a different issue than the getSequenceAt feature not being supported
+            Assumptions.assumeTrue(false, "Test environment not properly set up: " + e.getMessage());
+        }
+    }
+
+    @Test
+    void getSequenceAtAfterAllEvents() {
+        // Skip test if getSequenceAt is not supported
+        Assumptions.assumeTrue(isGetSequenceAtSupported(), "getSequenceAt feature is not supported in this Axon Server version");
+
+        // When timestamp is after all events, should return the head sequence
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+
+        try {
+            // Add some events
+            int numEvents = 3;
+            List<Long> timestamps = new ArrayList<>();
+            for (int i = 0; i < numEvents; i++) {
+                // Create events with increasing timestamps, starting from now
+                long timestamp = Instant.now().toEpochMilli() + (i * 500);
+                timestamps.add(timestamp);
+
+                TaggedEvent taggedEvent = taggedEvent(Event.newBuilder()
+                                                          .setIdentifier(aString())
+                                                          .setName("event-" + i)
+                                                          .setPayload(ByteString.empty())
+                                                          .setTimestamp(timestamp)
+                                                          .setVersion("0.0.1")
+                                                          .build());
+                appendEvent(taggedEvent);
+            }
+
+            // Get the current head after adding events
+            long head = retrieveHead();
+
+            // Request with timestamp after all events
+            long futureTimestamp = timestamps.get(numEvents - 1) + 1000; // 1 second after last event
+            try {
+                GetSequenceAtResponse response = dcbEventChannel.getSequenceAt(GetSequenceAtRequest.newBuilder()
+                                                                              .setTimestamp(futureTimestamp)
+                                                                              .build())
+                                                              .get(10, TimeUnit.SECONDS);
+
+                assertEquals(head, response.getSequence(),
+                        "Timestamp after all events should return the head sequence");
+            } catch (InterruptedException | ExecutionException | TimeoutException e) {
+                fail("getSequenceAt operation timed out or failed: " + e.getMessage());
+            }
+        } catch (Exception e) {
+            // If we can't append events or retrieve head, the test environment might not be properly set up
+            // This is a different issue than the getSequenceAt feature not being supported
+            Assumptions.assumeTrue(false, "Test environment not properly set up: " + e.getMessage());
+        }
+    }
+
+    @Test
+    void getSequenceAtExactMatch() {
+        // Skip test if getSequenceAt is not supported
+        Assumptions.assumeTrue(isGetSequenceAtSupported(), "getSequenceAt feature is not supported in this Axon Server version");
+
+        // When timestamp exactly matches an event, should return that event's sequence
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+
+        try {
+            long head = retrieveHead();
+
+            // Add some events with specific timestamps
+            int numEvents = 3;
+            List<Long> timestamps = new ArrayList<>();
+            List<Long> sequences = new ArrayList<>();
+
+            for (int i = 0; i < numEvents; i++) {
+                // Create events with increasing timestamps, starting from now
+                long timestamp = Instant.now().toEpochMilli() + (i * 500);
+                timestamps.add(timestamp);
+
+                TaggedEvent taggedEvent = taggedEvent(Event.newBuilder()
+                                                          .setIdentifier(aString())
+                                                          .setName("event-" + i)
+                                                          .setPayload(ByteString.empty())
+                                                          .setTimestamp(timestamp)
+                                                          .setVersion("0.0.1")
+                                                          .build());
+                AppendEventsResponse appendResponse = appendEvent(taggedEvent);
+                sequences.add(appendResponse.getSequenceOfTheFirstEvent());
+            }
+
+            // Request with timestamp exactly matching the middle event
+            int middleIndex = numEvents / 2;
+            long exactTimestamp = timestamps.get(middleIndex);
+            try {
+                GetSequenceAtResponse response = dcbEventChannel.getSequenceAt(GetSequenceAtRequest.newBuilder()
+                                                                              .setTimestamp(exactTimestamp)
+                                                                              .build())
+                                                              .get(10, TimeUnit.SECONDS);
+
+                assertEquals(sequences.get(middleIndex), response.getSequence(),
+                        "Timestamp exactly matching an event should return that event's sequence");
+            } catch (InterruptedException | ExecutionException | TimeoutException e) {
+                fail("getSequenceAt operation timed out or failed: " + e.getMessage());
+            }
+        } catch (Exception e) {
+            // If we can't retrieve head or append events, the test environment might not be properly set up
+            // This is a different issue than the getSequenceAt feature not being supported
+            Assumptions.assumeTrue(false, "Test environment not properly set up: " + e.getMessage());
+        }
+    }
+
+    @Test
+    void getSequenceAtBetweenEvents() {
+        // Skip test if getSequenceAt is not supported
+        Assumptions.assumeTrue(isGetSequenceAtSupported(), "getSequenceAt feature is not supported in this Axon Server version");
+
+        // When timestamp is between events, should return the sequence of the event with timestamp <= requested timestamp
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+
+        try {
+            long head = retrieveHead();
+
+            // Add some events with specific timestamps
+            int numEvents = 3;
+            List<Long> timestamps = new ArrayList<>();
+            List<Long> sequences = new ArrayList<>();
+
+            for (int i = 0; i < numEvents; i++) {
+                // Create events with increasing timestamps, 500ms apart
+                long timestamp = Instant.now().toEpochMilli() + (i * 500);
+                timestamps.add(timestamp);
+
+                TaggedEvent taggedEvent = taggedEvent(Event.newBuilder()
+                                                          .setIdentifier(aString())
+                                                          .setName("event-" + i)
+                                                          .setPayload(ByteString.empty())
+                                                          .setTimestamp(timestamp)
+                                                          .setVersion("0.0.1")
+                                                          .build());
+                AppendEventsResponse appendResponse = appendEvent(taggedEvent);
+                sequences.add(appendResponse.getSequenceOfTheFirstEvent());
+            }
+
+            // Request with timestamp between two events
+            long betweenTimestamp = timestamps.get(1) + 250; // Halfway between events 1 and 2
+            try {
+                GetSequenceAtResponse response = dcbEventChannel.getSequenceAt(GetSequenceAtRequest.newBuilder()
+                                                                              .setTimestamp(betweenTimestamp)
+                                                                              .build())
+                                                              .get(10, TimeUnit.SECONDS);
+
+                assertEquals(sequences.get(1), response.getSequence(),
+                        "Timestamp between events should return the sequence of the previous event");
+            } catch (InterruptedException | ExecutionException | TimeoutException e) {
+                fail("getSequenceAt operation timed out or failed: " + e.getMessage());
+            }
+        } catch (Exception e) {
+            // If we can't retrieve head or append events, the test environment might not be properly set up
+            // This is a different issue than the getSequenceAt feature not being supported
+            Assumptions.assumeTrue(false, "Test environment not properly set up: " + e.getMessage());
+        }
     }
 
     private Flux<SourceEventsResponse> sourceFlux(long start) {

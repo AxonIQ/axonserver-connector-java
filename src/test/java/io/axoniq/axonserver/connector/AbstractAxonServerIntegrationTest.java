@@ -90,7 +90,7 @@ public abstract class AbstractAxonServerIntegrationTest {
 
     @BeforeAll
     static void initialize() throws IOException {
-        axonServerAddress = new ServerAddress(toxiProxyContainer.getHost(), toxiProxyContainer.getMappedPort(8124));
+        axonServerAddress = new ServerAddress("localhost", toxiProxyContainer.getMappedPort(8124));
         axonServerHttpPort = new ServerAddress(axonServerContainer.getHost(), axonServerContainer.getMappedPort(8024));
         ToxiproxyClient client = new ToxiproxyClient(
                 toxiProxyContainer.getHost(), toxiProxyContainer.getMappedPort(8474)
