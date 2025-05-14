@@ -633,9 +633,6 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
 
     @Test
     void getSequenceAtEmptyStore() {
-        // Skip test if getSequenceAt is not supported
-        Assumptions.assumeTrue(isGetSequenceAtSupported(), "getSequenceAt feature is not supported in this Axon Server version");
-
         // In an empty store, getSequenceAt should return the tail sequence (0)
         DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
         long timestamp = Instant.now().toEpochMilli();
@@ -653,9 +650,6 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
 
     @Test
     void getSequenceAtBeforeAllEvents() {
-        // Skip test if getSequenceAt is not supported
-        Assumptions.assumeTrue(isGetSequenceAtSupported(), "getSequenceAt feature is not supported in this Axon Server version");
-
         // When timestamp is before all events, should return the tail sequence
         DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
 
@@ -705,9 +699,6 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
 
     @Test
     void getSequenceAtAfterAllEvents() {
-        // Skip test if getSequenceAt is not supported
-        Assumptions.assumeTrue(isGetSequenceAtSupported(), "getSequenceAt feature is not supported in this Axon Server version");
-
         // When timestamp is after all events, should return the head sequence
         DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
 
@@ -755,9 +746,6 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
 
     @Test
     void getSequenceAtExactMatch() {
-        // Skip test if getSequenceAt is not supported
-        Assumptions.assumeTrue(isGetSequenceAtSupported(), "getSequenceAt feature is not supported in this Axon Server version");
-
         // When timestamp exactly matches an event, should return that event's sequence
         DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
 
@@ -808,9 +796,6 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
 
     @Test
     void getSequenceAtBetweenEvents() {
-        // Skip test if getSequenceAt is not supported
-        Assumptions.assumeTrue(isGetSequenceAtSupported(), "getSequenceAt feature is not supported in this Axon Server version");
-
         // When timestamp is between events, should return the sequence of the event with timestamp <= requested timestamp
         DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
 
