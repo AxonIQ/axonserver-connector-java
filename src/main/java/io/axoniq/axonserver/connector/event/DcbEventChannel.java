@@ -37,11 +37,11 @@ import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Communication channel for Event related interaction with Axon Server based on Dynamic Consistency Boundaries
+ * Communication channel for Event related interaction with Axon Server based on the Dynamic Consistency Boundaries
  * concept.
  *
  * @author Milan Savic
- * @since 2024.1.0
+ * @since 2025.1.0
  */
 public interface DcbEventChannel {
 
@@ -139,7 +139,7 @@ public interface DcbEventChannel {
         /**
          * Commits this Transaction.
          *
-         * @return the future that completes once the Axon Server commits this Transaction
+         * @return the future that completes once the Axon Server commits this Transaction, containing the append events response as a result.
          */
         CompletableFuture<AppendEventsResponse> commit();
 

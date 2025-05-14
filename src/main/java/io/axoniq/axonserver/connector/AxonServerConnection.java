@@ -82,7 +82,7 @@ public interface AxonServerConnection {
     EventChannel eventChannel();
 
     /**
-     * Returns the channel on which Event related interactions can be performed with Axon Server using Dynamic
+     * Returns the channel on which Event related interactions can be performed with Axon Server using the Dynamic
      * Consistency Boundary concept.
      *
      * @return the channel for Event messaging
