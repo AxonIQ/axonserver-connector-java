@@ -67,7 +67,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
      * instead of using Docker containers.
      * When true, tests will connect to localhost:8024 (HTTP) and localhost:8124 (gRPC)
      */
-    private static final boolean LOCAL = true;
+    private static final boolean LOCAL = false;
 
     /**
      * HTTP port for local Axon Server instance
