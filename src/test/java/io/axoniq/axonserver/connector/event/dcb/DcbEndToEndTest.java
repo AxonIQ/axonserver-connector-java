@@ -604,33 +604,6 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
                     .verifyComplete();
     }
 
-    /**
-     * Helper method to check if the getSequenceAt feature is available in the current Axon Server version
-     * @return true if the feature is available, false otherwise
-     */
-    private boolean isGetSequenceAtSupported() {
-        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
-        long timestamp = Instant.now().toEpochMilli();
-
-        try {
-            dcbEventChannel.getSequenceAt(GetSequenceAtRequest.newBuilder()
-                                                           .setTimestamp(timestamp)
-                                                           .build())
-                                                           .get(2, TimeUnit.SECONDS);
-            return true;
-        } catch (InterruptedException | ExecutionException | TimeoutException e) {
-            if (e.getCause() instanceof io.grpc.StatusRuntimeException) {
-                io.grpc.StatusRuntimeException statusException = (io.grpc.StatusRuntimeException) e.getCause();
-                if (statusException.getStatus().getCode() == io.grpc.Status.Code.UNIMPLEMENTED) {
-                    logger.info("getSequenceAt feature is not supported in this Axon Server version. Skipping test.");
-                    return false;
-                }
-            }
-            // For other types of errors, we'll assume the feature is supported but there's another issue
-            return true;
-        }
-    }
-
     @Test
     void getSequenceAtEmptyStore() {
         // In an empty store, getSequenceAt should return the tail sequence (0)
