@@ -66,8 +66,8 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DcbEventChannelImpl.class);
 
-    private static final int BUFFER_SIZE = 32;
-    private static final int REFILL_BATCH = 8;
+    private static final int BUFFER_SIZE = 512;
+    private static final int REFILL_BATCH = 16;
     private final DcbEventStoreGrpc.DcbEventStoreStub eventStore;
     private final ClientIdentification clientIdentification;
     private final Set<ResultStream<StreamEventsResponse>> buffers = ConcurrentHashMap.newKeySet();
