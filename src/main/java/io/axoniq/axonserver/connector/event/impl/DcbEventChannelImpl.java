@@ -49,7 +49,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -68,6 +70,7 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
     private static final int REFILL_BATCH = 8;
     private final DcbEventStoreGrpc.DcbEventStoreStub eventStore;
     private final ClientIdentification clientIdentification;
+    private final Set<ResultStream<StreamEventsResponse>> buffers = ConcurrentHashMap.newKeySet();
 
     /**
      * Instantiate an {@link AbstractAxonServerChannel}.
@@ -91,12 +94,17 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
 
     @Override
     public void reconnect() {
-        // nothing to do here
+        closeBuffers();
     }
 
     @Override
     public void disconnect() {
-        // nothing to do here
+        closeBuffers();
+    }
+
+    private void closeBuffers() {
+        buffers.forEach(ResultStream::close);
+        buffers.clear();
     }
 
     @Override
@@ -120,7 +128,7 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
 
     @Override
     public ResultStream<StreamEventsResponse> stream(StreamEventsRequest request) {
-        AbstractBufferedStream<StreamEventsResponse, Empty> result =
+        AbstractBufferedStream<StreamEventsResponse, Empty> buffer =
                 new AbstractBufferedStream<StreamEventsResponse, Empty>(clientIdentification.getClientId(),
                                                                         BUFFER_SIZE,
                                                                         REFILL_BATCH) {
@@ -135,8 +143,15 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
                                                    .build();
                     }
                 };
-        eventStore.stream(request, result);
-        return result;
+        buffers.add(buffer);
+        buffer.onCloseRequested(() -> buffers.remove(buffer));
+        try {
+            eventStore.stream(request, buffer);
+        } catch (Exception e) {
+            buffers.remove(buffer);
+            throw e;
+        }
+        return buffer;
     }
 
     @Override
