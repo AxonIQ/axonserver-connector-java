@@ -70,7 +70,6 @@ public abstract class AbstractAxonServerIntegrationTest {
 
     private static String getDockerImageName() {
         String envVariable = System.getenv("AXON_SERVER_IMAGE");
-        System.out.println("ENV VARIABLE: [" + envVariable + "]");
         return envVariable != null ? envVariable : System.getProperty("AXON_SERVER_IMAGE", "axoniq/axonserver");
     }
 
