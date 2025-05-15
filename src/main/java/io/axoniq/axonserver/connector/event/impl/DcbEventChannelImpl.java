@@ -127,11 +127,11 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
     }
 
     @Override
-    public ResultStream<StreamEventsResponse> stream(StreamEventsRequest request) {
+    public ResultStream<StreamEventsResponse> stream(StreamEventsRequest request, int bufferSize, int refillBatch) {
         AbstractBufferedStream<StreamEventsResponse, Empty> buffer =
-                new AbstractBufferedStream<StreamEventsResponse, Empty>(clientIdentification.getClientId(),
-                                                                        BUFFER_SIZE,
-                                                                        REFILL_BATCH) {
+                new AbstractBufferedStream<>(clientIdentification.getClientId(),
+                                             Math.max(64, bufferSize),
+                                             Math.max(16, Math.min(bufferSize, refillBatch))) {
                     @Override
                     protected Empty buildFlowControlMessage(FlowControl flowControl) {
                         return null;
@@ -139,8 +139,7 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
 
                     @Override
                     protected StreamEventsResponse terminalMessage() {
-                        return StreamEventsResponse.newBuilder()
-                                                   .build();
+                        return StreamEventsResponse.getDefaultInstance();
                     }
                 };
         buffers.add(buffer);

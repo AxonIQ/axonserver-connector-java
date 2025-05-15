@@ -54,19 +54,71 @@ public interface DcbEventChannel {
      * Starts a new transaction to conditionally append events.
      *
      * @param condition the Consistency Condition used to validate the Transaction. Axon Server will validate this
-     *                  condition against the  Event Store and based on the validation outcome will accept or reject
-     *                  the transaction.
+     *                  condition against the  Event Store and based on the validation outcome will accept or reject the
+     *                  transaction.
      * @return the transaction reference onto which to register events to append
      */
     AppendEventsTransaction startTransaction(ConsistencyCondition condition);
 
     /**
-     * Provides an infinite stream of events.
+     * Opens an infinite stream of events, for sequentially consuming events from Axon Server, using the given
+     * {@code request} and keeping a local buffer of 64 events. When consuming 16 events, the client will request
+     * additional events to keep the buffer filled.
+     * <p>
+     * The stream of events starts immediately upon the invocation of this method, making the first events available for
+     * consumption as soon as they have arrived from Axon Server.
+     * </p>
      *
      * @param request the request used to filter events
      * @return an infinite stream of events
+     * @see #stream(StreamEventsRequest, int) to configure the buffer size
      */
-    ResultStream<StreamEventsResponse> stream(StreamEventsRequest request);
+    default ResultStream<StreamEventsResponse> stream(StreamEventsRequest request) {
+        return stream(request, 64);
+    }
+
+    /**
+     * Opens an infinite stream of events, for sequentially consuming events from Axon Server, using the given
+     * {@code request} and keeping a local buffer of {@code bufferSize}. When consuming 1/8th of the buffer size (with a
+     * minimum of 16), the client will request additional events to keep the buffer filled.
+     * <p>
+     * A value for {@code bufferSize} smaller than 64 events will result in a buffer of 64.
+     * </p>
+     * <p>
+     * The stream of events starts immediately upon the invocation of this method, making the first events available for
+     * consumption as soon as they have arrived from Axon Server.
+     * </p>
+     *
+     * @param request    the request used to filter events
+     * @param bufferSize the number of events to buffer locally
+     * @return an infinite stream of events
+     * @see #stream(StreamEventsRequest, int, int) to configure the refill frequency
+     */
+    default ResultStream<StreamEventsResponse> stream(StreamEventsRequest request, int bufferSize) {
+        return stream(request, bufferSize, Math.max(bufferSize >> 3, 16));
+    }
+
+    /**
+     * Opens an infinite stream of events, for sequentially consuming events from Axon Server, using the given
+     * {@code request} and keeping a local buffer of {@code bufferSize}, which is refilled after consuming
+     * {@code refillBatch} events.
+     * <p>
+     * A value for {@code bufferSize} smaller than 64 events will result in a buffer of 64. A value for
+     * {@code refillBatch} smaller than 16 will result n a refill batch of 16. A value larger than the
+     * {@code bufferSize} will be reduced to match the given {@code bufferSize}. While this will work, it is not
+     * recommended. The {@code refillBatch} should be sufficiently small to allow for a constant flow of events to
+     * consume.
+     * </p>
+     * The stream of events starts immediately upon the invocation of this method, making the first events available for
+     * consumption as soon as they have arrived from Axon Server.
+     * </p>
+     *
+     * @param request     the request used to filter events
+     * @param bufferSize  the number of events to buffer locally
+     * @param refillBatch the number of events to be consumed prior to refilling the buffer
+     * @return an infinite stream of events
+     */
+    ResultStream<StreamEventsResponse> stream(StreamEventsRequest request, int bufferSize, int refillBatch);
 
     /**
      * Provides a finite stream of events used to eventsource a model.
