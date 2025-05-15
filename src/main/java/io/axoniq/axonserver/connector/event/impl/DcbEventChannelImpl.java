@@ -160,16 +160,16 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
     }
 
     @Override
-    public CompletableFuture<GetHeadResponse> head(GetHeadRequest request) {
+    public CompletableFuture<GetHeadResponse> head() {
         FutureStreamObserver<GetHeadResponse> future = new FutureStreamObserver<>(null);
-        eventStore.getHead(request, future);
+        eventStore.getHead(GetHeadRequest.getDefaultInstance(), future);
         return future;
     }
 
     @Override
-    public CompletableFuture<GetTailResponse> tail(GetTailRequest request) {
+    public CompletableFuture<GetTailResponse> tail() {
         FutureStreamObserver<GetTailResponse> future = new FutureStreamObserver<>(null);
-        eventStore.getTail(request, future);
+        eventStore.getTail(GetTailRequest.getDefaultInstance(), future);
         return future;
     }
 

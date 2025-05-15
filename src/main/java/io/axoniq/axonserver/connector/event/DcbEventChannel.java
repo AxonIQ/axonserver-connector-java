@@ -80,18 +80,16 @@ public interface DcbEventChannel {
     /**
      * Provides the head of the event store.
      *
-     * @param request empty request
      * @return the head of the event store
      */
-    CompletableFuture<GetHeadResponse> head(GetHeadRequest request);
+    CompletableFuture<GetHeadResponse> head();
 
     /**
      * Provides the tail of the event store.
      *
-     * @param request empty request
      * @return the tail of the event store
      */
-    CompletableFuture<GetTailResponse> tail(GetTailRequest request);
+    CompletableFuture<GetTailResponse> tail();
 
     /**
      * Provides the sequence number of the event closest to the given timestamp.

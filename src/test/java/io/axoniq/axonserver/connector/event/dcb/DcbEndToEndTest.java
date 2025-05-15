@@ -458,7 +458,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     @Test
     void tail() {
         DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
-        GetTailResponse response = dcbEventChannel.tail(GetTailRequest.getDefaultInstance())
+        GetTailResponse response = dcbEventChannel.tail()
                                                   .join();
         assertEquals(0, response.getSequence());
     }
@@ -627,8 +627,8 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
         DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
 
         try {
-            GetTailResponse tailResponse = dcbEventChannel.tail(GetTailRequest.getDefaultInstance())
-                                                      .join();
+            GetTailResponse tailResponse = dcbEventChannel.tail()
+                                                          .join();
 
             long tail = tailResponse.getSequence();
 
@@ -889,7 +889,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
 
     private long retrieveHead() {
         DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
-        return dcbEventChannel.head(GetHeadRequest.getDefaultInstance())
+        return dcbEventChannel.head()
                               .join()
                               .getSequence();
     }
