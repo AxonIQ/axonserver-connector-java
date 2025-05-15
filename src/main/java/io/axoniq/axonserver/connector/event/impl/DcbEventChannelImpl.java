@@ -175,9 +175,12 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
     }
 
     @Override
-    public CompletableFuture<GetTagsResponse> tagsFor(GetTagsRequest request) {
+    public CompletableFuture<GetTagsResponse> tagsFor(long sequence) {
         FutureStreamObserver<GetTagsResponse> future = new FutureStreamObserver<>(null);
-        eventStore.getTags(request, future);
+        eventStore.getTags(GetTagsRequest.newBuilder()
+                                         .setSequence(sequence)
+                                         .build(),
+                           future);
         return future;
     }
 

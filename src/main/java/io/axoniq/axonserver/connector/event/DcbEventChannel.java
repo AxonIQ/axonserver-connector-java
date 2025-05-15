@@ -132,10 +132,10 @@ public interface DcbEventChannel {
     /**
      * Provides tags for an event at the given global sequence.
      *
-     * @param request the sequence of an event
+     * @param sequence the sequence of an event
      * @return the tags fo the event
      */
-    CompletableFuture<GetTagsResponse> tagsFor(GetTagsRequest request);
+    CompletableFuture<GetTagsResponse> tagsFor(long sequence);
 
     /**
      * Provides the head of the event store.

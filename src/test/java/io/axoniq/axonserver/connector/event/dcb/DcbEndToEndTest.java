@@ -443,9 +443,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
         TaggedEvent taggedEvent = taggedEvent(anEvent(aString(), "myName"), tag);
         long sequence = appendEvent(taggedEvent).getSequenceOfTheFirstEvent();
 
-        GetTagsResponse response = dcbEventChannel.tagsFor(GetTagsRequest.newBuilder()
-                                                                         .setSequence(sequence)
-                                                                         .build())
+        GetTagsResponse response = dcbEventChannel.tagsFor(sequence)
                                                   .join();
         assertEquals(ImmutableList.of(tag), response.getTagList());
     }
