@@ -48,6 +48,7 @@ import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -108,6 +109,13 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
         FutureStreamObserver<AppendEventsResponse> response = new FutureStreamObserver<>(null);
         StreamObserver<AppendEventsRequest> clientStream = eventStore.append(response);
         return new AppendEventsTransactionImpl(clientStream, response);
+    }
+
+    @Override
+    public AppendEventsTransaction startTransaction(ConsistencyCondition condition) {
+        FutureStreamObserver<AppendEventsResponse> response = new FutureStreamObserver<>(null);
+        StreamObserver<AppendEventsRequest> clientStream = eventStore.append(response);
+        return new AppendEventsTransactionImpl(clientStream, response).condition(condition);
     }
 
     @Override
@@ -174,9 +182,12 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
     }
 
     @Override
-    public CompletableFuture<GetSequenceAtResponse> getSequenceAt(GetSequenceAtRequest request) {
+    public CompletableFuture<GetSequenceAtResponse> getSequenceAt(Instant timestamp) {
         FutureStreamObserver<GetSequenceAtResponse> future = new FutureStreamObserver<>(null);
-        eventStore.getSequenceAt(request, future);
+        eventStore.getSequenceAt(GetSequenceAtRequest.newBuilder()
+                                                     .setTimestamp(timestamp.toEpochMilli())
+                                                     .build(),
+                                 future);
         return future;
     }
 
@@ -192,7 +203,6 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
             this.result = result;
         }
 
-        @Override
         public AppendEventsTransaction condition(ConsistencyCondition condition) {
             if (conditionSet.compareAndSet(false, true)) {
                 stream.onNext(AppendEventsRequest.newBuilder()

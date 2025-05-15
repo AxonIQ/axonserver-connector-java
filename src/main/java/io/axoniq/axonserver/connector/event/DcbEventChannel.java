@@ -19,13 +19,10 @@ package io.axoniq.axonserver.connector.event;
 import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.grpc.event.dcb.AppendEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.ConsistencyCondition;
-import io.axoniq.axonserver.grpc.event.dcb.GetHeadRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetHeadResponse;
-import io.axoniq.axonserver.grpc.event.dcb.GetSequenceAtRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetSequenceAtResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetTagsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetTagsResponse;
-import io.axoniq.axonserver.grpc.event.dcb.GetTailRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetTailResponse;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsResponse;
@@ -33,6 +30,7 @@ import io.axoniq.axonserver.grpc.event.dcb.StreamEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.StreamEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.TaggedEvent;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 
@@ -46,11 +44,21 @@ import java.util.concurrent.CompletableFuture;
 public interface DcbEventChannel {
 
     /**
-     * Starts a new transaction to append events.
+     * Starts a new transaction to unconditionally append events.
      *
-     * @return the transaction reference onto which to register events to append along with the condition
+     * @return the transaction reference onto which to register events to append
      */
     AppendEventsTransaction startTransaction();
+
+    /**
+     * Starts a new transaction to conditionally append events.
+     *
+     * @param condition the Consistency Condition used to validate the Transaction. Axon Server will validate this
+     *                  condition against the  Event Store and based on the validation outcome will accept or reject
+     *                  the transaction.
+     * @return the transaction reference onto which to register events to append
+     */
+    AppendEventsTransaction startTransaction(ConsistencyCondition condition);
 
     /**
      * Provides an infinite stream of events.
@@ -92,28 +100,18 @@ public interface DcbEventChannel {
     CompletableFuture<GetTailResponse> tail();
 
     /**
-     * Provides the sequence number of the event closest to the given timestamp.
-     * If the timestamp is before the first event, returns the tail sequence.
-     * If the timestamp is after the last event, returns the head sequence.
+     * Provides the sequence number of the event closest to the given timestamp. If the timestamp is before the first
+     * event, returns the tail sequence. If the timestamp is after the last event, returns the head sequence.
      *
-     * @param request the request containing the timestamp to find the sequence for
+     * @param timestamp the timestamp containing the timestamp to find the sequence for
      * @return the sequence at the given timestamp
      */
-    CompletableFuture<GetSequenceAtResponse> getSequenceAt(GetSequenceAtRequest request);
+    CompletableFuture<GetSequenceAtResponse> getSequenceAt(Instant timestamp);
 
     /**
      * Provides operations to interact with a Transaction to append events and a condition onto the Event Store.
      */
     interface AppendEventsTransaction {
-
-        /**
-         * Sets the Consistency Condition for the transaction. Axon Server will validate this condition against the
-         * Event Store and based on the validation outcome will accept or reject the transaction.
-         *
-         * @param condition the Consistency Condition used to validate the Transaction
-         * @return this Transaction for fluency
-         */
-        AppendEventsTransaction condition(ConsistencyCondition condition);
 
         /**
          * Appends this {@code taggedEvent} to this transaction.
@@ -137,7 +135,8 @@ public interface DcbEventChannel {
         /**
          * Commits this Transaction.
          *
-         * @return the future that completes once the Axon Server commits this Transaction, containing the append events response as a result.
+         * @return the future that completes once the Axon Server commits this Transaction, containing the append events
+         * response as a result.
          */
         CompletableFuture<AppendEventsResponse> commit();
 

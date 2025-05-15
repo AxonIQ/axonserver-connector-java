@@ -63,9 +63,8 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     private static final Logger logger = LoggerFactory.getLogger(DcbEndToEndTest.class.getName());
 
     /**
-     * Set this flag to true to run tests against a local Axon Server instance
-     * instead of using Docker containers.
-     * When true, tests will connect to localhost:8024 (HTTP) and localhost:8124 (gRPC)
+     * Set this flag to true to run tests against a local Axon Server instance instead of using Docker containers. When
+     * true, tests will connect to localhost:8024 (HTTP) and localhost:8124 (gRPC)
      */
     private static final boolean LOCAL = false;
 
@@ -92,8 +91,9 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     @BeforeEach
     void setUp() {
         AxonServerConnectionFactory.Builder builder = AxonServerConnectionFactory.forClient("dcb-e2e-test")
-                                            .connectTimeout(1500, TimeUnit.MILLISECONDS)
-                                            .reconnectInterval(500, MILLISECONDS);
+                                                                                 .connectTimeout(1500,
+                                                                                                 TimeUnit.MILLISECONDS)
+                                                                                 .reconnectInterval(500, MILLISECONDS);
 
         if (LOCAL) {
             // Connect to local Axon Server instance
@@ -519,7 +519,9 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
         appendEvent(taggedEvent, condition);
         appendEventAsync(taggedEvent, condition)
                 .handle((res, err) -> {
-                    assertEquals("CANCELLED: io.axoniq.axonserver.eventstore.api.ConsistencyConditionException: Consistency condition is not met.", err.getMessage());
+                    assertEquals(
+                            "CANCELLED: io.axoniq.axonserver.eventstore.api.ConsistencyConditionException: Consistency condition is not met.",
+                            err.getMessage());
                     return null;
                 })
                 .join();
@@ -608,13 +610,11 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     void getSequenceAtEmptyStore() {
         // In an empty store, getSequenceAt should return the tail sequence (0)
         DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
-        long timestamp = Instant.now().toEpochMilli();
+        Instant timestamp = Instant.now();
 
         try {
-            GetSequenceAtResponse response = dcbEventChannel.getSequenceAt(GetSequenceAtRequest.newBuilder()
-                                                                          .setTimestamp(timestamp)
-                                                                          .build())
-                                                          .get(10, TimeUnit.SECONDS);
+            GetSequenceAtResponse response = dcbEventChannel.getSequenceAt(timestamp)
+                                                            .get(10, TimeUnit.SECONDS);
             assertEquals(0, response.getSequence(), "Empty store should return sequence 0");
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             fail("getSequenceAt operation timed out or failed: " + e.getMessage());
@@ -641,25 +641,23 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
                 timestamps.add(timestamp);
 
                 TaggedEvent taggedEvent = taggedEvent(Event.newBuilder()
-                                                          .setIdentifier(aString())
-                                                          .setName("event-" + i)
-                                                          .setPayload(ByteString.empty())
-                                                          .setTimestamp(timestamp)
-                                                          .setVersion("0.0.1")
-                                                          .build());
+                                                           .setIdentifier(aString())
+                                                           .setName("event-" + i)
+                                                           .setPayload(ByteString.empty())
+                                                           .setTimestamp(timestamp)
+                                                           .setVersion("0.0.1")
+                                                           .build());
                 appendEvent(taggedEvent);
             }
 
             // Request with timestamp before all events
             long earlyTimestamp = timestamps.get(0) - 100000000; // 1 second before first event
             try {
-                GetSequenceAtResponse response = dcbEventChannel.getSequenceAt(GetSequenceAtRequest.newBuilder()
-                                                                              .setTimestamp(earlyTimestamp)
-                                                                              .build())
-                                                              .get(10, TimeUnit.SECONDS);
+                GetSequenceAtResponse response = dcbEventChannel.getSequenceAt(Instant.ofEpochMilli(earlyTimestamp))
+                                                                .get(10, TimeUnit.SECONDS);
 
                 assertEquals(tail, response.getSequence(),
-                        "Timestamp before all events should return the tail sequence");
+                             "Timestamp before all events should return the tail sequence");
             } catch (InterruptedException | ExecutionException | TimeoutException e) {
                 fail("getSequenceAt operation timed out or failed: " + e.getMessage());
             }
@@ -685,12 +683,12 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
                 timestamps.add(timestamp);
 
                 TaggedEvent taggedEvent = taggedEvent(Event.newBuilder()
-                                                          .setIdentifier(aString())
-                                                          .setName("event-" + i)
-                                                          .setPayload(ByteString.empty())
-                                                          .setTimestamp(timestamp)
-                                                          .setVersion("0.0.1")
-                                                          .build());
+                                                           .setIdentifier(aString())
+                                                           .setName("event-" + i)
+                                                           .setPayload(ByteString.empty())
+                                                           .setTimestamp(timestamp)
+                                                           .setVersion("0.0.1")
+                                                           .build());
                 appendEvent(taggedEvent);
             }
 
@@ -700,13 +698,11 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
             // Request with timestamp after all events
             long futureTimestamp = timestamps.get(numEvents - 1) + 1000; // 1 second after last event
             try {
-                GetSequenceAtResponse response = dcbEventChannel.getSequenceAt(GetSequenceAtRequest.newBuilder()
-                                                                              .setTimestamp(futureTimestamp)
-                                                                              .build())
-                                                              .get(10, TimeUnit.SECONDS);
+                GetSequenceAtResponse response = dcbEventChannel.getSequenceAt(Instant.ofEpochMilli(futureTimestamp))
+                                                                .get(10, TimeUnit.SECONDS);
 
                 assertEquals(head, response.getSequence(),
-                        "Timestamp after all events should return the head sequence");
+                             "Timestamp after all events should return the head sequence");
             } catch (InterruptedException | ExecutionException | TimeoutException e) {
                 fail("getSequenceAt operation timed out or failed: " + e.getMessage());
             }
@@ -736,12 +732,12 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
                 timestamps.add(timestamp);
 
                 TaggedEvent taggedEvent = taggedEvent(Event.newBuilder()
-                                                          .setIdentifier(aString())
-                                                          .setName("event-" + i)
-                                                          .setPayload(ByteString.empty())
-                                                          .setTimestamp(timestamp)
-                                                          .setVersion("0.0.1")
-                                                          .build());
+                                                           .setIdentifier(aString())
+                                                           .setName("event-" + i)
+                                                           .setPayload(ByteString.empty())
+                                                           .setTimestamp(timestamp)
+                                                           .setVersion("0.0.1")
+                                                           .build());
                 AppendEventsResponse appendResponse = appendEvent(taggedEvent);
                 sequences.add(appendResponse.getSequenceOfTheFirstEvent());
             }
@@ -750,13 +746,11 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
             int middleIndex = numEvents / 2;
             long exactTimestamp = timestamps.get(middleIndex);
             try {
-                GetSequenceAtResponse response = dcbEventChannel.getSequenceAt(GetSequenceAtRequest.newBuilder()
-                                                                              .setTimestamp(exactTimestamp)
-                                                                              .build())
-                                                              .get(10, TimeUnit.SECONDS);
+                GetSequenceAtResponse response = dcbEventChannel.getSequenceAt(Instant.ofEpochMilli(exactTimestamp))
+                                                                .get(10, TimeUnit.SECONDS);
 
                 assertEquals(sequences.get(middleIndex), response.getSequence(),
-                        "Timestamp exactly matching an event should return that event's sequence");
+                             "Timestamp exactly matching an event should return that event's sequence");
             } catch (InterruptedException | ExecutionException | TimeoutException e) {
                 fail("getSequenceAt operation timed out or failed: " + e.getMessage());
             }
@@ -786,12 +780,12 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
                 timestamps.add(timestamp);
 
                 TaggedEvent taggedEvent = taggedEvent(Event.newBuilder()
-                                                          .setIdentifier(aString())
-                                                          .setName("event-" + i)
-                                                          .setPayload(ByteString.empty())
-                                                          .setTimestamp(timestamp)
-                                                          .setVersion("0.0.1")
-                                                          .build());
+                                                           .setIdentifier(aString())
+                                                           .setName("event-" + i)
+                                                           .setPayload(ByteString.empty())
+                                                           .setTimestamp(timestamp)
+                                                           .setVersion("0.0.1")
+                                                           .build());
                 AppendEventsResponse appendResponse = appendEvent(taggedEvent);
                 sequences.add(appendResponse.getSequenceOfTheFirstEvent());
             }
@@ -799,13 +793,11 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
             // Request with timestamp between two events
             long betweenTimestamp = timestamps.get(1) + 250; // Halfway between events 1 and 2
             try {
-                GetSequenceAtResponse response = dcbEventChannel.getSequenceAt(GetSequenceAtRequest.newBuilder()
-                                                                              .setTimestamp(betweenTimestamp)
-                                                                              .build())
-                                                              .get(10, TimeUnit.SECONDS);
+                GetSequenceAtResponse response = dcbEventChannel.getSequenceAt(Instant.ofEpochMilli(betweenTimestamp))
+                                                                .get(10, TimeUnit.SECONDS);
 
                 assertEquals(sequences.get(1), response.getSequence(),
-                        "Timestamp between events should return the sequence of the previous event");
+                             "Timestamp between events should return the sequence of the previous event");
             } catch (InterruptedException | ExecutionException | TimeoutException e) {
                 fail("getSequenceAt operation timed out or failed: " + e.getMessage());
             }
@@ -912,9 +904,8 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     private CompletableFuture<AppendEventsResponse> appendEventAsync(TaggedEvent taggedEvent,
                                                                      ConsistencyCondition condition) {
         return connection.dcbEventChannel()
-                         .startTransaction()
+                         .startTransaction(condition)
                          .append(taggedEvent)
-                         .condition(condition)
                          .commit();
     }
 }
