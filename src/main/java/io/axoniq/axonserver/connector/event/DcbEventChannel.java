@@ -104,7 +104,7 @@ public interface DcbEventChannel {
      * {@code refillBatch} events.
      * <p>
      * A value for {@code bufferSize} smaller than 64 events will result in a buffer of 64. A value for
-     * {@code refillBatch} smaller than 16 will result n a refill batch of 16. A value larger than the
+     * {@code refillBatch} smaller than 16 will result in a refill batch of 16. A value larger than the
      * {@code bufferSize} will be reduced to match the given {@code bufferSize}. While this will work, it is not
      * recommended. The {@code refillBatch} should be sufficiently small to allow for a constant flow of events to
      * consume.
