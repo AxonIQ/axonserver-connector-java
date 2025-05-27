@@ -19,6 +19,7 @@ package io.axoniq.axonserver.connector;
 import io.axoniq.axonserver.connector.admin.AdminChannel;
 import io.axoniq.axonserver.connector.command.CommandChannel;
 import io.axoniq.axonserver.connector.control.ControlChannel;
+import io.axoniq.axonserver.connector.event.DcbEventChannel;
 import io.axoniq.axonserver.connector.event.EventChannel;
 import io.axoniq.axonserver.connector.event.transformation.EventTransformationChannel;
 import io.axoniq.axonserver.connector.query.QueryChannel;
@@ -79,6 +80,14 @@ public interface AxonServerConnection {
      * @return the channel for Event messaging
      */
     EventChannel eventChannel();
+
+    /**
+     * Returns the channel on which Event related interactions can be performed with Axon Server using the Dynamic
+     * Consistency Boundary concept.
+     *
+     * @return the channel for Event messaging
+     */
+    DcbEventChannel dcbEventChannel();
 
     /**
      * Returns the channel on which Query related interactions can be performed with AxonServer.
