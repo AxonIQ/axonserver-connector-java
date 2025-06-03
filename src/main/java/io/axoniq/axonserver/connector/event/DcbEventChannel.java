@@ -109,6 +109,7 @@ public interface DcbEventChannel {
      * recommended. The {@code refillBatch} should be sufficiently small to allow for a constant flow of events to
      * consume.
      * </p>
+     * <p>
      * The stream of events starts immediately upon the invocation of this method, making the first events available for
      * consumption as soon as they have arrived from Axon Server.
      * </p>
