@@ -31,8 +31,7 @@ import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.core5.http.ClassicHttpRequest;
 import org.apache.hc.core5.http.ParseException;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.*;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.wait.strategy.Wait;
@@ -56,7 +55,7 @@ public abstract class AbstractAxonServerIntegrationTest {
     @SuppressWarnings("resource")
     @Container
     public static GenericContainer<?> axonServerContainer =
-            new GenericContainer<>(System.getProperty("AXON_SERVER_IMAGE", "axoniq/axonserver"))
+            new GenericContainer<>(getDockerImageName())
                     .withExposedPorts(8024, 8124)
                     .withEnv("AXONIQ_AXONSERVER_PREVIEW_EVENT_TRANSFORMATION", "true")
                     .withEnv("AXONIQ_AXONSERVER_NAME", "axonserver")
@@ -68,6 +67,11 @@ public abstract class AbstractAxonServerIntegrationTest {
                     .withNetwork(network)
                     .withNetworkAliases("axonserver")
                     .waitingFor(Wait.forHttp("/actuator/health").forPort(8024));
+
+    private static String getDockerImageName() {
+        String envVariable = System.getenv("AXON_SERVER_IMAGE");
+        return envVariable != null ? envVariable : System.getProperty("AXON_SERVER_IMAGE", "axoniq/axonserver");
+    }
 
     @SuppressWarnings("resource")
     @Container
@@ -86,7 +90,7 @@ public abstract class AbstractAxonServerIntegrationTest {
 
     @BeforeAll
     static void initialize() throws IOException {
-        axonServerAddress = new ServerAddress(toxiProxyContainer.getHost(), toxiProxyContainer.getMappedPort(8124));
+        axonServerAddress = new ServerAddress("localhost", toxiProxyContainer.getMappedPort(8124));
         axonServerHttpPort = new ServerAddress(axonServerContainer.getHost(), axonServerContainer.getMappedPort(8024));
         ToxiproxyClient client = new ToxiproxyClient(
                 toxiProxyContainer.getHost(), toxiProxyContainer.getMappedPort(8474)
@@ -104,7 +108,9 @@ public abstract class AbstractAxonServerIntegrationTest {
             toxic.remove();
         }
         axonServerProxy.enable();
-        AxonServerUtils.purgeEventsFromAxonServer(axonServerHttpPort.getHostName(), axonServerHttpPort.getGrpcPort());
+        AxonServerUtils.purgeEventsFromAxonServer(axonServerHttpPort.getHostName(),
+                                                  axonServerHttpPort.getGrpcPort(),
+                                                  dcbContext());
     }
 
     public static Proxy getOrCreateProxy(ToxiproxyClient client,
@@ -116,6 +122,10 @@ public abstract class AbstractAxonServerIntegrationTest {
             proxy = client.createProxy(proxyName, listen, upstream);
         }
         return proxy;
+    }
+
+    protected boolean dcbContext() {
+        return false;
     }
 
     protected JsonElement sendToAxonServer(Function<String, ClassicHttpRequest> method,

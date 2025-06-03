@@ -39,13 +39,14 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class AxonServerUtils {
 
-    public static void purgeEventsFromAxonServer(String hostname, int port) throws IOException {
-        purgeEventsFromAxonServer("default", hostname, port);
+    public static void purgeEventsFromAxonServer(String hostname, int port, boolean dcbContext) throws IOException {
+        purgeEventsFromAxonServer("default", hostname, port, dcbContext);
     }
 
-    public static void purgeEventsFromAxonServer(String context, String hostname, int port) throws IOException {
+    public static void purgeEventsFromAxonServer(String context, String hostname, int port, boolean dcbContext)
+            throws IOException {
         deleteContext(context, hostname, port);
-        createContext(context, hostname, port);
+        createContext(context, hostname, port, dcbContext);
         // TODO: 6/20/23 Figure out why busy wait is necessary for newly created context to be operative
         waitFor(1_000);
     }
@@ -67,13 +68,14 @@ public class AxonServerUtils {
         waitForContextsCondition(hostname, port, contexts -> !contexts.contains(context));
     }
 
-    public static void createContext(String context, String hostname, int port) throws IOException {
+    public static void createContext(String context, String hostname, int port, boolean dcbContext) throws IOException {
         final URL url = new URL(String.format("http://%s:%d/v1/context", hostname, port));
         HttpURLConnection connection = null;
         try {
             String jsonRequest = String.format(
-                    "{\"context\": \"%s\", \"replicationGroup\": \"%s\", \"roles\": [{ \"node\": \"axonserver\", \"role\": \"PRIMARY\" }]}",
+                    "{\"context\": \"%s\", \"dcbContext\": %b, \"replicationGroup\": \"%s\", \"roles\": [{ \"node\": \"axonserver\", \"role\": \"PRIMARY\" }]}",
                     context,
+                    dcbContext,
                     context);
             connection = (HttpURLConnection) url.openConnection();
             connection.setRequestProperty("Content-Type", "application/json");

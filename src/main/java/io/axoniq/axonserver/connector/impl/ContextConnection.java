@@ -22,7 +22,9 @@ import io.axoniq.axonserver.connector.admin.impl.AdminChannelImpl;
 import io.axoniq.axonserver.connector.command.CommandChannel;
 import io.axoniq.axonserver.connector.command.impl.CommandChannelImpl;
 import io.axoniq.axonserver.connector.control.ControlChannel;
+import io.axoniq.axonserver.connector.event.DcbEventChannel;
 import io.axoniq.axonserver.connector.event.EventChannel;
+import io.axoniq.axonserver.connector.event.impl.DcbEventChannelImpl;
 import io.axoniq.axonserver.connector.event.impl.EventChannelImpl;
 import io.axoniq.axonserver.connector.event.transformation.EventTransformationChannel;
 import io.axoniq.axonserver.connector.event.transformation.impl.EventTransformationChannelImpl;
@@ -52,6 +54,7 @@ public class ContextConnection implements AxonServerConnection {
     private final ControlChannelImpl controlChannel;
     private final AtomicReference<CommandChannelImpl> commandChannel = new AtomicReference<>();
     private final AtomicReference<EventChannelImpl> eventChannel = new AtomicReference<>();
+    private final AtomicReference<DcbEventChannelImpl> dcbEventChannel = new AtomicReference<>();
     private final AtomicReference<QueryChannelImpl> queryChannel = new AtomicReference<>();
     private final AtomicReference<EventTransformationChannelImpl> eventTransformationChannel = new AtomicReference<>();
     private final AtomicReference<AdminChannelImpl> adminChannel = new AtomicReference<>();
@@ -185,6 +188,15 @@ public class ContextConnection implements AxonServerConnection {
                                                                       connection),
                                            this::ensureConnected
         );
+    }
+
+    @Override
+    public DcbEventChannel dcbEventChannel() {
+        return createIfAbsentAndInitialize(dcbEventChannel,
+                                           () -> new DcbEventChannelImpl(clientIdentification,
+                                                                         executorService,
+                                                                         connection),
+                                           this::ensureConnected);
     }
 
     @Override
