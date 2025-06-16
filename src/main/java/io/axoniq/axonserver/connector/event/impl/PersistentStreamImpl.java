@@ -131,6 +131,10 @@ public class PersistentStreamImpl
      * streams, and those closed with the intent to re-establish a connection.
      */
     public void triggerReconnect() {
+        if (closed.get()) {
+            logger.info("{}: Already closed, cannot trigger reconnect", streamId);
+            return;
+        }
         // first, close gracefully
         close();
         AxonServerException reconnectRequested = new AxonServerException(ErrorCategory.OTHER,
@@ -259,7 +263,11 @@ public class PersistentStreamImpl
     }
 
     private void close(Throwable throwable) {
-        closed.set(true);
+        boolean wasClosed = closed.getAndSet(true);
+        if (wasClosed) {
+            logger.info("{}: Already closed, cannot close again", streamId);
+            return;
+        }
         openSegments.forEach((segment, buffer) -> {
             try {
                 if (throwable != null) {
