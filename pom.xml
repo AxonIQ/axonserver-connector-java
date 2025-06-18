@@ -66,6 +66,7 @@
         <httpclient5.version>5.4.1</httpclient5.version>
         <toxiproxy.version>2.1.7</toxiproxy.version>
         <maven.surefire.plugin.version>3.5.2</maven.surefire.plugin.version>
+        <central-publishing-maven-plugin.version>0.7.0</central-publishing-maven-plugin.version>
     </properties>
 
     <dependencyManagement>
@@ -379,8 +380,13 @@
                 </configuration>
             </plugin>
             <plugin>
-                <artifactId>maven-deploy-plugin</artifactId>
-                <version>3.1.3</version>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <version>${central-publishing-maven-plugin.version}</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <publishingServerId>central</publishingServerId>
+                </configuration>
             </plugin>
             <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -566,24 +572,22 @@
                 </plugins>
             </build>
         </profile>
-        <profile>
-            <id>ossrh</id>
-            <repositories>
-                <repository>
-                    <id>sonatype</id>
-                    <url>https://oss.sonatype.org/content/repositories/snapshots</url>
-                    <snapshots>
-                        <enabled>true</enabled>
-                        <checksumPolicy>fail</checksumPolicy>
-                        <updatePolicy>always</updatePolicy>
-                    </snapshots>
-                    <releases>
-                        <enabled>false</enabled>
-                    </releases>
-                </repository>
-            </repositories>
-        </profile>
     </profiles>
+
+    <repositories>
+        <repository>
+            <name>Central Portal Snapshots</name>
+            <id>central-portal-snapshots</id>
+            <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+
 
     <scm>
         <connection>scm:git:https://github.com/AxonIQ/axonserver-connector-java.git</connection>
