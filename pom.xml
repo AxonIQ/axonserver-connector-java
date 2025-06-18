@@ -20,7 +20,7 @@
 
     <groupId>io.axoniq</groupId>
     <artifactId>axonserver-connector-java</artifactId>
-    <version>2024.2.3</version>
+    <version>2024.2.4-SNAPSHOT</version>
 
     <name>AxonServer Connector</name>
     <description>
