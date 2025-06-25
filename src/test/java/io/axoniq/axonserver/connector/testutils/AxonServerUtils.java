@@ -48,7 +48,7 @@ public class AxonServerUtils {
         deleteContext(context, hostname, port);
         createContext(context, hostname, port, dcbContext);
         // TODO: 6/20/23 Figure out why busy wait is necessary for newly created context to be operative
-        waitFor(1_000);
+        waitFor(2_000);
     }
 
     public static void deleteContext(String context, String hostname, int port) throws IOException {
