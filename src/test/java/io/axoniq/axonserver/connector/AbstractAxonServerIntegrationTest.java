@@ -70,13 +70,13 @@ public abstract class AbstractAxonServerIntegrationTest {
 
     private static String getDockerImageName() {
         String envVariable = System.getenv("AXON_SERVER_IMAGE");
-        return envVariable != null ? envVariable : System.getProperty("AXON_SERVER_IMAGE", "axoniq/axonserver");
+        return envVariable != null ? envVariable : System.getProperty("AXON_SERVER_IMAGE", "docker.io/axoniq/axonserver");
     }
 
     @SuppressWarnings("resource")
     @Container
     public static GenericContainer<?> toxiProxyContainer =
-            new GenericContainer<>("shopify/toxiproxy")
+            new GenericContainer<>("docker.io/shopify/toxiproxy")
                     .withExposedPorts(8474, 8124)
                     .withImagePullPolicy(PullPolicy.ageBased(Duration.ofDays(1)))
                     .withNetwork(network)
