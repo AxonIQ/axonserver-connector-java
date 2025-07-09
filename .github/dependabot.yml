@@ -10,13 +10,7 @@ updates:
     labels:
       - "Type: Dependency Upgrade"
       - "Priority 1: Must"
-    reviewers:
-      - "m1l4n54v1c"
-      - "MGathier"
-      - "schananas"
-      - "smcvb"
-      - "trimoq"
-    milestone: 31
+    milestone: 38
     groups:
       github-dependencies:
         update-types:
@@ -33,13 +27,7 @@ updates:
     labels:
       - "Type: Dependency Upgrade"
       - "Priority 1: Must"
-    reviewers:
-      - "m1l4n54v1c"
-      - "MGathier"
-      - "schananas"
-      - "smcvb"
-      - "trimoq"
-    milestone: 31
+    milestone: 38
     groups:
       maven-dependencies:
         update-types:
