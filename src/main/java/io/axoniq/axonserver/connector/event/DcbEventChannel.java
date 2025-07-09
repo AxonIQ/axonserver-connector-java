@@ -58,7 +58,7 @@ public interface DcbEventChannel {
      *                  transaction.
      * @return the transaction reference onto which to register events to append
      */
-    AppendEventsTransaction startTransaction(ConsistencyCondition condition);
+    AppendEventsTransaction startTransaction(ConsistencyCondition condition) throws IllegalStateException;
 
     /**
      * Opens an infinite stream of events, for sequentially consuming events from Axon Server, using the given
@@ -173,6 +173,17 @@ public interface DcbEventChannel {
          * @return this Transaction for fluency
          */
         AppendEventsTransaction append(TaggedEvent taggedEvent);
+
+        /**
+         * Appends this {@code taggedEvent} with {@code condition} to this transaction.
+         * Only valid if no consistency condition was supplied before
+         *
+         * @param taggedEvent the event to be appended
+         * @param condition the consistency condition
+         * @throws IllegalStateException Will throw an IllegalStateException if Consistency Condition is already set.
+         * @return this Transaction for fluency
+         */
+        AppendEventsTransaction append(TaggedEvent taggedEvent, ConsistencyCondition condition) throws IllegalStateException;
 
         /**
          * Appends all events from the collection of {@code taggedEvents} to this transaction

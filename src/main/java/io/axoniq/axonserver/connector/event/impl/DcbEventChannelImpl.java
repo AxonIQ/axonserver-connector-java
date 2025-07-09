@@ -18,6 +18,7 @@ package io.axoniq.axonserver.connector.event.impl;
 
 import com.google.protobuf.Empty;
 import io.axoniq.axonserver.connector.ResultStream;
+import io.axoniq.axonserver.connector.event.AppendEventsTransaction;
 import io.axoniq.axonserver.connector.event.DcbEventChannel;
 import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
 import io.axoniq.axonserver.connector.impl.AbstractBufferedStream;
@@ -120,7 +121,7 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
     }
 
     @Override
-    public AppendEventsTransaction startTransaction(ConsistencyCondition condition) {
+    public AppendEventsTransaction startTransaction(ConsistencyCondition condition) throws IllegalStateException {
         FutureStreamObserver<AppendEventsResponse> response = new FutureStreamObserver<>(null);
         StreamObserver<AppendEventsRequest> clientStream = eventStore.append(response);
         return new AppendEventsTransactionImpl(clientStream, response).condition(condition);
@@ -220,14 +221,25 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
             this.result = result;
         }
 
-        public AppendEventsTransaction condition(ConsistencyCondition condition) {
+        private AppendEventsRequest.Builder createConsistencyCondition(ConsistencyCondition consistencyCondition) throws IllegalStateException {
             if (conditionSet.compareAndSet(false, true)) {
-                stream.onNext(AppendEventsRequest.newBuilder()
-                                                 .setCondition(condition)
-                                                 .build());
-                return this;
+                return AppendEventsRequest.newBuilder()
+                                          .setCondition(consistencyCondition);
             }
             throw new IllegalStateException("Consistency Condition already set.");
+        }
+
+        public AppendEventsTransaction condition(ConsistencyCondition condition) {
+            stream.onNext(createConsistencyCondition(condition).build());
+            return this;
+        }
+
+        @Override
+        public AppendEventsTransaction append(TaggedEvent taggedEvent, ConsistencyCondition condition) throws IllegalStateException {
+            stream.onNext(createConsistencyCondition(condition)
+                                  .addEvent(taggedEvent)
+                                  .build());
+            return this;
         }
 
         @Override
