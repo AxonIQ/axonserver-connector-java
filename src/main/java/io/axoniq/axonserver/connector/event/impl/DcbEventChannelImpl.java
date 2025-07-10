@@ -51,6 +51,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -197,6 +198,16 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
     }
 
     @Override
+    public CompletableFuture<AppendEventsResponse> append(ConsistencyCondition condition,
+                                                          TaggedEvent... taggedEvents) {
+        FutureStreamObserver<AppendEventsResponse> response = new FutureStreamObserver<>(null);
+        StreamObserver<AppendEventsRequest> clientStream = eventStore.append(response);
+        return new AppendEventsTransactionImpl(clientStream, response)
+                .append(List.of(taggedEvents), condition)
+                .commit();
+    }
+
+    @Override
     public CompletableFuture<GetHeadResponse> head() {
         FutureStreamObserver<GetHeadResponse> future = new FutureStreamObserver<>(null);
         eventStore.getHead(GetHeadRequest.getDefaultInstance(), future);
@@ -242,14 +253,16 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
          * @throws IllegalStateException Will throw an IllegalStateException if Consistency Condition is already set.
          */
 
-        private AppendEventsTransaction append(Collection<TaggedEvent> taggedEvent, ConsistencyCondition condition) throws IllegalStateException {
+        private AppendEventsTransaction append(Collection<TaggedEvent> taggedEvent, ConsistencyCondition condition)
+                throws IllegalStateException {
             stream.onNext(createConsistencyCondition(condition)
                                   .addAllEvent(taggedEvent)
                                   .build());
             return this;
         }
 
-        private AppendEventsRequest.Builder createConsistencyCondition(ConsistencyCondition consistencyCondition) throws IllegalStateException {
+        private AppendEventsRequest.Builder createConsistencyCondition(ConsistencyCondition consistencyCondition)
+                throws IllegalStateException {
             if (conditionSet.compareAndSet(false, true)) {
                 return AppendEventsRequest.newBuilder()
                                           .setCondition(consistencyCondition);

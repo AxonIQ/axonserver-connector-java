@@ -30,6 +30,7 @@ import io.axoniq.axonserver.grpc.event.dcb.StreamEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.TaggedEvent;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 
@@ -61,13 +62,17 @@ public interface DcbEventChannel {
 
 
     /**
-     * Appends a {@code Collection} of {@code taggedEvents} and returns the
-     * completableFuture which contains the {@code AppendEventsResponse} when awaited
+     * Appends a {@code Collection} of {@code taggedEvents} and returns the completableFuture which contains the
+     * {@code AppendEventsResponse} when awaited.
+     *
      * @param taggedEvents the collection of events to be appended
      * @return the future that completes once the Axon Server commits this Transaction, containing the append events
-     *          response as a result.
+     * response as a result.
      */
     default CompletableFuture<AppendEventsResponse> append(Collection<TaggedEvent> taggedEvents) {
+        if (taggedEvents == null || taggedEvents.isEmpty()) {
+            return noEmptyEvents();
+        }
         return this.startTransaction()
                    .appendAll(taggedEvents)
                    .commit();
@@ -75,19 +80,65 @@ public interface DcbEventChannel {
 
     /**
      * Appends a {@code Collection} of {@code taggedEvents} with {@code ConsistencyCondition} and returns the
-     * completableFuture which contains the {@code AppendEventsResponse} when awaited
+     * completableFuture which contains the {@code AppendEventsResponse} when awaited.
+     *
      * @param taggedEvents the collection of events to be appended
-     * @param condition the Consistency Condition used to validate the Transaction. Axon Server will validate this
-     *      *                  condition against the  Event Store and based on the validation outcome will accept or reject the
-     *      *                  transaction.
+     * @param condition    the Consistency Condition used to validate the Transaction. Axon Server will validate this
+     *                     condition against the  Event Store and based on the validation outcome will accept or reject
+     *                     the transaction.
      * @return the future that completes once the Axon Server commits this Transaction, containing the append events
-     *          response as a result.
+     * response as a result.
      */
     default CompletableFuture<AppendEventsResponse> append(Collection<TaggedEvent> taggedEvents,
                                                            ConsistencyCondition condition) {
+        if (taggedEvents == null || taggedEvents.isEmpty()) {
+            return noEmptyEvents();
+        }
         return this.startTransaction(condition)
                    .appendAll(taggedEvents)
                    .commit();
+    }
+
+    /**
+     * Appends variable number of {@code taggedEvents} with {@code ConsistencyCondition} and returns the
+     * completableFuture which contains the {@code AppendEventsResponse} when awaited.
+     *
+     * @param taggedEvents the 1..n of events to be appended
+     * @param condition    the Consistency Condition used to validate the Transaction. Axon Server will validate this
+     *                     condition against the  Event Store and based on the validation outcome will accept or reject
+     *                     the transaction.
+     * @return the future that completes once the Axon Server commits this Transaction, containing the append events
+     * response as a result.
+     */
+    default CompletableFuture<AppendEventsResponse> append(ConsistencyCondition condition,
+                                                           TaggedEvent... taggedEvents) {
+        if (taggedEvents == null || taggedEvents.length == 0) {
+            return noEmptyEvents();
+        }
+        return startTransaction(condition)
+                .appendAll(taggedEvents)
+                .commit();
+    }
+
+    /**
+     * Appends variable number of {@code taggedEvents} and returns the completableFuture which contains the
+     * {@code AppendEventsResponse} when awaited.
+     *
+     * @param taggedEvents the 1..n of events to be appended
+     * @return the future that completes once the Axon Server commits this Transaction, containing the append events
+     * response as a result.
+     */
+    default CompletableFuture<AppendEventsResponse> append(TaggedEvent... taggedEvents) {
+        if (taggedEvents == null || taggedEvents.length == 0) {
+            return noEmptyEvents();
+        }
+        return startTransaction()
+                .appendAll(taggedEvents)
+                .commit();
+    }
+
+    private static CompletableFuture<AppendEventsResponse> noEmptyEvents() {
+        return CompletableFuture.failedFuture(new IllegalArgumentException("taggedEvents must not be null or empty"));
     }
 
     /**
@@ -203,6 +254,7 @@ public interface DcbEventChannel {
          * @return this Transaction for fluency
          */
         AppendEventsTransaction append(TaggedEvent taggedEvent);
+
         /**
          * Appends all events from the collection of {@code taggedEvents} to this transaction
          *
@@ -212,6 +264,17 @@ public interface DcbEventChannel {
         default AppendEventsTransaction appendAll(Collection<TaggedEvent> taggedEvents) {
             taggedEvents.forEach(this::append);
             return this;
+        }
+
+        /**
+         * Appends 1..n of {@code taggedEvents} to this transaction Overload to allow varargs implementation of
+         * appendAll
+         *
+         * @param taggedEvents the variable number of events to be appended
+         * @return this Transaction for fluency
+         */
+        default AppendEventsTransaction appendAll(TaggedEvent... taggedEvents) {
+            return this.appendAll(Arrays.asList(taggedEvents));
         }
 
         /**
