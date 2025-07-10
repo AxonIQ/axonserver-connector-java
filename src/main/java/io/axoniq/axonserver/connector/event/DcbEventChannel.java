@@ -32,6 +32,7 @@ import io.axoniq.axonserver.grpc.event.dcb.TaggedEvent;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -112,12 +113,7 @@ public interface DcbEventChannel {
      */
     default CompletableFuture<AppendEventsResponse> append(ConsistencyCondition condition,
                                                            TaggedEvent... taggedEvents) {
-        if (taggedEvents == null || taggedEvents.length == 0) {
-            return noEmptyEvents();
-        }
-        return startTransaction(condition)
-                .appendAll(taggedEvents)
-                .commit();
+        return this.append(Arrays.asList(taggedEvents), condition);
     }
 
     /**
@@ -129,12 +125,7 @@ public interface DcbEventChannel {
      * response as a result.
      */
     default CompletableFuture<AppendEventsResponse> append(TaggedEvent... taggedEvents) {
-        if (taggedEvents == null || taggedEvents.length == 0) {
-            return noEmptyEvents();
-        }
-        return startTransaction()
-                .appendAll(taggedEvents)
-                .commit();
+        return this.append(Arrays.asList(taggedEvents));
     }
 
     private static CompletableFuture<AppendEventsResponse> noEmptyEvents() {
@@ -264,17 +255,6 @@ public interface DcbEventChannel {
         default AppendEventsTransaction appendAll(Collection<TaggedEvent> taggedEvents) {
             taggedEvents.forEach(this::append);
             return this;
-        }
-
-        /**
-         * Appends 1..n of {@code taggedEvents} to this transaction Overload to allow varargs implementation of
-         * appendAll
-         *
-         * @param taggedEvents the variable number of events to be appended
-         * @return this Transaction for fluency
-         */
-        default AppendEventsTransaction appendAll(TaggedEvent... taggedEvents) {
-            return this.appendAll(Arrays.asList(taggedEvents));
         }
 
         /**

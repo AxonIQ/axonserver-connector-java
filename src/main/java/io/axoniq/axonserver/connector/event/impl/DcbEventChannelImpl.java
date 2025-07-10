@@ -50,6 +50,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
@@ -203,14 +204,7 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
     @Override
     public CompletableFuture<AppendEventsResponse> append(ConsistencyCondition condition,
                                                           TaggedEvent... taggedEvents) {
-        if (taggedEvents == null || taggedEvents.length == 0) {
-            return CompletableFuture.failedFuture(new IllegalArgumentException("taggedEvents must not be null or empty"));
-        }
-        FutureStreamObserver<AppendEventsResponse> response = new FutureStreamObserver<>(null);
-        StreamObserver<AppendEventsRequest> clientStream = eventStore.append(response);
-        return new AppendEventsTransactionImpl(clientStream, response)
-                .append(List.of(taggedEvents), condition)
-                .commit();
+        return this.append(Arrays.asList(taggedEvents), condition);
     }
 
     @Override
