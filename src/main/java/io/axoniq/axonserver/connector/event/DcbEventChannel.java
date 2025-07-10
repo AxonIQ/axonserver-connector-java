@@ -57,7 +57,7 @@ public interface DcbEventChannel {
      *                  transaction.
      * @return the transaction reference onto which to register events to append
      */
-    AppendEventsTransaction startTransaction(ConsistencyCondition condition) throws IllegalStateException;
+    AppendEventsTransaction startTransaction(ConsistencyCondition condition);
 
     default CompletableFuture<AppendEventsResponse> append(Collection<TaggedEvent> taggedEvents) {
         return this.startTransaction()

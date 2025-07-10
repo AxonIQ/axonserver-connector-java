@@ -122,7 +122,7 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
     }
 
     @Override
-    public AppendEventsTransaction startTransaction(ConsistencyCondition condition) throws IllegalStateException {
+    public AppendEventsTransaction startTransaction(ConsistencyCondition condition) {
         FutureStreamObserver<AppendEventsResponse> response = new FutureStreamObserver<>(null);
         StreamObserver<AppendEventsRequest> clientStream = eventStore.append(response);
         return new AppendEventsTransactionImpl(clientStream, response).condition(condition);
