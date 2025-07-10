@@ -894,9 +894,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
 
     private CompletableFuture<AppendEventsResponse> appendEventAsync(TaggedEvent taggedEvent) {
         return connection.dcbEventChannel()
-                         .startTransaction()
-                         .append(taggedEvent)
-                         .commit();
+                         .append(taggedEvent);
     }
 
     private CompletableFuture<AppendEventsResponse> appendEventAsync(TaggedEvent taggedEvent,
