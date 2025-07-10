@@ -59,12 +59,30 @@ public interface DcbEventChannel {
      */
     AppendEventsTransaction startTransaction(ConsistencyCondition condition);
 
+
+    /**
+     * Appends a {@code Collection} of {@code taggedEvents} and returns the
+     * completableFuture which contains the {@code AppendEventsResponse} when awaited
+     * @param taggedEvents the collection of events to be appended
+     * @return the future that completes once the Axon Server commits this Transaction, containing the append events
+     *          response as a result.
+     */
     default CompletableFuture<AppendEventsResponse> append(Collection<TaggedEvent> taggedEvents) {
         return this.startTransaction()
                    .appendAll(taggedEvents)
                    .commit();
     }
 
+    /**
+     * Appends a {@code Collection} of {@code taggedEvents} with {@code ConsistencyCondition} and returns the
+     * completableFuture which contains the {@code AppendEventsResponse} when awaited
+     * @param taggedEvents the collection of events to be appended
+     * @param condition the Consistency Condition used to validate the Transaction. Axon Server will validate this
+     *      *                  condition against the  Event Store and based on the validation outcome will accept or reject the
+     *      *                  transaction.
+     * @return the future that completes once the Axon Server commits this Transaction, containing the append events
+     *          response as a result.
+     */
     default CompletableFuture<AppendEventsResponse> append(Collection<TaggedEvent> taggedEvents,
                                                            ConsistencyCondition condition) {
         return this.startTransaction(condition)
