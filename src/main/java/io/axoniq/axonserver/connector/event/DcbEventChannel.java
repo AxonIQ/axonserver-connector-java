@@ -21,7 +21,6 @@ import io.axoniq.axonserver.grpc.event.dcb.AppendEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.ConsistencyCondition;
 import io.axoniq.axonserver.grpc.event.dcb.GetHeadResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetSequenceAtResponse;
-import io.axoniq.axonserver.grpc.event.dcb.GetTagsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetTagsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetTailResponse;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsRequest;
@@ -59,6 +58,19 @@ public interface DcbEventChannel {
      * @return the transaction reference onto which to register events to append
      */
     AppendEventsTransaction startTransaction(ConsistencyCondition condition) throws IllegalStateException;
+
+    default CompletableFuture<AppendEventsResponse> append(Collection<TaggedEvent> taggedEvents) {
+        return this.startTransaction()
+                   .appendAll(taggedEvents)
+                   .commit();
+    }
+
+    default CompletableFuture<AppendEventsResponse> append(Collection<TaggedEvent> taggedEvents,
+                                                           ConsistencyCondition condition) {
+        return this.startTransaction(condition)
+                   .appendAll(taggedEvents)
+                   .commit();
+    }
 
     /**
      * Opens an infinite stream of events, for sequentially consuming events from Axon Server, using the given
@@ -173,18 +185,6 @@ public interface DcbEventChannel {
          * @return this Transaction for fluency
          */
         AppendEventsTransaction append(TaggedEvent taggedEvent);
-
-        /**
-         * Appends this {@code taggedEvent} with {@code condition} to this transaction.
-         * Only valid if no consistency condition was supplied before
-         *
-         * @param taggedEvent the event to be appended
-         * @param condition the consistency condition
-         * @throws IllegalStateException Will throw an IllegalStateException if Consistency Condition is already set.
-         * @return this Transaction for fluency
-         */
-        AppendEventsTransaction append(TaggedEvent taggedEvent, ConsistencyCondition condition) throws IllegalStateException;
-
         /**
          * Appends all events from the collection of {@code taggedEvents} to this transaction
          *
