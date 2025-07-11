@@ -30,6 +30,9 @@ import io.axoniq.axonserver.grpc.control.Heartbeat;
 import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformServiceGrpc;
+import io.axoniq.axonserver.grpc.control.RequestTopologyChanges;
+import io.axoniq.axonserver.grpc.control.TopologyChange;
+import io.axoniq.axonserver.grpc.control.UpdateType;
 import io.grpc.Status;
 import io.grpc.stub.CallStreamObserver;
 import io.grpc.stub.StreamObserver;
@@ -40,6 +43,7 @@ import java.util.Collection;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -61,6 +65,8 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
         implements ControlChannel {
 
     private static final Logger logger = LoggerFactory.getLogger(ControlChannelImpl.class);
+    public static final TopologyChange RESET_ALL = TopologyChange.newBuilder().setUpdateType(UpdateType.RESET_ALL)
+                                                                 .build();
 
     private final ClientIdentification clientIdentification;
     private final ScheduledExecutorService executor;
@@ -76,6 +82,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
     private final AtomicBoolean infoSupplierActive = new AtomicBoolean();
     private final PlatformServiceGrpc.PlatformServiceStub platformServiceStub;
     private final AxonServerManagedChannel channel;
+    private final Set<Consumer<TopologyChange>> topologyChangeListeners = ConcurrentHashMap.newKeySet();
 
     /**
      * Constructs a {@link ControlChannelImpl}.
@@ -121,8 +128,26 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
                                      ProcessorInstructions.requestInfoHandler(processorInfoSuppliers));
         this.instructionHandlers.put(PlatformOutboundInstruction.RequestCase.REQUEST_RECONNECT,
                                      this::handleReconnectRequest);
+        this.instructionHandlers.put(PlatformOutboundInstruction.RequestCase.TOPOLOGY_CHANGE,
+                                     this::handleTopologyChange);
 
         platformServiceStub = PlatformServiceGrpc.newStub(channel);
+    }
+
+    private void handleTopologyChange(PlatformOutboundInstruction platformOutboundInstruction,
+                                      ReplyChannel<PlatformInboundInstruction> platformInboundInstructionReplyChannel) {
+        invokeTopologyChangeListeners(platformOutboundInstruction.getTopologyChange());
+    }
+
+    private void invokeTopologyChangeListeners(TopologyChange platformOutboundInstruction) {
+        topologyChangeListeners.forEach(listener -> {
+            try {
+                listener.accept(platformOutboundInstruction);
+            } catch (Exception e) {
+                logger.warn("Error invoking topology change listener for context '{}': {}",
+                            context, e.getMessage());
+            }
+        });
     }
 
     private void handleAck(PlatformOutboundInstruction instruction,
@@ -172,12 +197,18 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
                                                                          .setRegister(clientIdentification)
                                                                          .build());
                 heartbeatMonitor.resume();
+                if (!topologyChangeListeners.isEmpty()) {
+                    // topology change handlers are registered, so we subscribe to changes (after an initial reset)
+                    invokeTopologyChangeListeners(RESET_ALL);
+                    requestTopologyChanges();
+                }
             } catch (Exception e) {
                 instructionDispatcher.set(null);
                 instructionsForPlatform.onError(e);
             }
         }
     }
+
 
     private void registerOutboundStream(CallStreamObserver<PlatformInboundInstruction> upstream) {
         StreamObserver<PlatformInboundInstruction> previous =
@@ -216,6 +247,26 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
                                                    InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> handler) {
         instructionHandlers.put(type, handler);
         return new SyncRegistration(() -> instructionHandlers.remove(type, handler));
+    }
+
+    @Override
+    public Registration registerTopologyChangeHandler(Consumer<TopologyChange> handler) {
+        boolean first = topologyChangeListeners.isEmpty();
+        topologyChangeListeners.add(handler);
+        if (first) {
+            // first topology change handler is registered
+            requestTopologyChanges();
+        }
+        return new SyncRegistration(() -> topologyChangeListeners.remove(handler));
+    }
+
+    private void requestTopologyChanges() {
+        sendInstruction(PlatformInboundInstruction.newBuilder()
+                .setRequestTopologyChanges(RequestTopologyChanges.getDefaultInstance())
+                .build()).exceptionally(ex -> {
+            logger.warn("Failed to request topology changes for context '{}': {}", context, ex.getMessage());
+            return null;
+        });
     }
 
     @Override
