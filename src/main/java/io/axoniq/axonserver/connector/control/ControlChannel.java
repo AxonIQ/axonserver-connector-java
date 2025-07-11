@@ -21,9 +21,11 @@ import io.axoniq.axonserver.connector.Registration;
 import io.axoniq.axonserver.grpc.control.EventProcessorInfo;
 import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
+import io.axoniq.axonserver.grpc.control.TopologyChange;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -47,6 +49,17 @@ public interface ControlChannel {
      */
     Registration registerInstructionHandler(PlatformOutboundInstruction.RequestCase type,
                                             InstructionHandler<PlatformOutboundInstruction, PlatformInboundInstruction> handler);
+
+    /**
+     * Registers a handler for changes in the topology of AxonServer. This handler will be invoked whenever there is
+     * a change in the topology, such as a new command or query handler being registered, or a handler being deregistered.
+     *
+     * @param handler for changes in the topology of AxonServer.
+     * @return a handle to deregister the topology change handler
+     */
+    Registration registerTopologyChangeHandler(
+            Consumer<TopologyChange> handler
+    );
 
     /**
      * Registers an Event Processor with AxonServer, allowing AxonServer to request status information and provide
