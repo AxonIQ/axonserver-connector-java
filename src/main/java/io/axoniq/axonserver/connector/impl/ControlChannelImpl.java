@@ -30,8 +30,9 @@ import io.axoniq.axonserver.grpc.control.Heartbeat;
 import io.axoniq.axonserver.grpc.control.PlatformInboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformOutboundInstruction;
 import io.axoniq.axonserver.grpc.control.PlatformServiceGrpc;
-import io.axoniq.axonserver.grpc.control.RequestTopologyChanges;
+import io.axoniq.axonserver.grpc.control.SubscribeTopologyChanges;
 import io.axoniq.axonserver.grpc.control.TopologyChange;
+import io.axoniq.axonserver.grpc.control.UnsubscribeTopologyChanges;
 import io.axoniq.axonserver.grpc.control.UpdateType;
 import io.grpc.Status;
 import io.grpc.stub.CallStreamObserver;
@@ -200,7 +201,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
                 if (!topologyChangeListeners.isEmpty()) {
                     // topology change handlers are registered, so we subscribe to changes (after an initial reset)
                     invokeTopologyChangeListeners(RESET_ALL);
-                    requestTopologyChanges();
+                    subscribeTopologyChanges();
                 }
             } catch (Exception e) {
                 instructionDispatcher.set(null);
@@ -255,16 +256,24 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
         topologyChangeListeners.add(handler);
         if (first) {
             // first topology change handler is registered
-            requestTopologyChanges();
+            subscribeTopologyChanges();
         }
-        return new SyncRegistration(() -> topologyChangeListeners.remove(handler));
+        return new SyncRegistration(() -> {
+            topologyChangeListeners.remove(handler);
+            sendInstruction(PlatformInboundInstruction.newBuilder()
+                                                      .setUnsubscribeTopologyChanges(UnsubscribeTopologyChanges.getDefaultInstance())
+                                                      .build()).exceptionally(ex -> {
+                logger.warn("Failed to unsubscribe from topology changes for context '{}': {}", context, ex.getMessage());
+                return null;
+            });
+        });
     }
 
-    private void requestTopologyChanges() {
+    private void subscribeTopologyChanges() {
         sendInstruction(PlatformInboundInstruction.newBuilder()
-                .setRequestTopologyChanges(RequestTopologyChanges.getDefaultInstance())
+                .setSubscribeTopologyChanges(SubscribeTopologyChanges.getDefaultInstance())
                 .build()).exceptionally(ex -> {
-            logger.warn("Failed to request topology changes for context '{}': {}", context, ex.getMessage());
+            logger.warn("Failed to subscribe to topology changes for context '{}': {}", context, ex.getMessage());
             return null;
         });
     }
