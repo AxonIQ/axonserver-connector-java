@@ -199,8 +199,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
                                                                          .build());
                 heartbeatMonitor.resume();
                 if (!topologyChangeListeners.isEmpty()) {
-                    // topology change handlers are registered, so we subscribe to changes (after an initial reset)
-                    invokeTopologyChangeListeners(RESET_ALL);
+                    // topology change handlers are registered, so we subscribe to changes
                     subscribeTopologyChanges();
                 }
             } catch (Exception e) {
@@ -231,6 +230,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
             logger.info("Upstream unavailable. Forcing new connection.");
             reconnectHandler.run();
         }
+        invokeTopologyChangeListeners(RESET_ALL);
         scheduleReconnect(cause);
     }
 
