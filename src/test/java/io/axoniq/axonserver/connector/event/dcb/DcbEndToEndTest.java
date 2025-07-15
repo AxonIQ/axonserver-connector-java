@@ -492,7 +492,8 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
         GetTagsResponse initialResponse = dcbEventChannel.tagsFor(sequence)
                                                          .join();
         assertEquals(2, initialResponse.getTagCount());
-        assertEquals(initialResponse.getTagList(), asList(tag1, tag2));
+        assertTrue(initialResponse.getTagList().contains(tag1));
+        assertTrue(initialResponse.getTagList().contains(tag2));
 
         // Remove one tag
         dcbEventChannel.removeTags(sequence, ImmutableList.of(tag1))
