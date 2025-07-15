@@ -144,7 +144,7 @@ public interface DcbEventChannel {
      * Assigns tags to the event identified by its sequence.
      *
      * @param sequence the sequence of an event
-     * @param tags the tags to add to the event
+     * @param tags     the tags to add to the event
      * @return a CompletableFuture containing the response
      */
     CompletableFuture<AddTagsResponse> addTags(long sequence, Collection<Tag> tags);
@@ -153,7 +153,7 @@ public interface DcbEventChannel {
      * Removes tags from the event identified by its sequence.
      *
      * @param sequence the sequence of an event
-     * @param tags the tags to remove from the event
+     * @param tags     the tags to remove from the event
      * @return a CompletableFuture containing the response
      */
     CompletableFuture<RemoveTagsResponse> removeTags(long sequence, Collection<Tag> tags);
