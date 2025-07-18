@@ -66,7 +66,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
         implements ControlChannel {
 
     private static final Logger logger = LoggerFactory.getLogger(ControlChannelImpl.class);
-    public static final TopologyChange RESET_ALL = TopologyChange.newBuilder().setUpdateType(UpdateType.RESET_ALL)
+    private static final TopologyChange RESET_ALL = TopologyChange.newBuilder().setUpdateType(UpdateType.RESET_ALL)
                                                                  .build();
 
     private final ClientIdentification clientIdentification;
