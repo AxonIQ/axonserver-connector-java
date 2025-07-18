@@ -20,7 +20,7 @@
 
     <groupId>io.axoniq</groupId>
     <artifactId>axonserver-connector-java</artifactId>
-    <version>2025.1.1</version>
+    <version>2025.1.2-SNAPSHOT</version>
 
     <name>AxonServer Connector</name>
     <description>
@@ -571,7 +571,7 @@
         <connection>scm:git:https://github.com/AxonIQ/axonserver-connector-java.git</connection>
         <developerConnection>scm:git:https://github.com/AxonIQ/axonserver-connector-java.git</developerConnection>
         <url>https://github.com/AxonIQ/axonserver-connector-java</url>
-        <tag>2025.1.1</tag>
+        <tag>2025.1.0</tag>
     </scm>
 
     <organization>
