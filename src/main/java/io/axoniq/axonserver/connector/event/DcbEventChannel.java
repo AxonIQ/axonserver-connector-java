@@ -17,17 +17,19 @@
 package io.axoniq.axonserver.connector.event;
 
 import io.axoniq.axonserver.connector.ResultStream;
+import io.axoniq.axonserver.grpc.event.dcb.AddTagsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.AppendEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.ConsistencyCondition;
 import io.axoniq.axonserver.grpc.event.dcb.GetHeadResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetSequenceAtResponse;
-import io.axoniq.axonserver.grpc.event.dcb.GetTagsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetTagsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetTailResponse;
+import io.axoniq.axonserver.grpc.event.dcb.RemoveTagsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.StreamEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.StreamEventsResponse;
+import io.axoniq.axonserver.grpc.event.dcb.Tag;
 import io.axoniq.axonserver.grpc.event.dcb.TaggedEvent;
 
 import java.time.Instant;
@@ -137,6 +139,24 @@ public interface DcbEventChannel {
      * @return the tags fo the event
      */
     CompletableFuture<GetTagsResponse> tagsFor(long sequence);
+
+    /**
+     * Assigns tags to the event identified by its sequence.
+     *
+     * @param sequence the sequence of an event
+     * @param tags     the tags to add to the event
+     * @return a CompletableFuture containing the response
+     */
+    CompletableFuture<AddTagsResponse> addTags(long sequence, Collection<Tag> tags);
+
+    /**
+     * Removes tags from the event identified by its sequence.
+     *
+     * @param sequence the sequence of an event
+     * @param tags     the tags to remove from the event
+     * @return a CompletableFuture containing the response
+     */
+    CompletableFuture<RemoveTagsResponse> removeTags(long sequence, Collection<Tag> tags);
 
     /**
      * Provides the head of the event store.
