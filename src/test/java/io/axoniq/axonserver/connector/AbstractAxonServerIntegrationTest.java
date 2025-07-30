@@ -38,7 +38,9 @@ import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.images.PullPolicy;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.MountableFile;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
@@ -63,6 +65,7 @@ public abstract class AbstractAxonServerIntegrationTest {
                     .withEnv("AXONIQ_AXONSERVER_DEVMODE_ENABLED", "true")
                     .withEnv("AXONIQ_AXONSERVER_ACCESSCONTROL_TOKEN", "user-token")
                     .withEnv("AXONIQ_AXONSERVER_ACCESSCONTROL_ADMIN_TOKEN", "admin-token")
+                    .withCopyFileToContainer(MountableFile.forHostPath("/home/silvano/IdeaProjects/axon-server/package-axonserver-enterprise/target/axonserver.jar"), "/axonserver/axonserver.jar")
                     .withImagePullPolicy(PullPolicy.ageBased(Duration.ofDays(1)))
                     .withNetwork(network)
                     .withNetworkAliases("axonserver")
@@ -70,13 +73,13 @@ public abstract class AbstractAxonServerIntegrationTest {
 
     private static String getDockerImageName() {
         String envVariable = System.getenv("AXON_SERVER_IMAGE");
-        return envVariable != null ? envVariable : System.getProperty("AXON_SERVER_IMAGE", "axoniq/axonserver");
+        return envVariable != null ? envVariable : System.getProperty("AXON_SERVER_IMAGE", "docker.io/axoniq/axonserver");
     }
 
     @SuppressWarnings("resource")
     @Container
     public static GenericContainer<?> toxiProxyContainer =
-            new GenericContainer<>("shopify/toxiproxy")
+            new GenericContainer<>("docker.io/shopify/toxiproxy")
                     .withExposedPorts(8474, 8124)
                     .withImagePullPolicy(PullPolicy.ageBased(Duration.ofDays(1)))
                     .withNetwork(network)
