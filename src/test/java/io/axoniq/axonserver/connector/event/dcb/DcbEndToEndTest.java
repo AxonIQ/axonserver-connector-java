@@ -20,6 +20,8 @@ import io.axoniq.axonserver.grpc.event.dcb.GetTagsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetTagsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetTailRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetTailResponse;
+import io.axoniq.axonserver.grpc.event.dcb.AddTagsResponse;
+import io.axoniq.axonserver.grpc.event.dcb.RemoveTagsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.StreamEventsRequest;
@@ -55,6 +57,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
+import static java.util.Arrays.asList;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -446,6 +449,114 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
         GetTagsResponse response = dcbEventChannel.tagsFor(sequence)
                                                   .join();
         assertEquals(ImmutableList.of(tag), response.getTagList());
+    }
+
+    @Test
+    void addTags() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+
+        // Create and append an event with one tag
+        Tag initialTag = aTag();
+        TaggedEvent taggedEvent = taggedEvent(anEvent(aString(), "myName"), initialTag);
+        long sequence = appendEvent(taggedEvent).getSequenceOfTheFirstEvent();
+
+        // Verify initial tag
+        GetTagsResponse initialResponse = dcbEventChannel.tagsFor(sequence)
+                                                         .join();
+        assertEquals(ImmutableList.of(initialTag), initialResponse.getTagList());
+
+        // Add a new tag
+        Tag newTag = aTag();
+        dcbEventChannel.addTags(sequence, ImmutableList.of(newTag))
+                       .join();
+
+        // Verify both tags are present
+        GetTagsResponse updatedResponse = dcbEventChannel.tagsFor(sequence)
+                                                         .join();
+        assertEquals(2, updatedResponse.getTagCount());
+        assertTrue(updatedResponse.getTagList().contains(initialTag));
+        assertTrue(updatedResponse.getTagList().contains(newTag));
+    } 
+
+    @Test
+    void removeTags() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+
+        // Create and append an event with two tags
+        Tag tag1 = aTag();
+        Tag tag2 = aTag();
+        TaggedEvent taggedEvent = taggedEvent(anEvent(aString(), "myName"), tag1, tag2);
+        long sequence = appendEvent(taggedEvent).getSequenceOfTheFirstEvent();
+
+        // Verify initial tags
+        GetTagsResponse initialResponse = dcbEventChannel.tagsFor(sequence)
+                                                         .join();
+        assertEquals(2, initialResponse.getTagCount());
+        assertTrue(initialResponse.getTagList().contains(tag1));
+        assertTrue(initialResponse.getTagList().contains(tag2));
+
+        // Remove one tag
+        dcbEventChannel.removeTags(sequence, ImmutableList.of(tag1))
+                       .join();
+
+        // Verify only the remaining tag is present
+        GetTagsResponse updatedResponse = dcbEventChannel.tagsFor(sequence)
+                                                         .join();
+        assertEquals(1, updatedResponse.getTagCount());
+        assertTrue(updatedResponse.getTagList().contains(tag2));
+    }
+
+    @Test
+    void addExistingTag() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+
+        // Create and append an event with one tag
+        Tag existingTag = aTag();
+        TaggedEvent taggedEvent = taggedEvent(anEvent(aString(), "myName"), existingTag);
+        long sequence = appendEvent(taggedEvent).getSequenceOfTheFirstEvent();
+
+        // Verify initial tag
+        GetTagsResponse initialResponse = dcbEventChannel.tagsFor(sequence)
+                                                         .join();
+        assertEquals(1, initialResponse.getTagCount());
+        assertTrue(initialResponse.getTagList().contains(existingTag));
+
+        // Add the same tag again
+        dcbEventChannel.addTags(sequence, ImmutableList.of(existingTag))
+                       .join();
+
+        // Verify that there are no duplicates
+        GetTagsResponse updatedResponse = dcbEventChannel.tagsFor(sequence)
+                                                         .join();
+        assertEquals(1, updatedResponse.getTagCount());
+        assertTrue(updatedResponse.getTagList().contains(existingTag));
+    }
+
+    @Test
+    void removeNonExistingTag() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+
+        // Create and append an event with one tag
+        Tag existingTag = aTag();
+        TaggedEvent taggedEvent = taggedEvent(anEvent(aString(), "myName"), existingTag);
+        long sequence = appendEvent(taggedEvent).getSequenceOfTheFirstEvent();
+
+        // Verify initial tag
+        GetTagsResponse initialResponse = dcbEventChannel.tagsFor(sequence)
+                                                         .join();
+        assertEquals(1, initialResponse.getTagCount());
+        assertTrue(initialResponse.getTagList().contains(existingTag));
+
+        // Remove a non-existing tag
+        Tag nonExistingTag = aTag();
+        dcbEventChannel.removeTags(sequence, ImmutableList.of(nonExistingTag))
+                       .join();
+
+        // Verify that the original tag is still present
+        GetTagsResponse updatedResponse = dcbEventChannel.tagsFor(sequence)
+                                                         .join();
+        assertEquals(1, updatedResponse.getTagCount());
+        assertTrue(updatedResponse.getTagList().contains(existingTag));
     }
 
     @Test
@@ -850,7 +961,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     private static TaggedEvent taggedEvent(Event event, Tag... tag) {
         return TaggedEvent.newBuilder()
                           .setEvent(event)
-                          .addAllTag(Arrays.asList(tag))
+                          .addAllTag(asList(tag))
                           .build();
     }
 

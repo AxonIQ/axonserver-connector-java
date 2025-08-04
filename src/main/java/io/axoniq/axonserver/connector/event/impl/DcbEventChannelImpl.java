@@ -25,6 +25,8 @@ import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
 import io.axoniq.axonserver.connector.impl.FutureStreamObserver;
 import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
+import io.axoniq.axonserver.grpc.event.dcb.AddTagsRequest;
+import io.axoniq.axonserver.grpc.event.dcb.AddTagsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.AppendEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.AppendEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.ConsistencyCondition;
@@ -37,10 +39,13 @@ import io.axoniq.axonserver.grpc.event.dcb.GetTagsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetTagsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetTailRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetTailResponse;
+import io.axoniq.axonserver.grpc.event.dcb.RemoveTagsRequest;
+import io.axoniq.axonserver.grpc.event.dcb.RemoveTagsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.StreamEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.StreamEventsResponse;
+import io.axoniq.axonserver.grpc.event.dcb.Tag;
 import io.axoniq.axonserver.grpc.event.dcb.TaggedEvent;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -49,6 +54,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -205,6 +211,28 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
                                                      .setTimestamp(timestamp.toEpochMilli())
                                                      .build(),
                                  future);
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<AddTagsResponse> addTags(long sequence, Collection<Tag> tags) {
+        FutureStreamObserver<AddTagsResponse> future = new FutureStreamObserver<>(null);
+        AddTagsRequest request = AddTagsRequest.newBuilder()
+                                               .setSequence(sequence)
+                                               .addAllTag(tags)
+                                               .build();
+        eventStore.addTags(request, future);
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<RemoveTagsResponse> removeTags(long sequence, Collection<Tag> tags) {
+        FutureStreamObserver<RemoveTagsResponse> future = new FutureStreamObserver<>(null);
+        RemoveTagsRequest request = RemoveTagsRequest.newBuilder()
+                                                     .setSequence(sequence)
+                                                     .addAllTag(tags)
+                                                     .build();
+        eventStore.removeTags(request, future);
         return future;
     }
 
