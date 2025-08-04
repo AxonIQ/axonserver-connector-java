@@ -2,7 +2,7 @@ version: '3.3'
 
 services:
   axonserver:
-    image: axoniq/axonserver
+    image: docker.io/axoniq/axonserver
     hostname: axonserver
     environment:
       - AXONIQ_AXONSERVER_NAME=axonserver
@@ -15,7 +15,7 @@ services:
       - axonserver-eventstore:/eventdata
 
   toxiproxy:
-    image: shopify/toxiproxy
+    image: docker.io/shopify/toxiproxy
     hostname: toxiproxy
     ports:
       - '8474:8474'
