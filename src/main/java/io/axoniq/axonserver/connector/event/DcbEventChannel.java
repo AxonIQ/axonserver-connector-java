@@ -17,9 +17,11 @@
 package io.axoniq.axonserver.connector.event;
 
 import io.axoniq.axonserver.connector.ResultStream;
+import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.event.dcb.AddTagsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.AppendEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.ConsistencyCondition;
+import io.axoniq.axonserver.grpc.event.dcb.Event;
 import io.axoniq.axonserver.grpc.event.dcb.GetHeadResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetSequenceAtResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetTagsResponse;
@@ -32,6 +34,7 @@ import io.axoniq.axonserver.grpc.event.dcb.StreamEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.Tag;
 import io.axoniq.axonserver.grpc.event.dcb.TaggedEvent;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
@@ -180,6 +183,63 @@ public interface DcbEventChannel {
      * @return the sequence at the given timestamp
      */
     CompletableFuture<GetSequenceAtResponse> getSequenceAt(Instant timestamp);
+
+
+    /**
+     * Schedule the given {@code event} to be published after given {@code triggerDuration}. The returned value can be
+     * used to cancel the schedule, or to reschedule the event to another time.
+     *
+     * @param triggerDuration the amount of time to wait to publish the event
+     * @param event           the event to publish
+     * @return a token used to cancel the schedule
+     */
+    default CompletableFuture<String> scheduleEvent(Duration triggerDuration, Event event) {
+        return scheduleEvent(Instant.now().plus(triggerDuration), event);
+    }
+
+    /**
+     * Schedule the given {@code event} to be published at given {@code scheduleTime}. The returned value can be used to
+     * cancel the schedule, or to reschedule the event to another time.
+     *
+     * @param scheduleTime The scheduleTime at which to publish the event
+     * @param event        The event to publish
+     * @return a token used to cancel the schedule
+     */
+    CompletableFuture<String> scheduleEvent(Instant scheduleTime, Event event);
+
+    /**
+     * Cancels the scheduled publication of an event for which the given {@code scheduleToken} was returned.
+     *
+     * @param scheduleToken the token provided when scheduling the event to be cancelled
+     * @return a future reference to the result of the instruction
+     */
+    CompletableFuture<InstructionAck> cancelSchedule(String scheduleToken);
+
+    /**
+     * Reschedules the scheduled event with the given {@code scheduleToken} and reschedule it
+     * to be published after given {@code triggerDuration}. If no event is provided, the original event will be
+     * rescheduled.
+     *
+     * @param scheduleToken   the token of the event to cancel
+     * @param triggerDuration the point amount of time to wait to publish the event
+     * @param event           an optional new event to publish
+     * @return a future reference to the token for the new schedule
+     */
+    default CompletableFuture<String> reschedule(String scheduleToken, Duration triggerDuration, Event event) {
+        return reschedule(scheduleToken, Instant.now().plus(triggerDuration), event);
+    }
+
+    /**
+     * Reschedules the scheduled event with the given {@code scheduleToken} and reschedule it
+     * to be published at given {@code scheduleTime}. If no event is provided, the original event will be
+     * rescheduled.
+     *
+     * @param scheduleToken the token of the event to cancel
+     * @param scheduleTime  the point in time to publish the event
+     * @param event         an optional new event to publish
+     * @return a future reference to the token for the new schedule
+     */
+    CompletableFuture<String> reschedule(String scheduleToken, Instant scheduleTime, Event event);
 
     /**
      * Provides operations to interact with a Transaction to append events and a condition onto the Event Store.
