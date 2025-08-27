@@ -102,6 +102,6 @@ public class SnapshotChannelImpl extends AbstractAxonServerChannel<Void> impleme
 
     @Override
     public boolean isReady() {
-        return false;
+        return true;
     }
 }
