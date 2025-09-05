@@ -59,8 +59,6 @@ import io.axoniq.axonserver.grpc.event.dcb.TaggedEvent;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.Collection;
@@ -69,6 +67,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
+import javax.annotation.Nullable;
 
 /**
  * {@link DcbEventChannel} implementation, serving as the event connection between Axon Server and a client
@@ -78,8 +77,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @since 2025.1.0
  */
 public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> implements DcbEventChannel {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(DcbEventChannelImpl.class);
 
     private static final int BUFFER_SIZE = 512;
     private static final int REFILL_BATCH = 16;
@@ -250,7 +247,7 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
     @Override
     public CompletableFuture<String> scheduleEvent(Instant scheduleTime, Event event) {
         FutureStreamObserver<ScheduleToken>responseObserver = new FutureStreamObserver<>(new AxonServerException(
-                ErrorCategory.OTHER,
+                ErrorCategory.INSTRUCTION_ACK_ERROR,
                 "An unknown error occurred while scheduling an Event. No response received from Server.",
                 ""
         ));
@@ -265,7 +262,7 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
     @Override
     public CompletableFuture<InstructionAck> cancelSchedule(String token) {
         FutureStreamObserver<InstructionAck> responseObserver = new FutureStreamObserver<>(new AxonServerException(
-                ErrorCategory.OTHER,
+                ErrorCategory.INSTRUCTION_ACK_ERROR,
                 "An unknown error occurred while cancelling a scheduled Event. No response received from Server.",
                 ""
         ));
@@ -276,19 +273,20 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
     }
 
     @Override
-    public CompletableFuture<String> reschedule(String scheduleToken, Instant scheduleTime, Event event) {
+    public CompletableFuture<String> reschedule(String scheduleToken, Instant scheduleTime, @Nullable Event event) {
         FutureStreamObserver<ScheduleToken>responseObserver = new FutureStreamObserver<>(new AxonServerException(
-                ErrorCategory.OTHER,
+                ErrorCategory.INSTRUCTION_ACK_ERROR,
                 "An unknown error occurred while rescheduling Event. No response received from Server.",
                 ""
         ));
 
-        eventScheduler.rescheduleEvent(RescheduleEventRequest.newBuilder()
+        RescheduleEventRequest.Builder builder = RescheduleEventRequest.newBuilder()
                                                                        .setToken(scheduleToken)
-                                                                       .setEvent(event)
-                                                                       .setInstant(scheduleTime.toEpochMilli())
-                                                                       .build(),
-                                       responseObserver);
+                                                                       .setInstant(scheduleTime.toEpochMilli());
+        if (event != null) {
+            builder.setEvent(event);
+        }
+        eventScheduler.rescheduleEvent(builder.build(), responseObserver);
         return responseObserver.thenApply(ScheduleToken::getToken);
     }
 

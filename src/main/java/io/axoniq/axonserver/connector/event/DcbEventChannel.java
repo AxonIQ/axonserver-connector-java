@@ -38,6 +38,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
+import javax.annotation.Nullable;
 
 /**
  * Communication channel for Event related interaction with Axon Server based on the Dynamic Consistency Boundaries
@@ -239,7 +240,7 @@ public interface DcbEventChannel {
      * @param event         an optional new event to publish
      * @return a future reference to the token for the new schedule
      */
-    CompletableFuture<String> reschedule(String scheduleToken, Instant scheduleTime, Event event);
+    CompletableFuture<String> reschedule(String scheduleToken, Instant scheduleTime, @Nullable Event event);
 
     /**
      * Provides operations to interact with a Transaction to append events and a condition onto the Event Store.

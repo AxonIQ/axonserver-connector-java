@@ -64,11 +64,6 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     private static final boolean LOCAL = false;
 
     /**
-     * HTTP port for local Axon Server instance
-     */
-    private static ServerAddress axonServerHttpPort;
-
-    /**
      * Static initialization for local mode
      */
     static {
@@ -910,6 +905,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
+    @Disabled("Enable when scheduling is supported in AxonServer")
     void scheduleEvent() {
         DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
         long head = dcbEventChannel.head().join().getSequence();
@@ -922,6 +918,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
+    @Disabled("Enable when scheduling is supported in AxonServer")
     void cancelScheduledEvent() {
         DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
         long head = dcbEventChannel.head().join().getSequence();
@@ -934,6 +931,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
+    @Disabled("Enable when scheduling is supported in AxonServer")
     void rescheduleEvent() {
         DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
         long head = dcbEventChannel.head().join().getSequence();
@@ -947,6 +945,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
+    @Disabled("Enable when scheduling is supported in AxonServer")
     void rescheduleAndReplaceEvent() {
         DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
         long head = dcbEventChannel.head().join().getSequence();
