@@ -85,7 +85,7 @@ public abstract class AbstractAxonServerIntegrationTest {
     protected static Proxy axonServerProxy;
 
     protected static ServerAddress axonServerAddress;
-    private static ServerAddress axonServerHttpPort;
+    protected static ServerAddress axonServerHttpPort;
     protected String axonServerVersion;
 
     @BeforeAll

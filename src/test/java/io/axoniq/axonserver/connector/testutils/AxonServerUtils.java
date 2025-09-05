@@ -47,6 +47,7 @@ public class AxonServerUtils {
             throws IOException {
         deleteContext(context, hostname, port);
         createContext(context, hostname, port, dcbContext);
+        waitFor(1000);
     }
 
     public static void deleteContext(String context, String hostname, int port) throws IOException {
@@ -179,6 +180,14 @@ public class AxonServerUtils {
                                    TimeUnit.MILLISECONDS);
             }
         } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static void waitFor(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
     }
