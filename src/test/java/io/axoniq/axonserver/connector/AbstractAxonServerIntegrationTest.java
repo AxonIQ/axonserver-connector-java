@@ -65,7 +65,7 @@ public abstract class AbstractAxonServerIntegrationTest {
                     .withEnv("AXONIQ_AXONSERVER_DEVMODE_ENABLED", "true")
                     .withEnv("AXONIQ_AXONSERVER_ACCESSCONTROL_TOKEN", "user-token")
                     .withEnv("AXONIQ_AXONSERVER_ACCESSCONTROL_ADMIN_TOKEN", "admin-token")
-                    .withCopyFileToContainer(MountableFile.forHostPath("/home/silvano/IdeaProjects/axon-server/package-axonserver-enterprise/target/axonserver.jar"), "/axonserver/axonserver.jar")
+                    .withCopyFileToContainer(MountableFile.forHostPath("/home/marco/Documents/AxonIQ/AxonServer/axon-server/package-axonserver-enterprise/target/axonserver.jar"), "/axonserver/axonserver.jar")
                     .withImagePullPolicy(PullPolicy.ageBased(Duration.ofDays(1)))
                     .withNetwork(network)
                     .withNetworkAliases("axonserver")

@@ -149,7 +149,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
                                                                           .setKey(ByteString.copyFrom("Hello".getBytes()))
                                                                                   .setSnapshot(Snapshot.newBuilder()
                                                                                                        .setName("A key")
-                                                                                                       .setRevision("1.0")
+                                                                                                       .setVersion("1.0")
                                                                                                        .setPayload(ByteString.copyFrom("A payload".getBytes())).build())
                                                                           .setPrune(false)
                                                                           .setSequence(0)

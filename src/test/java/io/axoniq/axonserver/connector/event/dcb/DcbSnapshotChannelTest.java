@@ -15,6 +15,7 @@ import io.axoniq.axonserver.grpc.event.dcb.GetLastSnapshotResponse;
 import io.axoniq.axonserver.grpc.event.dcb.ListSnapshotsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.ListSnapshotsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.Snapshot;
+import io.grpc.StatusRuntimeException;
 import org.junit.jupiter.api.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,8 +23,10 @@ import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -87,7 +90,7 @@ class DcbSnapshotChannelTest extends AbstractAxonServerIntegrationTest {
                                                         .setPrune(false)
                                                         .setSnapshot(Snapshot.newBuilder()
                                                                              .setName("snapshot1")
-                                                                             .setRevision("1.0")
+                                                                             .setVersion("1.0")
                                                                              .setPayload(value1)
                                                                              .build())
                                                         .build();
@@ -101,7 +104,7 @@ class DcbSnapshotChannelTest extends AbstractAxonServerIntegrationTest {
                                                         .setPrune(false)
                                                         .setSnapshot(Snapshot.newBuilder()
                                                                              .setName("snapshot2")
-                                                                             .setRevision("1.0")
+                                                                             .setVersion("1.0")
                                                                              .setPayload(value2)
                                                                              .build())
                                                         .build();
@@ -135,7 +138,8 @@ class DcbSnapshotChannelTest extends AbstractAxonServerIntegrationTest {
                                                        .setPrune(false)
                                                        .setSnapshot(Snapshot.newBuilder()
                                                                             .setName("test-snapshot")
-                                                                            .setRevision("1.0")
+                                                                            .setVersion("1.0")
+                                                                            .setTimestamp(System.currentTimeMillis())
                                                                             .setPayload(value)
                                                                             .build())
                                                        .build();
@@ -225,7 +229,7 @@ class DcbSnapshotChannelTest extends AbstractAxonServerIntegrationTest {
                                       .setPrune(false)
                                       .setSnapshot(Snapshot.newBuilder()
                                                            .setName("snapshot-" + seq)
-                                                           .setRevision("1.0")
+                                                           .setVersion("1.0")
                                                            .setPayload(value)
                                                            .build())
                                       .build()
@@ -249,7 +253,7 @@ class DcbSnapshotChannelTest extends AbstractAxonServerIntegrationTest {
     // Delete Operation Tests
 
     @Test
-    void deleteRangeRemovesSnapshotsWithinInclusiveExclusiveBounds() {
+    void deleteRangeRemovesSnapshotsWithinExclusiveBounds() {
         ByteString key = ByteString.copyFrom("delete-range".getBytes());
         ByteString value = ByteString.copyFrom("data".getBytes());
 
@@ -261,7 +265,6 @@ class DcbSnapshotChannelTest extends AbstractAxonServerIntegrationTest {
         snapshotChannel.deleteSnapshots(
                 DeleteSnapshotsRequest.newBuilder()
                                       .setKey(key)
-                                      .setFromSequence(100)
                                       .setToSequence(200)
                                       .build()
         ).join();
@@ -272,11 +275,11 @@ class DcbSnapshotChannelTest extends AbstractAxonServerIntegrationTest {
                                                  .sorted()
                                                  .collect(Collectors.toList());
 
-        assertEquals(List.of(50L, 200L), remainingSequences);
+        assertEquals(List.of(200L), remainingSequences);
     }
 
     @Test
-    void deletingAllSnapshotsMakesGetLastReturnNull() {
+    void deletingAllSnapshotsMakesGetLastThrowException() {
         ByteString key = ByteString.copyFrom("delete-all".getBytes());
         ByteString value = ByteString.copyFrom("data".getBytes());
 
@@ -288,18 +291,17 @@ class DcbSnapshotChannelTest extends AbstractAxonServerIntegrationTest {
         snapshotChannel.deleteSnapshots(
                 DeleteSnapshotsRequest.newBuilder()
                                       .setKey(key)
-                                      .setFromSequence(0)
                                       .setToSequence(1000)
                                       .build()
         ).join();
 
         // GetLast should return empty response
-        GetLastSnapshotResponse last = snapshotChannel.getLastSnapshot(
-                GetLastSnapshotRequest.newBuilder().setKey(key).build()
-        ).join();
+        assertThrows(CompletionException.class, ()->{
+            snapshotChannel.getLastSnapshot(
+                    GetLastSnapshotRequest.newBuilder().setKey(key).build()
+            ).join();
+        });
 
-        // The response should have no snapshot set
-        assertFalse(last.hasSnapshot());
     }
 
     @Test
@@ -322,16 +324,16 @@ class DcbSnapshotChannelTest extends AbstractAxonServerIntegrationTest {
         snapshotChannel.deleteSnapshots(
                 DeleteSnapshotsRequest.newBuilder()
                                       .setKey(key)
-                                      .setFromSequence(sequence)
                                       .setToSequence(sequence + 1)
                                       .build()
         ).join();
 
         // Verify it's gone
-        GetLastSnapshotResponse afterDelete = snapshotChannel.getLastSnapshot(
-                GetLastSnapshotRequest.newBuilder().setKey(key).build()
-        ).join();
-        assertFalse(afterDelete.hasSnapshot());
+        assertThrows(CompletionException.class, ()->{
+            snapshotChannel.getLastSnapshot(
+                    GetLastSnapshotRequest.newBuilder().setKey(key).build()
+            ).join();
+        });
 
         // Reuse the same sequence
         addSnapshot(key, sequence, false, value2);
@@ -369,7 +371,7 @@ class DcbSnapshotChannelTest extends AbstractAxonServerIntegrationTest {
                                                 .map(ListSnapshotsResponse::getSequence)
                                                 .collect(Collectors.toList());
 
-        assertEquals(returnedSequences.stream().sorted().collect(Collectors.toList()), returnedSequences);
+        assertEquals(returnedSequences.stream().sorted(Comparator.reverseOrder()).collect(Collectors.toList()), returnedSequences);
     }
 
     @Test
@@ -396,39 +398,11 @@ class DcbSnapshotChannelTest extends AbstractAxonServerIntegrationTest {
     void getLastReturnsNullWhenNoSnapshotExistsForKey() {
         ByteString key = ByteString.copyFrom("unknown-key".getBytes());
 
-        GetLastSnapshotResponse result = snapshotChannel.getLastSnapshot(
-                GetLastSnapshotRequest.newBuilder().setKey(key).build()
-        ).join();
-
-        assertFalse(result.hasSnapshot());
-    }
-
-    @Test
-    void getLastReturnsHighestSequenceAfterMixedAddAndDeleteOperations() {
-        ByteString key = ByteString.copyFrom("getlast-mixed".getBytes());
-        ByteString value = ByteString.copyFrom("data".getBytes());
-
-        // Add snapshots
-        addSnapshot(key, 50L, false, value);
-        addSnapshot(key, 150L, false, value);
-        addSnapshot(key, 100L, false, value);
-        addSnapshot(key, 200L, false, value);
-
-        // Delete highest
-        snapshotChannel.deleteSnapshots(
-                DeleteSnapshotsRequest.newBuilder()
-                                      .setKey(key)
-                                      .setFromSequence(200)
-                                      .setToSequence(201)
-                                      .build()
-        ).join();
-
-        GetLastSnapshotResponse last = snapshotChannel.getLastSnapshot(
-                GetLastSnapshotRequest.newBuilder().setKey(key).build()
-        ).join();
-
-        assertTrue(last.hasSnapshot());
-        assertEquals(150L, last.getSequence());
+        assertThrows(CompletionException.class, ()->{
+            snapshotChannel.getLastSnapshot(
+                    GetLastSnapshotRequest.newBuilder().setKey(key).build()
+            ).join();
+        });
     }
 
     // Complex Scenarios
@@ -479,16 +453,16 @@ class DcbSnapshotChannelTest extends AbstractAxonServerIntegrationTest {
         snapshotChannel.deleteSnapshots(
                 DeleteSnapshotsRequest.newBuilder()
                                       .setKey(key)
-                                      .setFromSequence(sequence)
                                       .setToSequence(sequence + 1)
                                       .build()
         ).join();
 
         // Verify deletion
-        GetLastSnapshotResponse deleted = snapshotChannel.getLastSnapshot(
-                GetLastSnapshotRequest.newBuilder().setKey(key).build()
-        ).join();
-        assertFalse(deleted.hasSnapshot());
+        assertThrows(CompletionException.class, ()->{
+            snapshotChannel.getLastSnapshot(
+                    GetLastSnapshotRequest.newBuilder().setKey(key).build()
+            ).join();
+        });
 
         // Add again with same sequence
         addSnapshot(key, sequence, false, value2);
@@ -525,7 +499,7 @@ class DcbSnapshotChannelTest extends AbstractAxonServerIntegrationTest {
                                       .setPrune(true)
                                       .setSnapshot(Snapshot.newBuilder()
                                                            .setName("snapshot")
-                                                           .setRevision("1.0")
+                                                           .setVersion("1.0")
                                                            .setPayload(value)
                                                            .build())
                                       .build()
@@ -558,7 +532,7 @@ class DcbSnapshotChannelTest extends AbstractAxonServerIntegrationTest {
                                   .setPrune(prune)
                                   .setSnapshot(Snapshot.newBuilder()
                                                        .setName("snapshot-" + sequence)
-                                                       .setRevision("1.0")
+                                                       .setVersion("1.0")
                                                        .setPayload(value)
                                                        .build())
                                   .build()
