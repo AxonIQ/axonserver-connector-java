@@ -15,7 +15,6 @@ import io.axoniq.axonserver.grpc.event.dcb.GetLastSnapshotResponse;
 import io.axoniq.axonserver.grpc.event.dcb.ListSnapshotsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.ListSnapshotsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.Snapshot;
-import io.grpc.StatusRuntimeException;
 import org.junit.jupiter.api.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -479,7 +478,7 @@ class DcbSnapshotChannelTest extends AbstractAxonServerIntegrationTest {
     // Performance Tests (disabled by default)
 
     @Test
-//    @Disabled("Performance test - enable manually")
+    @Disabled("Performance test - enable manually")
     void appendingTwoMillionSnapshotsWithPruneEnabledCompletesInReasonableTime() throws InterruptedException {
         ByteString key = ByteString.copyFrom("perf-prune".getBytes());
         ByteString value = ByteString.copyFrom("payload".getBytes());
