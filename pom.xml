@@ -61,7 +61,6 @@
         <junit.jupiter.version>6.0.0</junit.jupiter.version>
         <mockito.version>5.14.2</mockito.version>
         <testcontainers.version>1.21.3</testcontainers.version>
-        <testng.version>7.11.0</testng.version>
 
         <httpclient5.version>5.5.1</httpclient5.version>
         <toxiproxy.version>2.1.11</toxiproxy.version>
@@ -131,19 +130,6 @@
                 <version>${reactive.streams.version}</version>
                 <scope>test</scope>
             </dependency>
-            <!-- testNG is needed to re-use Reactive Stream Test toolkit -->
-            <dependency>
-                <groupId>org.testng</groupId>
-                <artifactId>testng</artifactId>
-                <version>${testng.version}</version>
-                <scope>test</scope>
-            </dependency>
-            <dependency>
-                <groupId>org.junit.support</groupId>
-                <artifactId>testng-engine</artifactId>
-                <version>1.0.6</version>
-                <scope>test</scope>
-            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -160,17 +146,6 @@
             <groupId>org.reactivestreams</groupId>
             <artifactId>reactive-streams-tck</artifactId>
             <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.testng</groupId>
-            <artifactId>testng</artifactId>
-            <scope>test</scope>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.webjars</groupId>
-                    <artifactId>jquery</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.projectreactor</groupId>
