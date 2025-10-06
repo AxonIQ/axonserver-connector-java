@@ -34,3 +34,6 @@ updates:
           - "patch"
           - "minor"
           - "major"
+    ignore:
+      - dependency-name: "org.junit:junit-bom"
+        versions: [ "[6.0.0,)" ]

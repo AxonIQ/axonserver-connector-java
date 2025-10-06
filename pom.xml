@@ -58,7 +58,7 @@
         <projectreactor.version>3.7.11</projectreactor.version>
 
         <jacoco-maven-plugin.version>0.8.13</jacoco-maven-plugin.version>
-        <junit.jupiter.version>6.0.0</junit.jupiter.version>
+        <junit.jupiter.version>5.13.4</junit.jupiter.version>
         <mockito.version>5.14.2</mockito.version>
         <testcontainers.version>1.21.3</testcontainers.version>
 
