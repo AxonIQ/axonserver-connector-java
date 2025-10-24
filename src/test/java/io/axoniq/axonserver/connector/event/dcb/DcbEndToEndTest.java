@@ -8,18 +8,14 @@ import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
 import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.ResultStreamPublisher;
 import io.axoniq.axonserver.connector.event.DcbEventChannel;
-import io.axoniq.axonserver.connector.event.SnapshotChannel;
 import io.axoniq.axonserver.connector.impl.ServerAddress;
-import io.axoniq.axonserver.grpc.event.dcb.AddSnapshotRequest;
 import io.axoniq.axonserver.grpc.event.dcb.AppendEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.ConsistencyCondition;
 import io.axoniq.axonserver.grpc.event.dcb.Criterion;
 import io.axoniq.axonserver.grpc.event.dcb.Event;
-import io.axoniq.axonserver.grpc.event.dcb.GetLastSnapshotRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetSequenceAtResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetTagsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetTailResponse;
-import io.axoniq.axonserver.grpc.event.dcb.Snapshot;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.StreamEventsRequest;
@@ -134,24 +130,6 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
             // Skip the parent initialization when using a local instance
             logger.info("Using local Axon Server instance - skipping container setup");
         }
-    }
-
-    @Test
-    void addASnapshot() throws InterruptedException {
-        SnapshotChannel snapshotChannel = connection.snapshotChannel();
-
-        AddSnapshotRequest addSnapshotRequest = AddSnapshotRequest.newBuilder()
-                                                                          .setKey(ByteString.copyFrom("Hello".getBytes()))
-                                                                                  .setSnapshot(Snapshot.newBuilder()
-                                                                                                       .setName("A key")
-                                                                                                       .setVersion("1.0")
-                                                                                                       .setPayload(ByteString.copyFrom("A payload".getBytes())).build())
-                                                                          .setPrune(false)
-                                                                          .setSequence(0)
-                                                                          .build();
-        snapshotChannel.addSnapshot(addSnapshotRequest).join();
-
-        System.out.println(snapshotChannel.getLastSnapshot(GetLastSnapshotRequest.newBuilder().setKey(ByteString.copyFrom("Hello".getBytes())).build()).join().getSnapshot().getName());
     }
 
     @Test
