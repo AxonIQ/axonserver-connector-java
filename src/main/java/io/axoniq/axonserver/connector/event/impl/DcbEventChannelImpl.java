@@ -213,12 +213,6 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
     }
 
     @Override
-    public CompletableFuture<AppendEventsResponse> append(ConsistencyCondition condition,
-                                                          TaggedEvent... taggedEvents) {
-        return this.append(Arrays.asList(taggedEvents), condition);
-    }
-
-    @Override
     public CompletableFuture<GetHeadResponse> head() {
         FutureStreamObserver<GetHeadResponse> future = new FutureStreamObserver<>(null);
         eventStore.getHead(GetHeadRequest.getDefaultInstance(), future);
