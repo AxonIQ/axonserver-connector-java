@@ -24,6 +24,8 @@ import io.axoniq.axonserver.connector.command.impl.CommandChannelImpl;
 import io.axoniq.axonserver.connector.control.ControlChannel;
 import io.axoniq.axonserver.connector.event.DcbEventChannel;
 import io.axoniq.axonserver.connector.event.EventChannel;
+import io.axoniq.axonserver.connector.event.SnapshotChannel;
+import io.axoniq.axonserver.connector.event.impl.SnapshotChannelImpl;
 import io.axoniq.axonserver.connector.event.impl.DcbEventChannelImpl;
 import io.axoniq.axonserver.connector.event.impl.EventChannelImpl;
 import io.axoniq.axonserver.connector.event.transformation.EventTransformationChannel;
@@ -58,6 +60,7 @@ public class ContextConnection implements AxonServerConnection {
     private final AtomicReference<QueryChannelImpl> queryChannel = new AtomicReference<>();
     private final AtomicReference<EventTransformationChannelImpl> eventTransformationChannel = new AtomicReference<>();
     private final AtomicReference<AdminChannelImpl> adminChannel = new AtomicReference<>();
+    private final AtomicReference<SnapshotChannelImpl> snapshotChannel = new AtomicReference<>();
     private final ScheduledExecutorService executorService;
     private final AxonServerManagedChannel connection;
     private final int commandPermits;
@@ -112,6 +115,7 @@ public class ContextConnection implements AxonServerConnection {
         doIfNotNull(eventChannel.get(), EventChannelImpl::reconnect);
         doIfNotNull(eventTransformationChannel.get(), EventTransformationChannelImpl::reconnect);
         doIfNotNull(adminChannel.get(), AdminChannelImpl::reconnect);
+        doIfNotNull(snapshotChannel.get(), SnapshotChannelImpl::reconnect);
     }
 
     @Override
@@ -144,6 +148,7 @@ public class ContextConnection implements AxonServerConnection {
         doIfNotNull(eventChannel.get(), EventChannelImpl::disconnect);
         doIfNotNull(eventTransformationChannel.get(), EventTransformationChannelImpl::disconnect);
         doIfNotNull(adminChannel.get(), AdminChannelImpl::disconnect);
+        doIfNotNull(snapshotChannel.get(), SnapshotChannelImpl::disconnect);
         connection.shutdown();
         onShutdown.accept(this);
         try {
@@ -188,6 +193,16 @@ public class ContextConnection implements AxonServerConnection {
                                                                       connection),
                                            this::ensureConnected
         );
+    }
+
+    @Override
+    public SnapshotChannel snapshotChannel() {
+        return createIfAbsentAndInitialize(snapshotChannel,
+                                           () -> new SnapshotChannelImpl(clientIdentification,
+                                                                         executorService,
+                                                                         connection),
+                                           this::ensureConnected
+                );
     }
 
     @Override

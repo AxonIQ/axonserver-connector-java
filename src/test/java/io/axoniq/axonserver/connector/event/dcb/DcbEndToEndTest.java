@@ -463,7 +463,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
         assertEquals(2, updatedResponse.getTagCount());
         assertTrue(updatedResponse.getTagList().contains(initialTag));
         assertTrue(updatedResponse.getTagList().contains(newTag));
-    } 
+    }
 
     @Test
     void removeTags() {
