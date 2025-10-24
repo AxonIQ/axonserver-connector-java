@@ -61,6 +61,7 @@ import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -199,6 +200,19 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
     }
 
     @Override
+    public CompletableFuture<AppendEventsResponse> append(Collection<TaggedEvent> taggedEvents,
+                                                          ConsistencyCondition condition) {
+        if (taggedEvents == null || taggedEvents.isEmpty()) {
+            return CompletableFuture.failedFuture(new IllegalArgumentException("taggedEvents must not be null or empty"));
+        }
+        FutureStreamObserver<AppendEventsResponse> response = new FutureStreamObserver<>(null);
+        StreamObserver<AppendEventsRequest> clientStream = eventStore.append(response);
+        return new AppendEventsTransactionImpl(clientStream, response)
+                .append(taggedEvents, condition)
+                .commit();
+    }
+
+    @Override
     public CompletableFuture<GetHeadResponse> head() {
         FutureStreamObserver<GetHeadResponse> future = new FutureStreamObserver<>(null);
         eventStore.getHead(GetHeadRequest.getDefaultInstance(), future);
@@ -303,14 +317,36 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
             this.result = result;
         }
 
-        public AppendEventsTransaction condition(ConsistencyCondition condition) {
+        /**
+         * Appends this {@code taggedEvent} with {@code condition} to this transaction. Only valid if no consistency
+         * condition was supplied before
+         *
+         * @param taggedEvent the events to be appended
+         * @param condition   the consistency condition
+         * @return this Transaction for fluency
+         * @throws IllegalStateException Will throw an IllegalStateException if Consistency Condition is already set.
+         */
+
+        private AppendEventsTransaction append(Collection<TaggedEvent> taggedEvent, ConsistencyCondition condition)
+                throws IllegalStateException {
+            stream.onNext(createConsistencyCondition(condition)
+                                  .addAllEvent(taggedEvent)
+                                  .build());
+            return this;
+        }
+
+        private AppendEventsRequest.Builder createConsistencyCondition(ConsistencyCondition consistencyCondition)
+                throws IllegalStateException {
             if (conditionSet.compareAndSet(false, true)) {
-                stream.onNext(AppendEventsRequest.newBuilder()
-                                                 .setCondition(condition)
-                                                 .build());
-                return this;
+                return AppendEventsRequest.newBuilder()
+                                          .setCondition(consistencyCondition);
             }
             throw new IllegalStateException("Consistency Condition already set.");
+        }
+
+        public AppendEventsTransaction condition(ConsistencyCondition condition) {
+            stream.onNext(createConsistencyCondition(condition).build());
+            return this;
         }
 
         @Override
