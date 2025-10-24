@@ -68,11 +68,6 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     private static final boolean LOCAL = false;
 
     /**
-     * HTTP port for local Axon Server instance
-     */
-    private static ServerAddress axonServerHttpPort;
-
-    /**
      * Static initialization for local mode
      */
     static {
@@ -929,6 +924,61 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
             // This is a different issue than the getSequenceAt feature not being supported
             Assumptions.assumeTrue(false, "Test environment not properly set up: " + e.getMessage());
         }
+    }
+
+    @Test
+    @Disabled("Enable when scheduling is supported in AxonServer")
+    void scheduleEvent() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        long head = dcbEventChannel.head().join().getSequence();
+        Event event = anEvent(aString(), "scheduledEvent");
+        dcbEventChannel.scheduleEvent(Duration.ofSeconds(5), event)
+                       .join();
+        StepVerifier.create(streamFlux(head).take(1))
+                    .expectNextMatches(r -> r.getEvent().getEvent().getName().equals("scheduledEvent"))
+                    .verifyComplete();
+    }
+
+    @Test
+    @Disabled("Enable when scheduling is supported in AxonServer")
+    void cancelScheduledEvent() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        long head = dcbEventChannel.head().join().getSequence();
+        Event event = anEvent(aString(), "scheduledEvent");
+        String token = dcbEventChannel.scheduleEvent(Duration.ofSeconds(1), event)
+                       .join();
+        dcbEventChannel.cancelSchedule(token).join();
+        StepVerifier.create(streamFlux(head).take(Duration.ofSeconds(2)))
+                    .verifyComplete();
+    }
+
+    @Test
+    @Disabled("Enable when scheduling is supported in AxonServer")
+    void rescheduleEvent() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        long head = dcbEventChannel.head().join().getSequence();
+        Event event = anEvent(aString(), "rescheduledEvent");
+        String token = dcbEventChannel.scheduleEvent(Duration.ofSeconds(30), event)
+                       .join();
+        dcbEventChannel.reschedule(token, Duration.ofSeconds(2), null).join();
+        StepVerifier.create(streamFlux(head).take(Duration.ofSeconds(3)))
+                    .expectNextMatches(r -> r.getEvent().getEvent().getName().equals("rescheduledEvent"))
+                    .verifyComplete();
+    }
+
+    @Test
+    @Disabled("Enable when scheduling is supported in AxonServer")
+    void rescheduleAndReplaceEvent() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        long head = dcbEventChannel.head().join().getSequence();
+        Event event = anEvent(aString(), "scheduledEvent");
+        String token = dcbEventChannel.scheduleEvent(Duration.ofSeconds(5), event)
+                                      .join();
+        Event replaceEvent = anEvent(aString(), "rescheduledEvent");
+        dcbEventChannel.reschedule(token, Duration.ofSeconds(2), replaceEvent).join();
+        StepVerifier.create(streamFlux(head).take(Duration.ofSeconds(6)))
+                    .expectNextMatches(r -> r.getEvent().getEvent().getName().equals("rescheduledEvent"))
+                    .verifyComplete();
     }
 
     private Flux<SourceEventsResponse> sourceFlux(long start) {
