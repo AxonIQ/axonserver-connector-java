@@ -14,8 +14,7 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Communication channel for Snapshot-related interactions with AxonServer. This interface provides operations for
- * managing snapshots in a Dynamic Consistency Boundaries (DCB) environment, including adding, deleting, listing, and
- * retrieving snapshots.
+ * managing snapshots, including adding, deleting, listing, and retrieving snapshots.
  */
 public interface SnapshotChannel {
 

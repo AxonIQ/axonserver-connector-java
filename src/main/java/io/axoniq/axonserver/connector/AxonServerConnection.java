@@ -97,6 +97,11 @@ public interface AxonServerConnection {
      */
     QueryChannel queryChannel();
 
+    /**
+     * Returns the channel on which Snapshotting can be performed with AxonServer.
+     *
+     * @return the channel for Snapshotting
+     */
     SnapshotChannel snapshotChannel();
 
     /**

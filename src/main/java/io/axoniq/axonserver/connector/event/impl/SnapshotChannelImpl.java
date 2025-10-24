@@ -19,20 +19,32 @@ import io.axoniq.axonserver.grpc.event.dcb.GetLastSnapshotResponse;
 import io.axoniq.axonserver.grpc.event.dcb.ListSnapshotsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.ListSnapshotsResponse;
 
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 
+/**
+ * {@link SnapshotChannel} implementation, serving as the event connection between Axon Server and a client
+ * application.
+ *
+ * @author Silvano Biemans
+ * @author Milan Savic
+ * @since 2025.2.0
+ */
 public class SnapshotChannelImpl extends AbstractAxonServerChannel<Void> implements SnapshotChannel {
 
     private final DcbSnapshotStoreGrpc.DcbSnapshotStoreStub snapshotStore;
     private final ClientIdentification clientIdentification;
+    private final Set<ResultStream<ListSnapshotsResponse>> buffers = ConcurrentHashMap.newKeySet();
 
     private static final int BUFFER_SIZE = 512;
     private static final int REFILL_BATCH = 16;
+
     /**
      * Instantiate an {@link AbstractAxonServerChannel}.
      *
-     * @param clientIdentification identifies a client
+     * @param clientIdentification     identifies a client
      * @param executor                 a {@link ScheduledExecutorService} used to schedule reconnections
      * @param axonServerManagedChannel the {@link AxonServerManagedChannel} used to connect to AxonServer
      */
@@ -59,7 +71,7 @@ public class SnapshotChannelImpl extends AbstractAxonServerChannel<Void> impleme
 
     @Override
     public ResultStream<ListSnapshotsResponse> listSnapshots(ListSnapshotsRequest request) {
-        AbstractBufferedStream<ListSnapshotsResponse, Empty> result =
+        AbstractBufferedStream<ListSnapshotsResponse, Empty> buffer =
                 new AbstractBufferedStream<>(clientIdentification.getClientId(),
                                              BUFFER_SIZE,
                                              REFILL_BATCH) {
@@ -74,8 +86,15 @@ public class SnapshotChannelImpl extends AbstractAxonServerChannel<Void> impleme
                         return null;
                     }
                 };
-        snapshotStore.list(request, result);
-        return result;
+        buffers.add(buffer);
+        buffer.onCloseRequested(() -> buffers.remove(buffer));
+        try {
+            snapshotStore.list(request, buffer);
+        } catch (Exception e) {
+            buffers.remove(buffer);
+            throw e;
+        }
+        return buffer;
     }
 
     @Override
@@ -87,21 +106,26 @@ public class SnapshotChannelImpl extends AbstractAxonServerChannel<Void> impleme
 
     @Override
     public void connect() {
-
+        // nothing to do here
     }
 
     @Override
     public void reconnect() {
-
+        closeBuffers();
     }
 
     @Override
     public void disconnect() {
-
+        closeBuffers();
     }
 
     @Override
     public boolean isReady() {
         return true;
+    }
+
+    private void closeBuffers() {
+        buffers.forEach(ResultStream::close);
+        buffers.clear();
     }
 }
