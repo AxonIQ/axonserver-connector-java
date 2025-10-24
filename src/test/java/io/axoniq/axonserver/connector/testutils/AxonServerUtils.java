@@ -47,8 +47,7 @@ public class AxonServerUtils {
             throws IOException {
         deleteContext(context, hostname, port);
         createContext(context, hostname, port, dcbContext);
-        // TODO: 6/20/23 Figure out why busy wait is necessary for newly created context to be operative
-        waitFor(2_000);
+        waitFor(1000);
     }
 
     public static void deleteContext(String context, String hostname, int port) throws IOException {
@@ -96,8 +95,8 @@ public class AxonServerUtils {
         waitForContextsCondition(hostname, port, contexts -> contexts.contains(context));
     }
 
-    public static List<String> contexts(String hostname, int port) throws IOException {
-        final URL url = new URL(String.format("http://%s:%d/v1/public/context", hostname, port));
+    public static List<String> internalContexts(String hostname, int port) throws IOException {
+        final URL url = new URL(String.format("http://%s:%d/internal/raft/contexts", hostname, port));
         HttpURLConnection connection = null;
         try {
             connection = (HttpURLConnection) url.openConnection();
@@ -169,19 +168,11 @@ public class AxonServerUtils {
         }
     }
 
-    private static void waitFor(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     private static void checkContextsCondition(String hostname, int port,
                                                Predicate<List<String>> condition,
                                                CountDownLatch latch, ScheduledExecutorService scheduler) {
         try {
-            if (condition.test(contexts(hostname, port))) {
+            if (condition.test(internalContexts(hostname, port))) {
                 latch.countDown();
             } else {
                 scheduler.schedule(() -> checkContextsCondition(hostname, port, condition, latch, scheduler),
@@ -189,6 +180,14 @@ public class AxonServerUtils {
                                    TimeUnit.MILLISECONDS);
             }
         } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static void waitFor(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
     }

@@ -17,19 +17,26 @@
 package io.axoniq.axonserver.connector.event.impl;
 
 import com.google.protobuf.Empty;
+import io.axoniq.axonserver.connector.AxonServerException;
+import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.ResultStream;
-import io.axoniq.axonserver.connector.event.AppendEventsTransaction;
 import io.axoniq.axonserver.connector.event.DcbEventChannel;
 import io.axoniq.axonserver.connector.impl.AbstractAxonServerChannel;
 import io.axoniq.axonserver.connector.impl.AbstractBufferedStream;
 import io.axoniq.axonserver.connector.impl.AxonServerManagedChannel;
 import io.axoniq.axonserver.connector.impl.FutureStreamObserver;
 import io.axoniq.axonserver.grpc.FlowControl;
+import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
+import io.axoniq.axonserver.grpc.event.dcb.AddTagsRequest;
+import io.axoniq.axonserver.grpc.event.dcb.AddTagsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.AppendEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.AppendEventsResponse;
+import io.axoniq.axonserver.grpc.event.dcb.CancelScheduledEventRequest;
 import io.axoniq.axonserver.grpc.event.dcb.ConsistencyCondition;
+import io.axoniq.axonserver.grpc.event.dcb.DcbEventSchedulerGrpc;
 import io.axoniq.axonserver.grpc.event.dcb.DcbEventStoreGrpc;
+import io.axoniq.axonserver.grpc.event.dcb.Event;
 import io.axoniq.axonserver.grpc.event.dcb.GetHeadRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetHeadResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetSequenceAtRequest;
@@ -38,26 +45,30 @@ import io.axoniq.axonserver.grpc.event.dcb.GetTagsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetTagsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetTailRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetTailResponse;
+import io.axoniq.axonserver.grpc.event.dcb.RemoveTagsRequest;
+import io.axoniq.axonserver.grpc.event.dcb.RemoveTagsResponse;
+import io.axoniq.axonserver.grpc.event.dcb.RescheduleEventRequest;
+import io.axoniq.axonserver.grpc.event.dcb.ScheduleEventRequest;
+import io.axoniq.axonserver.grpc.event.dcb.ScheduleToken;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.StreamEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.StreamEventsResponse;
+import io.axoniq.axonserver.grpc.event.dcb.Tag;
 import io.axoniq.axonserver.grpc.event.dcb.TaggedEvent;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
+import javax.annotation.Nullable;
 
 /**
  * {@link DcbEventChannel} implementation, serving as the event connection between Axon Server and a client
@@ -68,11 +79,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> implements DcbEventChannel {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(DcbEventChannelImpl.class);
-
     private static final int BUFFER_SIZE = 512;
     private static final int REFILL_BATCH = 16;
     private final DcbEventStoreGrpc.DcbEventStoreStub eventStore;
+    private final DcbEventSchedulerGrpc.DcbEventSchedulerStub eventScheduler;
     private final ClientIdentification clientIdentification;
     private final Set<ResultStream<StreamEventsResponse>> buffers = ConcurrentHashMap.newKeySet();
 
@@ -88,6 +98,7 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
                                AxonServerManagedChannel axonServerManagedChannel) {
         super(clientIdentification, executor, axonServerManagedChannel);
         this.eventStore = DcbEventStoreGrpc.newStub(axonServerManagedChannel);
+        this.eventScheduler = DcbEventSchedulerGrpc.newStub(axonServerManagedChannel);
         this.clientIdentification = clientIdentification;
     }
 
@@ -230,6 +241,75 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
                                  future);
         return future;
     }
+
+    @Override
+    public CompletableFuture<AddTagsResponse> addTags(long sequence, Collection<Tag> tags) {
+        FutureStreamObserver<AddTagsResponse> future = new FutureStreamObserver<>(null);
+        AddTagsRequest request = AddTagsRequest.newBuilder()
+                                               .setSequence(sequence)
+                                               .addAllTag(tags)
+                                               .build();
+        eventStore.addTags(request, future);
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<RemoveTagsResponse> removeTags(long sequence, Collection<Tag> tags) {
+        FutureStreamObserver<RemoveTagsResponse> future = new FutureStreamObserver<>(null);
+        RemoveTagsRequest request = RemoveTagsRequest.newBuilder()
+                                                     .setSequence(sequence)
+                                                     .addAllTag(tags)
+                                                     .build();
+        eventStore.removeTags(request, future);
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<String> scheduleEvent(Instant scheduleTime, Event event) {
+        FutureStreamObserver<ScheduleToken>responseObserver = new FutureStreamObserver<>(new AxonServerException(
+                ErrorCategory.INSTRUCTION_ACK_ERROR,
+                "An unknown error occurred while scheduling an Event. No response received from Server.",
+                ""
+        ));
+
+        eventScheduler.scheduleEvent(ScheduleEventRequest.newBuilder()
+                                                                 .setEvent(event)
+                                                                 .setInstant(scheduleTime.toEpochMilli())
+                                                                 .build(), responseObserver);
+        return responseObserver.thenApply(ScheduleToken::getToken);
+    }
+
+    @Override
+    public CompletableFuture<InstructionAck> cancelSchedule(String token) {
+        FutureStreamObserver<InstructionAck> responseObserver = new FutureStreamObserver<>(new AxonServerException(
+                ErrorCategory.INSTRUCTION_ACK_ERROR,
+                "An unknown error occurred while cancelling a scheduled Event. No response received from Server.",
+                ""
+        ));
+
+        eventScheduler.cancelScheduledEvent(CancelScheduledEventRequest.newBuilder().setToken(token).build(),
+                                            responseObserver);
+        return responseObserver;
+    }
+
+    @Override
+    public CompletableFuture<String> reschedule(String scheduleToken, Instant scheduleTime, @Nullable Event event) {
+        FutureStreamObserver<ScheduleToken>responseObserver = new FutureStreamObserver<>(new AxonServerException(
+                ErrorCategory.INSTRUCTION_ACK_ERROR,
+                "An unknown error occurred while rescheduling Event. No response received from Server.",
+                ""
+        ));
+
+        RescheduleEventRequest.Builder builder = RescheduleEventRequest.newBuilder()
+                                                                       .setToken(scheduleToken)
+                                                                       .setInstant(scheduleTime.toEpochMilli());
+        if (event != null) {
+            builder.setEvent(event);
+        }
+        eventScheduler.rescheduleEvent(builder.build(), responseObserver);
+        return responseObserver.thenApply(ScheduleToken::getToken);
+    }
+
 
     private static class AppendEventsTransactionImpl implements AppendEventsTransaction {
 

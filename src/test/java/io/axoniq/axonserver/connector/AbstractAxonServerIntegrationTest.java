@@ -38,7 +38,9 @@ import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.images.PullPolicy;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.MountableFile;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
@@ -85,7 +87,7 @@ public abstract class AbstractAxonServerIntegrationTest {
     protected static Proxy axonServerProxy;
 
     protected static ServerAddress axonServerAddress;
-    private static ServerAddress axonServerHttpPort;
+    protected static ServerAddress axonServerHttpPort;
     protected String axonServerVersion;
 
     @BeforeAll

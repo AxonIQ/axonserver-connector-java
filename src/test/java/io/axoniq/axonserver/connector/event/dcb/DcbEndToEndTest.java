@@ -7,18 +7,14 @@ import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
 import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.ResultStreamPublisher;
-import io.axoniq.axonserver.connector.impl.ServerAddress;
 import io.axoniq.axonserver.connector.event.DcbEventChannel;
+import io.axoniq.axonserver.connector.impl.ServerAddress;
 import io.axoniq.axonserver.grpc.event.dcb.AppendEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.ConsistencyCondition;
 import io.axoniq.axonserver.grpc.event.dcb.Criterion;
 import io.axoniq.axonserver.grpc.event.dcb.Event;
-import io.axoniq.axonserver.grpc.event.dcb.GetHeadRequest;
-import io.axoniq.axonserver.grpc.event.dcb.GetSequenceAtRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetSequenceAtResponse;
-import io.axoniq.axonserver.grpc.event.dcb.GetTagsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetTagsResponse;
-import io.axoniq.axonserver.grpc.event.dcb.GetTailRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetTailResponse;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsResponse;
@@ -34,11 +30,9 @@ import org.testcontainers.containers.output.Slf4jLogConsumer;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -55,6 +49,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
+import static java.util.Arrays.asList;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -67,11 +62,6 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
      * true, tests will connect to localhost:8024 (HTTP) and localhost:8124 (gRPC)
      */
     private static final boolean LOCAL = false;
-
-    /**
-     * HTTP port for local Axon Server instance
-     */
-    private static ServerAddress axonServerHttpPort;
 
     /**
      * Static initialization for local mode
@@ -449,6 +439,114 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     }
 
     @Test
+    void addTags() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+
+        // Create and append an event with one tag
+        Tag initialTag = aTag();
+        TaggedEvent taggedEvent = taggedEvent(anEvent(aString(), "myName"), initialTag);
+        long sequence = appendEvent(taggedEvent).getSequenceOfTheFirstEvent();
+
+        // Verify initial tag
+        GetTagsResponse initialResponse = dcbEventChannel.tagsFor(sequence)
+                                                         .join();
+        assertEquals(ImmutableList.of(initialTag), initialResponse.getTagList());
+
+        // Add a new tag
+        Tag newTag = aTag();
+        dcbEventChannel.addTags(sequence, ImmutableList.of(newTag))
+                       .join();
+
+        // Verify both tags are present
+        GetTagsResponse updatedResponse = dcbEventChannel.tagsFor(sequence)
+                                                         .join();
+        assertEquals(2, updatedResponse.getTagCount());
+        assertTrue(updatedResponse.getTagList().contains(initialTag));
+        assertTrue(updatedResponse.getTagList().contains(newTag));
+    }
+
+    @Test
+    void removeTags() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+
+        // Create and append an event with two tags
+        Tag tag1 = aTag();
+        Tag tag2 = aTag();
+        TaggedEvent taggedEvent = taggedEvent(anEvent(aString(), "myName"), tag1, tag2);
+        long sequence = appendEvent(taggedEvent).getSequenceOfTheFirstEvent();
+
+        // Verify initial tags
+        GetTagsResponse initialResponse = dcbEventChannel.tagsFor(sequence)
+                                                         .join();
+        assertEquals(2, initialResponse.getTagCount());
+        assertTrue(initialResponse.getTagList().contains(tag1));
+        assertTrue(initialResponse.getTagList().contains(tag2));
+
+        // Remove one tag
+        dcbEventChannel.removeTags(sequence, ImmutableList.of(tag1))
+                       .join();
+
+        // Verify only the remaining tag is present
+        GetTagsResponse updatedResponse = dcbEventChannel.tagsFor(sequence)
+                                                         .join();
+        assertEquals(1, updatedResponse.getTagCount());
+        assertTrue(updatedResponse.getTagList().contains(tag2));
+    }
+
+    @Test
+    void addExistingTag() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+
+        // Create and append an event with one tag
+        Tag existingTag = aTag();
+        TaggedEvent taggedEvent = taggedEvent(anEvent(aString(), "myName"), existingTag);
+        long sequence = appendEvent(taggedEvent).getSequenceOfTheFirstEvent();
+
+        // Verify initial tag
+        GetTagsResponse initialResponse = dcbEventChannel.tagsFor(sequence)
+                                                         .join();
+        assertEquals(1, initialResponse.getTagCount());
+        assertTrue(initialResponse.getTagList().contains(existingTag));
+
+        // Add the same tag again
+        dcbEventChannel.addTags(sequence, ImmutableList.of(existingTag))
+                       .join();
+
+        // Verify that there are no duplicates
+        GetTagsResponse updatedResponse = dcbEventChannel.tagsFor(sequence)
+                                                         .join();
+        assertEquals(1, updatedResponse.getTagCount());
+        assertTrue(updatedResponse.getTagList().contains(existingTag));
+    }
+
+    @Test
+    void removeNonExistingTag() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+
+        // Create and append an event with one tag
+        Tag existingTag = aTag();
+        TaggedEvent taggedEvent = taggedEvent(anEvent(aString(), "myName"), existingTag);
+        long sequence = appendEvent(taggedEvent).getSequenceOfTheFirstEvent();
+
+        // Verify initial tag
+        GetTagsResponse initialResponse = dcbEventChannel.tagsFor(sequence)
+                                                         .join();
+        assertEquals(1, initialResponse.getTagCount());
+        assertTrue(initialResponse.getTagList().contains(existingTag));
+
+        // Remove a non-existing tag
+        Tag nonExistingTag = aTag();
+        dcbEventChannel.removeTags(sequence, ImmutableList.of(nonExistingTag))
+                       .join();
+
+        // Verify that the original tag is still present
+        GetTagsResponse updatedResponse = dcbEventChannel.tagsFor(sequence)
+                                                         .join();
+        assertEquals(1, updatedResponse.getTagCount());
+        assertTrue(updatedResponse.getTagList().contains(existingTag));
+    }
+
+    @Test
     void head() {
         assertEquals(0, retrieveHead());
     }
@@ -806,6 +904,61 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
         }
     }
 
+    @Test
+    @Disabled("Enable when scheduling is supported in AxonServer")
+    void scheduleEvent() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        long head = dcbEventChannel.head().join().getSequence();
+        Event event = anEvent(aString(), "scheduledEvent");
+        dcbEventChannel.scheduleEvent(Duration.ofSeconds(5), event)
+                       .join();
+        StepVerifier.create(streamFlux(head).take(1))
+                    .expectNextMatches(r -> r.getEvent().getEvent().getName().equals("scheduledEvent"))
+                    .verifyComplete();
+    }
+
+    @Test
+    @Disabled("Enable when scheduling is supported in AxonServer")
+    void cancelScheduledEvent() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        long head = dcbEventChannel.head().join().getSequence();
+        Event event = anEvent(aString(), "scheduledEvent");
+        String token = dcbEventChannel.scheduleEvent(Duration.ofSeconds(1), event)
+                       .join();
+        dcbEventChannel.cancelSchedule(token).join();
+        StepVerifier.create(streamFlux(head).take(Duration.ofSeconds(2)))
+                    .verifyComplete();
+    }
+
+    @Test
+    @Disabled("Enable when scheduling is supported in AxonServer")
+    void rescheduleEvent() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        long head = dcbEventChannel.head().join().getSequence();
+        Event event = anEvent(aString(), "rescheduledEvent");
+        String token = dcbEventChannel.scheduleEvent(Duration.ofSeconds(30), event)
+                       .join();
+        dcbEventChannel.reschedule(token, Duration.ofSeconds(2), null).join();
+        StepVerifier.create(streamFlux(head).take(Duration.ofSeconds(3)))
+                    .expectNextMatches(r -> r.getEvent().getEvent().getName().equals("rescheduledEvent"))
+                    .verifyComplete();
+    }
+
+    @Test
+    @Disabled("Enable when scheduling is supported in AxonServer")
+    void rescheduleAndReplaceEvent() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        long head = dcbEventChannel.head().join().getSequence();
+        Event event = anEvent(aString(), "scheduledEvent");
+        String token = dcbEventChannel.scheduleEvent(Duration.ofSeconds(5), event)
+                                      .join();
+        Event replaceEvent = anEvent(aString(), "rescheduledEvent");
+        dcbEventChannel.reschedule(token, Duration.ofSeconds(2), replaceEvent).join();
+        StepVerifier.create(streamFlux(head).take(Duration.ofSeconds(6)))
+                    .expectNextMatches(r -> r.getEvent().getEvent().getName().equals("rescheduledEvent"))
+                    .verifyComplete();
+    }
+
     private Flux<SourceEventsResponse> sourceFlux(long start) {
         DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
         return fluxStream(() -> dcbEventChannel.source(sourceEventsRequest(start)));
@@ -850,7 +1003,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
     private static TaggedEvent taggedEvent(Event event, Tag... tag) {
         return TaggedEvent.newBuilder()
                           .setEvent(event)
-                          .addAllTag(Arrays.asList(tag))
+                          .addAllTag(asList(tag))
                           .build();
     }
 

@@ -21,6 +21,7 @@ import io.axoniq.axonserver.connector.command.CommandChannel;
 import io.axoniq.axonserver.connector.control.ControlChannel;
 import io.axoniq.axonserver.connector.event.DcbEventChannel;
 import io.axoniq.axonserver.connector.event.EventChannel;
+import io.axoniq.axonserver.connector.event.SnapshotChannel;
 import io.axoniq.axonserver.connector.event.transformation.EventTransformationChannel;
 import io.axoniq.axonserver.connector.query.QueryChannel;
 
@@ -95,6 +96,13 @@ public interface AxonServerConnection {
      * @return the channel for Query messaging
      */
     QueryChannel queryChannel();
+
+    /**
+     * Returns the channel on which Snapshotting can be performed with AxonServer.
+     *
+     * @return the channel for Snapshotting
+     */
+    SnapshotChannel snapshotChannel();
 
     /**
      * Returns the channel on which Event transformations can be performed with AxonServer.
