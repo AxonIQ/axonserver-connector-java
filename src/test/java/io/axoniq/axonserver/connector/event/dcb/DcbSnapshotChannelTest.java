@@ -4,6 +4,7 @@ import com.google.protobuf.ByteString;
 import io.axoniq.axonserver.connector.AbstractAxonServerIntegrationTest;
 import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
+import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.ResultStreamPublisher;
 import io.axoniq.axonserver.connector.event.SnapshotChannel;
 import io.axoniq.axonserver.connector.impl.ServerAddress;
@@ -15,6 +16,8 @@ import io.axoniq.axonserver.grpc.event.dcb.GetLastSnapshotResponse;
 import io.axoniq.axonserver.grpc.event.dcb.ListSnapshotsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.ListSnapshotsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.Snapshot;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import org.junit.jupiter.api.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +36,7 @@ import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.*;
 
 class DcbSnapshotChannelTest extends AbstractAxonServerIntegrationTest {
@@ -61,6 +65,22 @@ class DcbSnapshotChannelTest extends AbstractAxonServerIntegrationTest {
         client = builder.build();
         connection = client.connect("default");
         snapshotChannel = connection.snapshotChannel();
+
+        assumeSnapshotSupportOnAxonServer(snapshotChannel, "AxonServer does not support snapshot channel");
+    }
+
+    private static void assumeSnapshotSupportOnAxonServer(SnapshotChannel snapshotChannel1, String message) {
+        try (ResultStream<ListSnapshotsResponse> ignored = snapshotChannel1.listSnapshots(ListSnapshotsRequest.newBuilder()
+                                                                                                              .build());) {
+            ignored.nextIfAvailable(2, SECONDS);
+            Assumptions.assumeFalse(ignored.getError().isPresent());
+            // nothing to do, just checking
+        } catch (StatusRuntimeException e) {
+            Assumptions.assumeFalse(e.getStatus() == Status.UNIMPLEMENTED,
+                                    message);
+        } catch (InterruptedException e) {
+            fail(e);
+        }
     }
 
     @AfterEach
