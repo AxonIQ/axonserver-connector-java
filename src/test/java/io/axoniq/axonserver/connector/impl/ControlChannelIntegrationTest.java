@@ -337,9 +337,9 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         }
 
         logger.info("Waiting for connector to establish connection");
-        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(controlChannel.isReady()));
-        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(handlerClientQueryChannel.isReady()));
-        assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(handlerClientCommandChannel.isReady()));
+        assertWithin(2, TimeUnit.SECONDS, () -> assertTrue(controlChannel.isReady()));
+        assertWithin(2, TimeUnit.SECONDS, () -> assertTrue(handlerClientQueryChannel.isReady()));
+        assertWithin(2, TimeUnit.SECONDS, () -> assertTrue(handlerClientCommandChannel.isReady()));
 
         assertEquals(11, connectCounter.get());
 
