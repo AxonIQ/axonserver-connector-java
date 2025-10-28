@@ -30,6 +30,22 @@ import java.util.concurrent.CompletableFuture;
 public interface SubscriptionQueryResult {
 
     /**
+     * Returns a CompletableFuture that completes when the initial result of the query is available. If an error
+     * occurred while querying, the CompletableFuture completes exceptionally.
+     * <p>
+     * Invoking this method will send a request for the initial result, if that hasn't been requested before. Subsequent
+     * invocations of this method will return the same CompletableFuture instance.
+     * <p>
+     *     Note that calling this method will not prevent the {@link #initialResults()} call from retrieving a new set
+     *     of initial results, or vice versa.
+     *
+     * @return a CompletableFuture that completes with the initial result of the subscription query
+     * @deprecated in favor of {@link #initialResults()}, which returns a stream of results.
+     */
+    @Deprecated(since = "2025.2.0", forRemoval = true)
+    CompletableFuture<QueryResponse> initialResult();
+
+    /**
      * Returns a ResultStream that represent the initial result of the subscription query.
      * <p>
      * Invoking this method will send a request for the initial result if that hasn't been requested before. Further
@@ -37,7 +53,7 @@ public interface SubscriptionQueryResult {
      *
      * @return a ResultStream that provides the initial result of the subscription query
      */
-    ResultStream<QueryResponse> initialResult();
+    ResultStream<QueryResponse> initialResults();
 
     /**
      * Returns the stream of updates to the queried projection. The stream can be read in a blocking and non-blocking

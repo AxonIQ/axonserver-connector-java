@@ -60,8 +60,8 @@ public class ConnectorRunner_SubscriptionQuery {
                                                                                        .addProcessingInstructions(ProcessingInstruction.newBuilder().setKey(ProcessingKey.NR_OF_RESULTS).setValue(MetaDataValue.newBuilder().setNumberValue(20).build()).build())
                                                                                        .setQuery("java.lang.String")
                                                                                        .setPayload(SerializedObject.newBuilder().setType("java.lang.String").setData(ByteString.copyFromUtf8("Hello world")).build()).build(),
-                                                                           SerializedObject.newBuilder().setType("java.lang.String").setData(ByteString.copyFromUtf8("Hello")).build(), 1000, 100);
-                ResultStream<QueryResponse> initialResult = result.initialResult();
+                                                                           1000, 100);
+                ResultStream<QueryResponse> initialResult = result.initialResults();
                 initialResult.onAvailable(() -> {
                     QueryResponse r = initialResult.nextIfAvailable();
                     if (r != null) {

@@ -32,6 +32,7 @@ import io.grpc.stub.ClientCallStreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -45,7 +46,9 @@ public class SubscriptionQueryStream extends FlowControlledStream<SubscriptionQu
     private static final Logger logger = LoggerFactory.getLogger(SubscriptionQueryStream.class);
 
     private final String subscriptionQueryId;
+    private final CompletableFuture<QueryResponse> initialResultFuture;
     private final AbstractBufferedStream<QueryUpdate, SubscriptionQueryRequest> updateBuffer;
+    private final String clientId;
     private final Supplier<ResultStream<QueryResponse>> initialResultSupplier;
 
     private final AtomicReference<ResultStream<QueryResponse>> initialResult = new AtomicReference<>();
@@ -61,13 +64,16 @@ public class SubscriptionQueryStream extends FlowControlledStream<SubscriptionQu
      *                              {@link #updatesBuffer()}
      */
     public SubscriptionQueryStream(String subscriptionQueryId,
+                                   CompletableFuture<QueryResponse> initialResultFuture,
                                    String clientId,
                                    Supplier<ResultStream<QueryResponse>> initialResultSupplier,
                                    int bufferSize,
                                    int fetchSize) {
         super(clientId, bufferSize, fetchSize);
+        this.clientId = clientId;
         this.initialResultSupplier = initialResultSupplier;
         this.subscriptionQueryId = subscriptionQueryId;
+        this.initialResultFuture = initialResultFuture;
         this.updateBuffer = new SubscriptionQueryUpdateBuffer(clientId, subscriptionQueryId, bufferSize, fetchSize);
     }
 
@@ -171,12 +177,16 @@ public class SubscriptionQueryStream extends FlowControlledStream<SubscriptionQu
                         value.getCompleteExceptionally().getClientId()
                 );
                 updateBuffer.onError(exception);
-                ResultStream<QueryResponse> initial = initialResult.get();
-                if (initial != null && !initial.isClosed()) {
-                    initial.close();
+                if (!initialResultFuture.isDone()) {
+                    initialResultFuture.completeExceptionally(exception);
                 }
                 break;
             case INITIAL_RESULT:
+                logger.debug("Received subscription query initial result. Subscription Id: {}. Message Id: {}.",
+                             value.getSubscriptionIdentifier(),
+                             value.getMessageIdentifier());
+                initialResultFuture.complete(value.getInitialResult());
+                break;
             default:
                 logger.info("Received unsupported message from SubscriptionQuery. "
                                     + "It doesn't declare one of the expected types: {}",
@@ -187,6 +197,7 @@ public class SubscriptionQueryStream extends FlowControlledStream<SubscriptionQu
 
     @Override
     public void onError(Throwable t) {
+        initialResultFuture.completeExceptionally(t);
         ResultStream<QueryResponse> initialResult = this.initialResult.get();
         if (initialResult != null && !initialResult.isClosed()) {
             initialResult.close();
@@ -208,6 +219,9 @@ public class SubscriptionQueryStream extends FlowControlledStream<SubscriptionQu
     @Override
     public void onCompleted() {
         updateBuffer.onCompleted();
+        if (!initialResultFuture.isDone()) {
+            initialResultFuture.completeExceptionally(new AxonServerException(ErrorCategory.QUERY_DISPATCH_ERROR, "Subscription query has already been completed", clientId));
+        }
     }
 
     @Override

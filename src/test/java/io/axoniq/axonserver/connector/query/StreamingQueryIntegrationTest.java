@@ -32,7 +32,6 @@ import io.axoniq.axonserver.grpc.query.QueryRequest;
 import io.axoniq.axonserver.grpc.query.QueryResponse;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.*;
-import org.testcontainers.shaded.org.awaitility.Awaitility;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -46,6 +45,7 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.testcontainers.shaded.org.awaitility.Awaitility.await;
 
 class StreamingQueryIntegrationTest extends AbstractAxonServerIntegrationTest {
 
@@ -256,8 +256,9 @@ class StreamingQueryIntegrationTest extends AbstractAxonServerIntegrationTest {
 
 
         QueryResponse response = resultStream.nextIfAvailable(1, TimeUnit.SECONDS);
-        assertNull(response);
-        Awaitility.await().atMost(1, TimeUnit.SECONDS).untilAsserted(() -> assertTrue(resultStream.isClosed()));
+        assertNotNull(response);
+        assertTrue(response.hasErrorMessage());
+        await().until(resultStream::isClosed);
     }
 
     @Test
@@ -329,7 +330,7 @@ class StreamingQueryIntegrationTest extends AbstractAxonServerIntegrationTest {
                                          .setErrorCode("errorCode")
                                          .setErrorMessage(ErrorMessage.getDefaultInstance())
                                          .build();
-                    responseHandler.completeWithError(ErrorMessage.newBuilder().setErrorCode("12345").build());
+                    responseHandler.sendLast(response);
                 }
 
                 @Override
@@ -345,10 +346,6 @@ class StreamingQueryIntegrationTest extends AbstractAxonServerIntegrationTest {
         private final AtomicReference<ReplyChannel<QueryResponse>> replyChannelRef = new AtomicReference<>();
         private final String prefix;
         private final AtomicLong maxResults;
-
-        public SequencingQueryHandler() {
-            this(Long.MAX_VALUE);
-        }
 
         public SequencingQueryHandler(long maxResults) {
             this(maxResults, "");

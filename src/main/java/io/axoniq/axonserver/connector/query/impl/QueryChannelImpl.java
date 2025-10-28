@@ -43,7 +43,6 @@ import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.ProcessingInstruction;
 import io.axoniq.axonserver.grpc.ProcessingKey;
-import io.axoniq.axonserver.grpc.SerializedObject;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
 import io.axoniq.axonserver.grpc.query.QueryComplete;
 import io.axoniq.axonserver.grpc.query.QueryProviderInbound;
@@ -396,7 +395,6 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
 
     @Override
     public SubscriptionQueryResult subscriptionQuery(QueryRequest query,
-                                                     SerializedObject updateResponseType,
                                                      int bufferSize,
                                                      int fetchSize) {
         logger.trace("Sending subscription query over QueryChannel for context '{}'.", context);
@@ -407,8 +405,9 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
             finalQuery = query;
         }
         String subscriptionId = finalQuery.getMessageIdentifier();
+        CompletableFuture<QueryResponse> initialResultFuture = new CompletableFuture<>();
         SubscriptionQueryStream subscriptionStream = new SubscriptionQueryStream(
-                subscriptionId,
+                subscriptionId, initialResultFuture,
                 clientIdentification.getClientId(), () -> QueryChannelImpl.this.query(finalQuery),
                 bufferSize,
                 fetchSize
@@ -418,13 +417,28 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         SubscriptionQuery subscriptionQuery = SubscriptionQuery.newBuilder()
                                                                .setQueryRequest(finalQuery)
                                                                .setSubscriptionIdentifier(subscriptionId)
-                                                               .setUpdateResponseType(updateResponseType)
                                                                .build();
         upstream.onNext(SubscriptionQueryRequest.newBuilder().setSubscribe(subscriptionQuery).build());
         return new SubscriptionQueryResult() {
 
+            private final AtomicBoolean initialResultRequested = new AtomicBoolean();
+
             @Override
-            public ResultStream<QueryResponse> initialResult() {
+            public CompletableFuture<QueryResponse> initialResult() {
+                if (!initialResultFuture.isDone() && !initialResultRequested.getAndSet(true)) {
+                    SubscriptionQuery.Builder initialResultRequest =
+                            SubscriptionQuery.newBuilder()
+                                             .setQueryRequest(finalQuery)
+                                             .setSubscriptionIdentifier(subscriptionId);
+                    upstream.onNext(SubscriptionQueryRequest.newBuilder()
+                                                            .setGetInitialResult(initialResultRequest)
+                                                            .build());
+                }
+                return initialResultFuture;
+            }
+
+            @Override
+            public ResultStream<QueryResponse> initialResults() {
                 return subscriptionStream.initialStream();
             }
 
