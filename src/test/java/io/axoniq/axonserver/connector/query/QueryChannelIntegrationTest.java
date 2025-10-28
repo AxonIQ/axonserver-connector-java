@@ -32,11 +32,7 @@ import io.axoniq.axonserver.grpc.query.QueryRequest;
 import io.axoniq.axonserver.grpc.query.QueryResponse;
 import io.axoniq.axonserver.grpc.query.QueryUpdate;
 import io.axoniq.axonserver.grpc.query.SubscriptionQuery;
-import io.grpc.StatusRuntimeException;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.RepeatedTest;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,17 +50,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
-import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertFalseWithin;
-import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertTrueWithin;
-import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
+import static io.axoniq.axonserver.connector.testutils.AssertUtils.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
@@ -119,7 +106,12 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         for (int i = 0; i < 1000; i++) {
             SubscriptionQueryResult result = queryChannel2.subscriptionQuery(QueryRequest.newBuilder().setMessageIdentifier(UUID.randomUUID().toString()).setQuery("testQuery").build(), SerializedObject.newBuilder().build(), 100, 10);
             // the initial result may be requested when the subscription query was already closed. Therefore we accept exceptionally completed results.
-            results.add(result.initialResult().exceptionally(e -> null).whenComplete((r, e) -> result.updates().close()));
+            CompletableFuture<?> completed = new CompletableFuture<>();
+            results.add(completed);
+            result.initialResult().onAvailable(() -> {
+                completed.complete(null);
+                result.updates().close();
+            });
         }
 
         for (CompletableFuture<?> result : results) {
@@ -127,7 +119,8 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         }
 
         SubscriptionQueryResult result = queryChannel2.subscriptionQuery(QueryRequest.newBuilder().setMessageIdentifier(UUID.randomUUID().toString()).setQuery("testQuery").build(), SerializedObject.newBuilder().build(), 100, 10);
-        assertDoesNotThrow(() -> result.initialResult().get(5, TimeUnit.SECONDS));
+        result.initialResult().nextIfAvailable(5, TimeUnit.SECONDS);
+        assertFalse(result.initialResult().getError().isPresent());
     }
 
     @Test
@@ -254,8 +247,14 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                                                                                                   .build(),
                                                                                   100, 10);
 
-        assertTrueWithin(1, TimeUnit.SECONDS, () -> subscriptionQuery.initialResult().isDone());
-        assertFalse(subscriptionQuery.initialResult().isCompletedExceptionally());
+        assertTrueWithin(1, TimeUnit.SECONDS, () -> {
+            // we need to consume staged messages to see the "close" signal
+            do {
+                // just consume
+            } while (subscriptionQuery.initialResult().nextIfAvailable() != null);
+            return subscriptionQuery.initialResult().isClosed();
+        });
+        assertFalse(subscriptionQuery.initialResult().getError().isPresent());
         assertWithin(1, TimeUnit.SECONDS, () -> assertNotNull(updateHandlerRef.get()));
 
         updateHandlerRef.get().sendUpdate(QueryUpdate.newBuilder().setPayload(SerializedObject.newBuilder().setType(String.class.getName()).setData(ByteString.copyFromUtf8("Hello")).build()).build());
@@ -314,7 +313,7 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                                                                                                  SerializedObject.newBuilder().setType("update").build(),
                                                                                                  100, 10);
 
-        assertEquals(subscriptionId, subscriptionQuery.initialResult().get(1, TimeUnit.SECONDS)
+        assertEquals(subscriptionId, subscriptionQuery.initialResult().nextIfAvailable(1, TimeUnit.SECONDS)
                                                       .getRequestIdentifier());
         assertWithin(1, TimeUnit.SECONDS, () -> assertNotNull(updateHandlerRef.get()));
         logger.info("Sending update");
@@ -470,13 +469,8 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                                                                                       SerializedObject.newBuilder().setType("update").build(),
                                                                                       100, 10);
         assertWithin(1, TimeUnit.SECONDS, () -> assertTrue(result.updates().isClosed()));
-        try {
-            result.initialResult().get(1, TimeUnit.SECONDS);
-            fail("Expected an exception to be reported");
-        } catch (ExecutionException e) {
-            assertTrue(e.getCause() instanceof StatusRuntimeException);
-            assertEquals(ErrorCategory.NO_HANDLER_FOR_QUERY.errorCode(), ((StatusRuntimeException) e.getCause()).getStatus().getDescription());
-        }
+        QueryResponse firstMessage = result.initialResult().nextIfAvailable(1, TimeUnit.SECONDS);
+        assertTrue(firstMessage.hasErrorMessage());
     }
 
     @Test
@@ -491,7 +485,7 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                                                                                       SerializedObject.newBuilder().setType("update").build(),
                                                                                       100, 10);
 
-        result.initialResult().get(1, TimeUnit.SECONDS);
+        result.initialResult().nextIfAvailable(1, TimeUnit.SECONDS);
         assertNull(result.updates().nextIfAvailable());
         assertFalse(result.updates().isClosed());
 

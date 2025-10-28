@@ -32,6 +32,7 @@ import io.axoniq.axonserver.grpc.query.QueryRequest;
 import io.axoniq.axonserver.grpc.query.QueryResponse;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.*;
+import org.testcontainers.shaded.org.awaitility.Awaitility;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -253,9 +254,10 @@ class StreamingQueryIntegrationTest extends AbstractAxonServerIntegrationTest {
         ResultStream<QueryResponse> resultStream = connection2.queryChannel()
                                                               .query(queryRequest);
 
-        QueryResponse response = resultStream.next();
 
-        assertTrue(response.hasErrorMessage());
+        QueryResponse response = resultStream.nextIfAvailable(1, TimeUnit.SECONDS);
+        assertNull(response);
+        Awaitility.await().atMost(1, TimeUnit.SECONDS).untilAsserted(() -> assertTrue(resultStream.isClosed()));
     }
 
     @Test
@@ -327,7 +329,7 @@ class StreamingQueryIntegrationTest extends AbstractAxonServerIntegrationTest {
                                          .setErrorCode("errorCode")
                                          .setErrorMessage(ErrorMessage.getDefaultInstance())
                                          .build();
-                    responseHandler.sendLast(response);
+                    responseHandler.completeWithError(ErrorMessage.newBuilder().setErrorCode("12345").build());
                 }
 
                 @Override
