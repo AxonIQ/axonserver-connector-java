@@ -52,15 +52,32 @@ public interface QueryChannel {
      * an initial query result followed by a stream of updates.
      *
      * @param query      the subscription {@link QueryRequest} to send
-     * @param updateType the type of updates expected from this subscription query
      * @param bufferSize the number of updates to be buffered by the update result stream
      * @param fetchSize  the number of updates to be consumed from the update stream prior to refilling it
      * @return the {@link SubscriptionQueryResult} containing the initial result and update stream
      */
     SubscriptionQueryResult subscriptionQuery(QueryRequest query,
-                                              SerializedObject updateType,
                                               int bufferSize,
                                               int fetchSize);
+
+    /**
+     * Sends out a subscription {@code query} to AxonServer for routing to the appropriate handler. Allows for receiving
+     * an initial query result followed by a stream of updates.
+     *
+     * @param query      the subscription {@link QueryRequest} to send
+     * @param updateType the type of updates expected from this subscription query
+     * @param bufferSize the number of updates to be buffered by the update result stream
+     * @param fetchSize  the number of updates to be consumed from the update stream prior to refilling it
+     * @return the {@link SubscriptionQueryResult} containing the initial result and update stream
+     * @deprecated in favor of {@link #subscriptionQuery(QueryRequest, int, int)}. UpdateType is not used.
+     */
+    @Deprecated(since = "2025.2.0")
+    default SubscriptionQueryResult subscriptionQuery(QueryRequest query,
+                                                      @SuppressWarnings("unused") SerializedObject updateType,
+                                                      int bufferSize,
+                                                      int fetchSize) {
+        return subscriptionQuery(query, bufferSize, fetchSize);
+    }
 
     /**
      * Prepares this {@link QueryChannel} to disconnect, by unsubscribing all registered query handlers. Will wait with

@@ -60,8 +60,18 @@ public class ConnectorRunner_SubscriptionQuery {
                                                                                        .addProcessingInstructions(ProcessingInstruction.newBuilder().setKey(ProcessingKey.NR_OF_RESULTS).setValue(MetaDataValue.newBuilder().setNumberValue(20).build()).build())
                                                                                        .setQuery("java.lang.String")
                                                                                        .setPayload(SerializedObject.newBuilder().setType("java.lang.String").setData(ByteString.copyFromUtf8("Hello world")).build()).build(),
-                                                                           SerializedObject.newBuilder().setType("java.lang.String").setData(ByteString.copyFromUtf8("Hello")).build(), 1000, 100);
-                result.initialResult().whenComplete((r, e) -> System.out.println("Initial result: " + r.getPayload().getData().toStringUtf8()));
+                                                                           1000, 100);
+                ResultStream<QueryResponse> initialResult = result.initialResults();
+                initialResult.onAvailable(() -> {
+                    QueryResponse r = initialResult.nextIfAvailable();
+                    if (r != null) {
+                        System.out.println("Initial result: " + r.getPayload().getData().toStringUtf8());
+                    } else if (initialResult.getError().isPresent()) {
+                        System.out.println("Initial result error: " + initialResult.getError().get().getMessage());
+                    } else if (initialResult.isClosed()) {
+                        System.out.println("Initial result stream closed");
+                    }
+                });
                 ResultStream<QueryUpdate> updates = result.updates();
                 long deadline = System.currentTimeMillis() + 15000;
                 while (!updates.isClosed()) {
@@ -73,7 +83,6 @@ public class ConnectorRunner_SubscriptionQuery {
                         updates.close();
                     }
                 }
-                result.initialResult().get(5, TimeUnit.SECONDS);
             } finally {
                 contextConnection.disconnect();
                 testSubject.shutdown();
@@ -95,6 +104,7 @@ public class ConnectorRunner_SubscriptionQuery {
                 @Override
                 public void handle(QueryRequest q, ReplyChannel<QueryResponse> r) {
                     System.out.println("Handled query");
+                    r.send(QueryResponse.newBuilder().setRequestIdentifier(q.getMessageIdentifier()).setPayload(q.getPayload()).build());
                     r.sendLast(QueryResponse.newBuilder().setRequestIdentifier(q.getMessageIdentifier()).setPayload(q.getPayload()).build());
                 }
 

@@ -43,7 +43,6 @@ import io.axoniq.axonserver.grpc.FlowControl;
 import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.ProcessingInstruction;
 import io.axoniq.axonserver.grpc.ProcessingKey;
-import io.axoniq.axonserver.grpc.SerializedObject;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
 import io.axoniq.axonserver.grpc.query.QueryComplete;
 import io.axoniq.axonserver.grpc.query.QueryProviderInbound;
@@ -367,7 +366,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         if (query.getMessageIdentifier().isEmpty()) {
             query = query.toBuilder().setMessageIdentifier(UUID.randomUUID().toString()).build();
         }
-        AbstractBufferedStream<QueryResponse, QueryRequest> results = new AbstractBufferedStream<QueryResponse, QueryRequest>(
+        AbstractBufferedStream<QueryResponse, QueryRequest> results = new AbstractBufferedStream<>(
                 clientIdentification.getClientId(), 32, 8
         ) {
 
@@ -386,7 +385,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                 outboundStream().cancel("Client cancelled the stream.", null);
             }
         };
-        if ("".equals(query.getMessageIdentifier())) {
+        if (query.getMessageIdentifier().isEmpty()) {
             logger.debug("No message identifier has been set on the query. Adding a random identifier now.");
             query = query.toBuilder().setMessageIdentifier(UUID.randomUUID().toString()).build();
         }
@@ -396,7 +395,6 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
 
     @Override
     public SubscriptionQueryResult subscriptionQuery(QueryRequest query,
-                                                     SerializedObject updateResponseType,
                                                      int bufferSize,
                                                      int fetchSize) {
         logger.trace("Sending subscription query over QueryChannel for context '{}'.", context);
@@ -409,15 +407,16 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         String subscriptionId = finalQuery.getMessageIdentifier();
         CompletableFuture<QueryResponse> initialResultFuture = new CompletableFuture<>();
         SubscriptionQueryStream subscriptionStream = new SubscriptionQueryStream(
-                subscriptionId, initialResultFuture, QueryChannelImpl.this.clientIdentification.getClientId(),
-                bufferSize, fetchSize
+                subscriptionId, initialResultFuture,
+                clientIdentification.getClientId(), () -> QueryChannelImpl.this.query(finalQuery),
+                bufferSize,
+                fetchSize
         );
         StreamObserver<SubscriptionQueryRequest> upstream = queryServiceStub.subscription(subscriptionStream);
         subscriptionStream.enableFlowControl();
         SubscriptionQuery subscriptionQuery = SubscriptionQuery.newBuilder()
                                                                .setQueryRequest(finalQuery)
                                                                .setSubscriptionIdentifier(subscriptionId)
-                                                               .setUpdateResponseType(updateResponseType)
                                                                .build();
         upstream.onNext(SubscriptionQueryRequest.newBuilder().setSubscribe(subscriptionQuery).build());
         return new SubscriptionQueryResult() {
@@ -439,8 +438,13 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
             }
 
             @Override
+            public ResultStream<QueryResponse> initialResults() {
+                return subscriptionStream.initialStream();
+            }
+
+            @Override
             public ResultStream<QueryUpdate> updates() {
-                return subscriptionStream.buffer();
+                return subscriptionStream.updatesBuffer();
             }
         };
     }
@@ -588,7 +592,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
     }
 
     private void handleQuery(QueryProviderInbound inbound, ReplyChannel<QueryProviderOutbound> result) {
-        doHandleQuery(inbound, new ReplyChannel<QueryResponse>() {
+        doHandleQuery(inbound, new ReplyChannel<>() {
             @Override
             public void send(QueryResponse response) {
                 result.send(QueryProviderOutbound.newBuilder().setQueryResponse(response).build());
@@ -615,7 +619,6 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
             public void completeWithError(ErrorCategory errorCategory, String message) {
                 result.completeWithError(errorCategory, message);
             }
-
         });
     }
 
@@ -623,7 +626,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
         String subscriptionId = query.getSubscriptionQueryRequest().getGetInitialResult().getSubscriptionIdentifier();
         doHandleQuery(
                 query.getSubscriptionQueryRequest().getGetInitialResult().getQueryRequest(),
-                new ReplyChannel<QueryResponse>() {
+                new ReplyChannel<>() {
 
                     @Override
                     public void send(QueryResponse response) {

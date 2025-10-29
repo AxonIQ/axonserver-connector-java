@@ -45,6 +45,7 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.testcontainers.shaded.org.awaitility.Awaitility.await;
 
 class StreamingQueryIntegrationTest extends AbstractAxonServerIntegrationTest {
 
@@ -253,9 +254,11 @@ class StreamingQueryIntegrationTest extends AbstractAxonServerIntegrationTest {
         ResultStream<QueryResponse> resultStream = connection2.queryChannel()
                                                               .query(queryRequest);
 
-        QueryResponse response = resultStream.next();
 
+        QueryResponse response = resultStream.nextIfAvailable(1, TimeUnit.SECONDS);
+        assertNotNull(response);
         assertTrue(response.hasErrorMessage());
+        await().until(resultStream::isClosed);
     }
 
     @Test
@@ -343,10 +346,6 @@ class StreamingQueryIntegrationTest extends AbstractAxonServerIntegrationTest {
         private final AtomicReference<ReplyChannel<QueryResponse>> replyChannelRef = new AtomicReference<>();
         private final String prefix;
         private final AtomicLong maxResults;
-
-        public SequencingQueryHandler() {
-            this(Long.MAX_VALUE);
-        }
 
         public SequencingQueryHandler(long maxResults) {
             this(maxResults, "");
