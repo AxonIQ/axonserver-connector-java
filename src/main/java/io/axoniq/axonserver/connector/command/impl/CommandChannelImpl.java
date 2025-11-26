@@ -257,7 +257,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
         CommandHandler commandHandler = new CommandHandler(handler, loadFactor);
         for (String commandName : commandNames) {
             commandHandlers.put(commandName, commandHandler);
-            logger.info("Registered handler for command '{}' in context '{}'", commandName, context);
+            logger.debug("Registered handler for command '{}' in context '{}'", commandName, context);
             CompletableFuture<Void> ack = sendSubscribe(commandName, loadFactor, outboundCommandStream.get());
             subscriptionResult = CompletableFuture.allOf(subscriptionResult, ack);
         }
@@ -285,7 +285,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
         CompletableFuture<Void> future = CompletableFuture.completedFuture(null);
         for (String commandName : commandNames) {
             if (commandHandlers.get(commandName) == handler) {
-                logger.info("Deregistered handler for command '{}' in context '{}'", commandName, context);
+                logger.debug("Deregistered handler for command '{}' in context '{}'", commandName, context);
                 CompletableFuture<Void> result = sendUnsubscribe(commandName, outboundCommandStream.get())
                         .thenRun(() -> commandHandlers.remove(commandName, handler));
                 future = CompletableFuture.allOf(future, result);
