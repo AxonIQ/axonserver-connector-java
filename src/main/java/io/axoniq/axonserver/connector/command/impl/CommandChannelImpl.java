@@ -257,9 +257,14 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
         CommandHandler commandHandler = new CommandHandler(handler, loadFactor);
         for (String commandName : commandNames) {
             commandHandlers.put(commandName, commandHandler);
-            logger.info("Registered handler for command '{}' in context '{}'", commandName, context);
             CompletableFuture<Void> ack = sendSubscribe(commandName, loadFactor, outboundCommandStream.get());
-            subscriptionResult = CompletableFuture.allOf(subscriptionResult, ack);
+            subscriptionResult = CompletableFuture.allOf(subscriptionResult, ack).whenComplete((r,e) -> {
+                if (e == null) {
+                    logger.info("Registered handler for command '{}' in context '{}'", commandName, context);
+                } else {
+                    logger.warn("An error occurred while registering command '{}' in context '{}'", commandName, context, e);
+                }
+            } );
         }
         return new AsyncRegistration(subscriptionResult, () -> unsubscribe(commandHandler, commandNames));
     }
@@ -317,7 +322,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
         boolean hasRoutingKey = command.getProcessingInstructionsList()
                                        .stream()
                                        .anyMatch(pi -> pi.getKey() == ProcessingKey.ROUTING_KEY);
-        String messageIdentifier = "".equals(command.getMessageIdentifier())
+        String messageIdentifier = command.getMessageIdentifier().isEmpty()
                                    ? UUID.randomUUID().toString()
                                    : command.getMessageIdentifier();
 
