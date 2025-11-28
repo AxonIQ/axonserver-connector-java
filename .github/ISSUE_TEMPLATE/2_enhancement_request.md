@@ -2,7 +2,7 @@
 name: 'Enhancement request'
 about: 'Suggest an enhancement/change to an existing feature for Axon Server Connector Java'
 title:
-labels: 'Type: Enhancement'
+type: 'Enhancement'
 ---
 
 <!-- Please use markdown (https://guides.github.com/features/mastering-markdown/) semantics throughout the enhancement description. -->
