@@ -46,7 +46,7 @@
 
         <axonserver.api.version>2025.1.1</axonserver.api.version>
 
-        <grpc.version>1.69.0</grpc.version>
+        <grpc.version>1.75.0</grpc.version>
         <protobuf.version>4.29.2</protobuf.version>
 
         <slf4j.version>2.0.0</slf4j.version>
