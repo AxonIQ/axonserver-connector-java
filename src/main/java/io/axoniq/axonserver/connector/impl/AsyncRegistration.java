@@ -20,10 +20,12 @@ import io.axoniq.axonserver.connector.AxonServerException;
 import io.axoniq.axonserver.connector.ErrorCategory;
 import io.axoniq.axonserver.connector.Registration;
 
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -69,7 +71,15 @@ public class AsyncRegistration implements Registration {
 
     @Override
     public Registration onAck(Runnable runnable) {
-        requestAck.thenRun(runnable);
+        requestAck.exceptionally(e -> null).thenRun(runnable);
+        return this;
+    }
+
+    @Override
+    public Registration onAck(Consumer<Optional<Throwable>> action) {
+        requestAck.thenApply(ignored -> Optional.<Throwable>empty())
+                  .exceptionally(Optional::of)
+                  .thenAccept(action);
         return this;
     }
 }

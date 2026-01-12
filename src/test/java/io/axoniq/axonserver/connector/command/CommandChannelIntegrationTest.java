@@ -16,6 +16,7 @@
 
 package io.axoniq.axonserver.connector.command;
 
+import eu.rekawek.toxiproxy.model.Toxic;
 import io.axoniq.axonserver.connector.AbstractAxonServerIntegrationTest;
 import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
@@ -33,17 +34,21 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.silently;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.assertWithin;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.testcontainers.shaded.org.awaitility.Awaitility.await;
 
 class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
@@ -59,6 +64,7 @@ class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
                                                                    "client1")
                                                         .routingServers(axonServerAddress)
                                                         .forceReconnectViaRoutingServers(false)
+                                                        .connectTimeout(1500, TimeUnit.MILLISECONDS)
                                                         .reconnectInterval(500, TimeUnit.MILLISECONDS)
                                                         .build();
         connection1 = connectionFactory1.connect("default");
@@ -66,6 +72,7 @@ class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         connectionFactory2 = AxonServerConnectionFactory.forClient(getClass().getSimpleName(),
                                                                    "client2")
                                                         .routingServers(axonServerAddress)
+                                                        .connectTimeout(1500, TimeUnit.MILLISECONDS)
                                                         .reconnectInterval(500, TimeUnit.MILLISECONDS)
                                                         .forceReconnectViaRoutingServers(false)
                                                         .build();
@@ -74,9 +81,13 @@ class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws IOException {
         silently(connectionFactory1, AxonServerConnectionFactory::shutdown);
         silently(connectionFactory2, AxonServerConnectionFactory::shutdown);
+        axonServerProxy.enable();
+        for (Toxic toxic : axonServerProxy.toxics().getAll()) {
+            toxic.remove();
+        }
     }
 
     @Test
@@ -291,6 +302,22 @@ class CommandChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         assertEquals(ErrorCategory.NO_HANDLER_FOR_COMMAND.errorCode(), actual2.get(1, TimeUnit.SECONDS).getErrorCode());
         assertEquals("No Handler for command: testCommand", actual2.get(1, TimeUnit.SECONDS).getErrorMessage().getMessage());
 
+    }
+
+    @Test
+    void subscribingHandlersWithAxonServerUnavailableAcknowledgesSubscription() throws IOException {
+        axonServerProxy.disable();
+
+        AtomicBoolean acked = new AtomicBoolean(false);
+        AtomicReference<Optional<Throwable>> ackError = new AtomicReference<>();
+        Registration registration = connection1.commandChannel().registerCommandHandler(this::mockHandler,
+                                                                                        100,
+                                                                                        "testCommand");
+
+        registration.onAck(() -> acked.set(true))
+                    .onAck(ackError::set);
+        await().until(ackError::get, v -> v != null && v.isPresent());
+        await().untilTrue(acked);
     }
 
     private CompletableFuture<CommandResponse> mockHandler(Command command) {

@@ -17,6 +17,7 @@
 package io.axoniq.axonserver.connector.query;
 
 import com.google.protobuf.ByteString;
+import eu.rekawek.toxiproxy.model.Toxic;
 import io.axoniq.axonserver.connector.AbstractAxonServerIntegrationTest;
 import io.axoniq.axonserver.connector.AxonServerConnection;
 import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
@@ -39,6 +40,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -46,12 +48,14 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.doIfNotNull;
 import static io.axoniq.axonserver.connector.testutils.AssertUtils.*;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.testcontainers.shaded.org.awaitility.Awaitility.await;
 
 class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
@@ -83,9 +87,13 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws Exception {
         connectionFactory1.shutdown();
         connectionFactory2.shutdown();
+        axonServerProxy.enable();
+        for (Toxic toxic : axonServerProxy.toxics().getAll()) {
+            toxic.remove();
+        }
     }
 
     @Test
@@ -479,6 +487,22 @@ class QueryChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
         result.updates().close();
 
         assertTrue(result.updates().isClosed());
+    }
+
+    @Test
+    void subscribingHandlersWithAxonServerUnavailableAcknowledgesSubscription() throws IOException {
+        axonServerProxy.disable();
+
+        AtomicBoolean acked = new AtomicBoolean(false);
+        AtomicReference<Optional<Throwable>> ackError = new AtomicReference<>();
+        Registration registration = connection1.queryChannel().registerQueryHandler(this::mockHandler,
+                                                                                    new QueryDefinition("testQuery",
+                                                                                                        String.class));
+
+        registration.onAck(() -> acked.set(true))
+                    .onAck(ackError::set);
+        await().until(ackError::get, v -> v != null && v.isPresent());
+        await().untilTrue(acked);
     }
 
     private void mockHandler(QueryRequest query, ReplyChannel<QueryResponse> responseHandler) {
