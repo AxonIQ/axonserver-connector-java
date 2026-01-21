@@ -444,6 +444,7 @@
                 </executions>
                 <configuration>
                     <encoding>UTF-8</encoding>
+                    <doclint>none</doclint>
                     <tags>
                         <tag>
                             <name>apiNote</name>
