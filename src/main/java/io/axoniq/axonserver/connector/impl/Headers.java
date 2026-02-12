@@ -35,6 +35,12 @@ public abstract class Headers {
     public static final Metadata.Key<String> ACCESS_TOKEN =
             Metadata.Key.of("AxonIQ-Access-Token", Metadata.ASCII_STRING_MARSHALLER);
 
+    /**
+     * A {@link Metadata.Key} defining the client ID of the application sending this message.
+     */
+    public static final Metadata.Key<String> CLIENT_ID =
+            Metadata.Key.of("AxonIQ-ClientId", Metadata.ASCII_STRING_MARSHALLER);
+
     private Headers() {
         // Utility class
     }

@@ -193,7 +193,7 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
                     responseObserver.getInstructionsForPlatform();
 
             try {
-                logger.info("Connected instruction stream for context '{}'. Sending client identification", context);
+                logger.info("Connected instruction stream for context '{}'. Sending client identification with clientId {}", context, clientIdentification.getClientId());
                 instructionsForPlatform.onNext(PlatformInboundInstruction.newBuilder()
                                                                          .setRegister(clientIdentification)
                                                                          .build());
