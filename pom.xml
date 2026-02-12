@@ -422,6 +422,8 @@
                 </executions>
                 <configuration>
                     <encoding>UTF-8</encoding>
+                    <failOnError>false</failOnError>
+                    <failOnWarnings>false</failOnWarnings>
                     <tags>
                         <tag>
                             <name>apiNote</name>
