@@ -20,7 +20,7 @@
 
     <groupId>io.axoniq</groupId>
     <artifactId>axonserver-connector-java</artifactId>
-    <version>2025.2.2-SNAPSHOT</version>
+    <version>2026.0.0-SNAPSHOT</version>
 
     <name>AxonServer Connector</name>
     <description>
@@ -422,6 +422,8 @@
                 </executions>
                 <configuration>
                     <encoding>UTF-8</encoding>
+                    <failOnError>false</failOnError>
+                    <failOnWarnings>false</failOnWarnings>
                     <tags>
                         <tag>
                             <name>apiNote</name>

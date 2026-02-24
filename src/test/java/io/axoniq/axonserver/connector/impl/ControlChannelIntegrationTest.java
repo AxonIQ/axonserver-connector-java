@@ -284,7 +284,7 @@ class ControlChannelIntegrationTest extends AbstractAxonServerIntegrationTest {
 
         String segmentToMove = "0";
         String segmentsPath = "/v1/components/" + getClass().getSimpleName() + "/processors/testProcessor/segments/" +
-                segmentToMove + "/move?tokenStoreIdentifier=TokenStoreId&context=default&target=foo";
+                segmentToMove + "/move?tokenStoreIdentifier=TokenStoreId&context=default&target=" + clientToMoveTo.getClientInstanceId();
         assertWithin(2, TimeUnit.SECONDS, () -> sendToAxonServer(HttpPatch::new, segmentsPath));
         assertWithin(2, TimeUnit.SECONDS,
                      () -> assertTrue(instructionHandler.instructions.contains("release" + segmentToMove)));
