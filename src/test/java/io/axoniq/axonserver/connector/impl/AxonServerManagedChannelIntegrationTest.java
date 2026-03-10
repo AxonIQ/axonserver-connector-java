@@ -18,7 +18,7 @@ package io.axoniq.axonserver.connector.impl;
 
 import io.axoniq.axonserver.connector.AbstractAxonServerIntegrationTest;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
-import io.axoniq.axonserver.grpc.event.Confirmation;
+import io.axoniq.axonserver.grpc.event.ConfirmationWithConsistencyMarker;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.EventStoreGrpc;
 import io.grpc.ConnectivityState;
@@ -170,7 +170,7 @@ class AxonServerManagedChannelIntegrationTest extends AbstractAxonServerIntegrat
 
         EventStoreGrpc.EventStoreStub stub = EventStoreGrpc.newStub(testSubject);
 
-        ClientResponseObserver<Event, Confirmation> observer = mock(ClientResponseObserver.class);
+        ClientResponseObserver<Event, ConfirmationWithConsistencyMarker> observer = mock(ClientResponseObserver.class);
         StreamObserver<Event> upstream = stub.appendEvent(observer);
 
         InOrder inOrder = Mockito.inOrder(observer);
