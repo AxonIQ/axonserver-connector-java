@@ -16,7 +16,7 @@
 
 package io.axoniq.axonserver.connector.event;
 
-import io.axoniq.axonserver.grpc.event.Confirmation;
+import io.axoniq.axonserver.grpc.event.ConfirmationWithConsistencyMarker;
 import io.axoniq.axonserver.grpc.event.Event;
 
 import java.util.concurrent.CompletableFuture;
@@ -39,7 +39,7 @@ public interface AppendEventsTransaction {
      *
      * @return a CompletableFuture resolving the confirmation of the successful processing of the transaction
      */
-    CompletableFuture<Confirmation> commit();
+    CompletableFuture<ConfirmationWithConsistencyMarker> commit();
 
     /**
      * Rolls back the transaction.
