@@ -46,7 +46,7 @@
 
         <axonserver.api.version>2026.0.0-SNAPSHOT</axonserver.api.version>
 
-        <grpc.version>1.76.0</grpc.version>
+        <grpc.version>1.79.0</grpc.version>
         <protobuf.version>4.34.0</protobuf.version>
 
         <slf4j.version>2.0.16</slf4j.version>
@@ -60,7 +60,7 @@
         <jacoco-maven-plugin.version>0.8.14</jacoco-maven-plugin.version>
         <junit.jupiter.version>5.14.3</junit.jupiter.version>
         <mockito.version>5.23.0</mockito.version>
-        <testcontainers.version>1.21.4</testcontainers.version>
+        <testcontainers.version>2.0.4</testcontainers.version>
 
         <httpclient5.version>5.6</httpclient5.version>
         <toxiproxy.version>2.1.11</toxiproxy.version>
@@ -133,6 +133,21 @@
                 <groupId>org.reactivestreams</groupId>
                 <artifactId>reactive-streams-tck</artifactId>
                 <version>${reactive.streams.version}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <!-- For update of testng version, used by reactive-streams-tck to avoid vulnerability -->
+            <dependency>
+                <groupId>org.testng</groupId>
+                <artifactId>testng</artifactId>
+                <version>7.11.0</version>
+                <scope>test</scope>
+            </dependency>
+            <!-- Apparently the log4j dependencies don't all include their own version -->
+            <dependency>
+                <groupId>org.apache.logging.log4j</groupId>
+                <artifactId>log4j-core</artifactId>
+                <version>${log4j.version}</version>
                 <scope>test</scope>
             </dependency>
         </dependencies>
@@ -245,13 +260,13 @@
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
-            <artifactId>toxiproxy</artifactId>
+            <artifactId>testcontainers-toxiproxy</artifactId>
             <version>${testcontainers.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
-            <artifactId>junit-jupiter</artifactId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
             <version>${testcontainers.version}</version>
             <scope>test</scope>
         </dependency>
@@ -303,6 +318,12 @@
                                 </artifactItem>
                             </artifactItems>
                         </configuration>
+                    </execution>
+                    <!-- this makes dependencies available as properties that resolve to the actual jar file -->
+                    <execution>
+                        <goals>
+                            <goal>properties</goal>
+                        </goals>
                     </execution>
                 </executions>
             </plugin>
@@ -406,6 +427,7 @@
                         <include>**/*Test_*.java</include>
                         <include>**/*Tests_*.java</include>
                     </includes>
+                    <argLine>-javaagent:${org.mockito:mockito-core:jar}</argLine>
                 </configuration>
             </plugin>
             <plugin>
