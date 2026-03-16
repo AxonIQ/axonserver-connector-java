@@ -58,7 +58,7 @@ public interface Registration {
      * Registers the given {@code runnable} to {@code this} {@link Registration} to be executed when the acknowledgement
      * of {@code this} {@link Registration} is received. Allows for the addition of further logic to {@code this
      * Registration}, like invoking {@link #awaitAck(long, TimeUnit)} for example.
-     * <p/>
+     * <p>
      * The given {@code runnable} is invoked, regardless of successful or failed acknowledgement. Use
      * {@link #onAck(Consumer)} to register an action that needs to distinguish between successful and failed
      * registration.
