@@ -22,6 +22,7 @@ import io.axoniq.axonserver.connector.control.ControlChannel;
 import io.axoniq.axonserver.connector.event.DcbEventChannel;
 import io.axoniq.axonserver.connector.event.EventChannel;
 import io.axoniq.axonserver.connector.event.SnapshotChannel;
+import io.axoniq.axonserver.connector.event.SnapshottedDcbEventChannel;
 import io.axoniq.axonserver.connector.event.transformation.EventTransformationChannel;
 import io.axoniq.axonserver.connector.query.QueryChannel;
 
@@ -89,6 +90,14 @@ public interface AxonServerConnection {
      * @return the channel for Event messaging
      */
     DcbEventChannel dcbEventChannel();
+
+    /**
+     * Returns the channel on which events can be sourced from Axon Server using the Dynamic Consistency Boundary
+     * concept, prefixed by the latest matching snapshot if available.
+     *
+     * @return the channel for snapshot-aware Event sourcing
+     */
+    SnapshottedDcbEventChannel snapshottedDcbEventChannel();
 
     /**
      * Returns the channel on which Query related interactions can be performed with AxonServer.

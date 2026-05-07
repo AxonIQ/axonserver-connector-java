@@ -25,9 +25,11 @@ import io.axoniq.axonserver.connector.control.ControlChannel;
 import io.axoniq.axonserver.connector.event.DcbEventChannel;
 import io.axoniq.axonserver.connector.event.EventChannel;
 import io.axoniq.axonserver.connector.event.SnapshotChannel;
+import io.axoniq.axonserver.connector.event.SnapshottedDcbEventChannel;
 import io.axoniq.axonserver.connector.event.impl.SnapshotChannelImpl;
 import io.axoniq.axonserver.connector.event.impl.DcbEventChannelImpl;
 import io.axoniq.axonserver.connector.event.impl.EventChannelImpl;
+import io.axoniq.axonserver.connector.event.impl.SnapshottedDcbEventChannelImpl;
 import io.axoniq.axonserver.connector.event.transformation.EventTransformationChannel;
 import io.axoniq.axonserver.connector.event.transformation.impl.EventTransformationChannelImpl;
 import io.axoniq.axonserver.connector.query.QueryChannel;
@@ -57,6 +59,7 @@ public class ContextConnection implements AxonServerConnection {
     private final AtomicReference<CommandChannelImpl> commandChannel = new AtomicReference<>();
     private final AtomicReference<EventChannelImpl> eventChannel = new AtomicReference<>();
     private final AtomicReference<DcbEventChannelImpl> dcbEventChannel = new AtomicReference<>();
+    private final AtomicReference<SnapshottedDcbEventChannelImpl> snapshottedDcbEventChannel = new AtomicReference<>();
     private final AtomicReference<QueryChannelImpl> queryChannel = new AtomicReference<>();
     private final AtomicReference<EventTransformationChannelImpl> eventTransformationChannel = new AtomicReference<>();
     private final AtomicReference<AdminChannelImpl> adminChannel = new AtomicReference<>();
@@ -211,6 +214,15 @@ public class ContextConnection implements AxonServerConnection {
                                            () -> new DcbEventChannelImpl(clientIdentification,
                                                                          executorService,
                                                                          connection),
+                                           this::ensureConnected);
+    }
+
+    @Override
+    public SnapshottedDcbEventChannel snapshottedDcbEventChannel() {
+        return createIfAbsentAndInitialize(snapshottedDcbEventChannel,
+                                           () -> new SnapshottedDcbEventChannelImpl(clientIdentification,
+                                                                                    executorService,
+                                                                                    connection),
                                            this::ensureConnected);
     }
 
