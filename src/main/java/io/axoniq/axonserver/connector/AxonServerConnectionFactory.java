@@ -36,12 +36,14 @@ import io.grpc.ManagedChannelBuilder;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.Status;
+import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
 import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
 import io.grpc.netty.shaded.io.netty.handler.ssl.SslContextBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -402,6 +404,92 @@ public class AxonServerConnectionFactory {
         public Builder useTransportSecurity(SslContext sslContext) {
             sslConfig = cb -> cb.sslContext(sslContext);
             return this;
+        }
+
+        /**
+         * Configures the use of Transport Layer Security (TLS), verifying the server's certificate against the
+         * certificates in the given {@code trustedCertificates} file. Use this when Axon Server (or a proxy in front
+         * of it) uses a certificate that is not signed by a Certificate Authority trusted by the JVM by default.
+         * <p>
+         * The given file must be in PEM format and is read once, when the factory is built.
+         * <p>
+         * Defaults to not using TLS.
+         *
+         * @param trustedCertificates A PEM file containing the CA certificates to verify the server's certificate
+         *                            against
+         * @return this builder for further configuration
+         * @see #useMutualTransportSecurity(File, File, File)
+         */
+        public Builder useTransportSecurity(File trustedCertificates) {
+            return useTransportSecurity(buildSslContext(null, null, trustedCertificates));
+        }
+
+        /**
+         * Configures the use of mutual Transport Layer Security (mTLS), presenting the given client certificate to
+         * the server during the TLS handshake. The server's certificate is verified using the JVM's default trusted
+         * Certificate Authorities.
+         * <p>
+         * The given files must be in PEM format, with the private key in PKCS#8 format. They are read once, when the
+         * factory is built.
+         * <p>
+         * Defaults to not using TLS.
+         *
+         * @param clientCertificateChain A PEM file containing the client's certificate chain
+         * @param clientPrivateKey       A PEM file containing the client's PKCS#8 private key
+         * @return this builder for further configuration
+         * @see #useMutualTransportSecurity(File, File, File)
+         */
+        public Builder useMutualTransportSecurity(File clientCertificateChain, File clientPrivateKey) {
+            return useMutualTransportSecurity(clientCertificateChain, clientPrivateKey, null);
+        }
+
+        /**
+         * Configures the use of mutual Transport Layer Security (mTLS), presenting the given client certificate to
+         * the server during the TLS handshake. The server's certificate is verified against the certificates in the
+         * given {@code trustedCertificates} file, or against the JVM's default trusted Certificate Authorities when
+         * {@code trustedCertificates} is {@code null}.
+         * <p>
+         * The given files must be in PEM format, with the private key in PKCS#8 format. They are read once, when the
+         * factory is built.
+         * <p>
+         * Defaults to not using TLS.
+         *
+         * @param clientCertificateChain A PEM file containing the client's certificate chain
+         * @param clientPrivateKey       A PEM file containing the client's PKCS#8 private key
+         * @param trustedCertificates    A PEM file containing the CA certificates to verify the server's certificate
+         *                               against, or {@code null} to use the JVM's default trusted Certificate
+         *                               Authorities
+         * @return this builder for further configuration
+         */
+        public Builder useMutualTransportSecurity(File clientCertificateChain,
+                                                  File clientPrivateKey,
+                                                  File trustedCertificates) {
+            if (clientCertificateChain == null) {
+                throw new IllegalArgumentException("clientCertificateChain may not be null");
+            }
+            if (clientPrivateKey == null) {
+                throw new IllegalArgumentException("clientPrivateKey may not be null");
+            }
+            return useTransportSecurity(buildSslContext(clientCertificateChain, clientPrivateKey,
+                                                        trustedCertificates));
+        }
+
+        private static SslContext buildSslContext(File clientCertificateChain,
+                                                  File clientPrivateKey,
+                                                  File trustedCertificates) {
+            SslContextBuilder sslContextBuilder = GrpcSslContexts.forClient();
+            if (clientCertificateChain != null) {
+                sslContextBuilder.keyManager(clientCertificateChain, clientPrivateKey);
+            }
+            if (trustedCertificates != null) {
+                sslContextBuilder.trustManager(trustedCertificates);
+            }
+            try {
+                return sslContextBuilder.build();
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Could not create an SSL context from the given certificate files",
+                                                   e);
+            }
         }
 
         /**
