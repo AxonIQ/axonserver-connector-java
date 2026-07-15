@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023. AxonIQ
+ * Copyright (c) 2020-2026. AxonIQ
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,6 +61,7 @@ import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 import static io.axoniq.axonserver.connector.impl.ObjectUtils.randomHex;
+import static java.util.Objects.requireNonNull;
 
 /**
  * The component which manages all the connections which an Axon client can establish with an Axon Server instance. Does
@@ -382,6 +383,9 @@ public class AxonServerConnectionFactory {
         /**
          * Configures the use of Transport Layer Security (TLS) using the default settings from the JVM.
          * <p>
+         * Invoking this or any other transport security method replaces the transport security configuration of
+         * earlier invocations.
+         * <p>
          * Defaults to not using TLS.
          *
          * @return this builder for further configuration
@@ -394,6 +398,9 @@ public class AxonServerConnectionFactory {
 
         /**
          * Configures the use of Transport Layer Security (TLS) using the settings from the given {@code sslContext}.
+         * <p>
+         * Invoking this or any other transport security method replaces the transport security configuration of
+         * earlier invocations.
          * <p>
          * Defaults to not using TLS.
          *
@@ -411,7 +418,11 @@ public class AxonServerConnectionFactory {
          * certificates in the given {@code trustedCertificates} file. Use this when Axon Server (or a proxy in front
          * of it) uses a certificate that is not signed by a Certificate Authority trusted by the JVM by default.
          * <p>
-         * The given file must be in PEM format and is read once, when the factory is built.
+         * The given file must be in PEM format and is read once, when this method is invoked. A rotated certificate
+         * file is not picked up automatically; it requires reconfiguring the factory.
+         * <p>
+         * Invoking this or any other transport security method replaces the transport security configuration of
+         * earlier invocations.
          * <p>
          * Defaults to not using TLS.
          *
@@ -429,8 +440,12 @@ public class AxonServerConnectionFactory {
          * the server during the TLS handshake. The server's certificate is verified using the JVM's default trusted
          * Certificate Authorities.
          * <p>
-         * The given files must be in PEM format, with the private key in PKCS#8 format. They are read once, when the
-         * factory is built.
+         * The given files must be in PEM format, with the private key in PKCS#8 format. They are read once, when
+         * this method is invoked. Rotated certificate files are not picked up automatically; they require
+         * reconfiguring the factory.
+         * <p>
+         * Invoking this or any other transport security method replaces the transport security configuration of
+         * earlier invocations.
          * <p>
          * Defaults to not using TLS.
          *
@@ -449,8 +464,12 @@ public class AxonServerConnectionFactory {
          * given {@code trustedCertificates} file, or against the JVM's default trusted Certificate Authorities when
          * {@code trustedCertificates} is {@code null}.
          * <p>
-         * The given files must be in PEM format, with the private key in PKCS#8 format. They are read once, when the
-         * factory is built.
+         * The given files must be in PEM format, with the private key in PKCS#8 format. They are read once, when
+         * this method is invoked. Rotated certificate files are not picked up automatically; they require
+         * reconfiguring the factory.
+         * <p>
+         * Invoking this or any other transport security method replaces the transport security configuration of
+         * earlier invocations.
          * <p>
          * Defaults to not using TLS.
          *
@@ -464,12 +483,8 @@ public class AxonServerConnectionFactory {
         public Builder useMutualTransportSecurity(File clientCertificateChain,
                                                   File clientPrivateKey,
                                                   File trustedCertificates) {
-            if (clientCertificateChain == null) {
-                throw new IllegalArgumentException("clientCertificateChain may not be null");
-            }
-            if (clientPrivateKey == null) {
-                throw new IllegalArgumentException("clientPrivateKey may not be null");
-            }
+            requireNonNull(clientCertificateChain, "clientCertificateChain may not be null");
+            requireNonNull(clientPrivateKey, "clientPrivateKey may not be null");
             return useTransportSecurity(buildSslContext(clientCertificateChain, clientPrivateKey,
                                                         trustedCertificates));
         }
