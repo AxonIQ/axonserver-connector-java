@@ -159,6 +159,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
             return;
         }
 
+        boolean resubscribingExistingHandlers = !commandHandlers.isEmpty();
         this.subscriptionsCompleted.set(commandHandlers.isEmpty());
 
         IncomingCommandStream responseObserver = new IncomingCommandStream(
@@ -186,8 +187,9 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
                        .whenComplete((unused, throwable) -> {
                            if (throwable != null) {
                                logger.warn("An error occurred while registering command handlers", throwable);
-                           } else {
-                               logger.info("CommandChannel for context '{}' connected, {} command handlers registered", context, commandHandlers.size());
+                           } else if (resubscribingExistingHandlers) {
+                               logger.info("CommandChannel for context '{}' connected, {} command handlers registered",
+                                           context, commandHandlers.size());
                            }
                            subscriptionsCompleted.set(throwable == null);
                        });
@@ -250,21 +252,34 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
     public Registration registerCommandHandler(Function<Command, CompletableFuture<CommandResponse>> handler,
                                                int loadFactor,
                                                String... commandNames) {
-        if (commandHandlers.isEmpty()) {
+        boolean firstHandlers = commandHandlers.isEmpty();
+        if (firstHandlers) {
             doCreateCommandStream();
         }
         CompletableFuture<Void> subscriptionResult = CompletableFuture.completedFuture(null);
         CommandHandler commandHandler = new CommandHandler(handler, loadFactor);
         for (String commandName : commandNames) {
             commandHandlers.put(commandName, commandHandler);
-            CompletableFuture<Void> ack = sendSubscribe(commandName, loadFactor, outboundCommandStream.get());
-            subscriptionResult = CompletableFuture.allOf(subscriptionResult, ack).whenComplete((r,e) -> {
+            CompletableFuture<Void> ack = sendSubscribe(commandName, loadFactor, outboundCommandStream.get())
+                    .whenComplete((r, e) -> {
+                        if (e == null) {
+                            logger.debug("Registered handler for command '{}' in context '{}'", commandName, context);
+                        } else {
+                            logger.warn("An error occurred while registering command '{}' in context '{}'",
+                                        commandName, context, e);
+                        }
+                    });
+            subscriptionResult = CompletableFuture.allOf(subscriptionResult, ack);
+        }
+        if (firstHandlers) {
+            subscriptionResult.whenComplete((r, e) -> {
                 if (e == null) {
-                    logger.debug("Registered handler for command '{}' in context '{}'", commandName, context);
+                    logger.info("CommandChannel for context '{}' connected, {} command handlers registered.",
+                                context, commandHandlers.size());
                 } else {
-                    logger.warn("An error occurred while registering command '{}' in context '{}'", commandName, context, e);
+                    logger.warn("An error occurred while registering command handlers", e);
                 }
-            } );
+            });
         }
         return new AsyncRegistration(subscriptionResult, () -> unsubscribe(commandHandler, commandNames));
     }
