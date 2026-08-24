@@ -159,6 +159,7 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
             return;
         }
 
+        boolean resubscribingExistingHandlers = !commandHandlers.isEmpty();
         this.subscriptionsCompleted.set(commandHandlers.isEmpty());
 
         IncomingCommandStream responseObserver = new IncomingCommandStream(
@@ -186,8 +187,9 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
                        .whenComplete((unused, throwable) -> {
                            if (throwable != null) {
                                logger.warn("An error occurred while registering command handlers", throwable);
-                           } else {
-                               logger.info("CommandChannel for context '{}' connected, {} command handlers registered", context, commandHandlers.size());
+                           } else if (resubscribingExistingHandlers) {
+                               logger.info("CommandChannel for context '{}' connected, {} command handlers registered",
+                                           context, commandHandlers.size());
                            }
                            subscriptionsCompleted.set(throwable == null);
                        });
@@ -250,7 +252,8 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
     public Registration registerCommandHandler(Function<Command, CompletableFuture<CommandResponse>> handler,
                                                int loadFactor,
                                                String... commandNames) {
-        if (commandHandlers.isEmpty()) {
+        boolean firstHandlers = commandHandlers.isEmpty();
+        if (firstHandlers) {
             doCreateCommandStream();
         }
         CompletableFuture<Void> subscriptionResult = CompletableFuture.completedFuture(null);
@@ -265,6 +268,16 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
                     logger.warn("An error occurred while registering command '{}' in context '{}'", commandName, context, e);
                 }
             } );
+        }
+        if (firstHandlers) {
+            subscriptionResult.whenComplete((r, e) -> {
+                if (e == null) {
+                    logger.info("CommandChannel for context '{}' connected, {} command handlers registered.",
+                                context, commandHandlers.size());
+                } else {
+                    logger.warn("An error occurred while registering command handlers", e);
+                }
+            });
         }
         return new AsyncRegistration(subscriptionResult, () -> unsubscribe(commandHandler, commandNames));
     }
