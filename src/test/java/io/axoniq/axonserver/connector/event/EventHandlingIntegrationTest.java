@@ -22,7 +22,7 @@ import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
 import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.impl.StreamClosedException;
 import io.axoniq.axonserver.grpc.InstructionAck;
-import io.axoniq.axonserver.grpc.event.Confirmation;
+import io.axoniq.axonserver.grpc.event.ConfirmationWithConsistencyMarker;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.EventWithToken;
 import org.junit.jupiter.api.AfterEach;
@@ -103,11 +103,11 @@ class EventHandlingIntegrationTest extends AbstractAxonServerIntegrationTest {
 
             CountDownLatch dataAvailable = new CountDownLatch(1);
 
-            CompletableFuture<Confirmation> result = publishingEventChannel
+            CompletableFuture<ConfirmationWithConsistencyMarker> result = publishingEventChannel
                     .startAppendEventsTransaction()
                     .appendEvent(createEvent("Hello world"))
                     .commit();
-            Confirmation confirmation = result.get(1, SECONDS);
+            ConfirmationWithConsistencyMarker confirmation = result.get(1, SECONDS);
 
             assertTrue(confirmation.getSuccess());
 

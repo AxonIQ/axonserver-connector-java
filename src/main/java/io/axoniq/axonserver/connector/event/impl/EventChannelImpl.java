@@ -39,6 +39,7 @@ import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.control.ClientIdentification;
 import io.axoniq.axonserver.grpc.event.CancelScheduledEventRequest;
 import io.axoniq.axonserver.grpc.event.Confirmation;
+import io.axoniq.axonserver.grpc.event.ConfirmationWithConsistencyMarker;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.event.EventSchedulerGrpc;
 import io.axoniq.axonserver.grpc.event.EventStoreGrpc;
@@ -152,7 +153,7 @@ public class EventChannelImpl extends AbstractAxonServerChannel<Void> implements
 
     @Override
     public AppendEventsTransaction startAppendEventsTransaction() {
-        FutureStreamObserver<Confirmation> result = new FutureStreamObserver<>(null);
+        FutureStreamObserver<ConfirmationWithConsistencyMarker> result = new FutureStreamObserver<>(null);
         StreamObserver<Event> clientStream = eventStore.appendEvent(result);
         return new AppendEventsTransactionImpl(clientStream, result);
     }

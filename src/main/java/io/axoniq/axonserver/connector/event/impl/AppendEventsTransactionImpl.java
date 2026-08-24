@@ -17,7 +17,7 @@
 package io.axoniq.axonserver.connector.event.impl;
 
 import io.axoniq.axonserver.connector.event.AppendEventsTransaction;
-import io.axoniq.axonserver.grpc.event.Confirmation;
+import io.axoniq.axonserver.grpc.event.ConfirmationWithConsistencyMarker;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -31,16 +31,16 @@ import java.util.concurrent.CompletableFuture;
 public class AppendEventsTransactionImpl implements AppendEventsTransaction {
 
     private final StreamObserver<Event> stream;
-    private final CompletableFuture<Confirmation> result;
+    private final CompletableFuture<ConfirmationWithConsistencyMarker> result;
 
     /**
      * Constructs a {@link AppendEventsTransactionImpl} used to append events to the Event Store.
      *
      * @param stream the {@link StreamObserver} of {@link Event} instances which should be appended
-     * @param result a {@link CompletableFuture} resolving the {@link Confirmation} of the successful processing of this
+     * @param result a {@link CompletableFuture} resolving the {@link ConfirmationWithConsistencyMarker} of the successful processing of this
      *               transaction
      */
-    public AppendEventsTransactionImpl(StreamObserver<Event> stream, CompletableFuture<Confirmation> result) {
+    public AppendEventsTransactionImpl(StreamObserver<Event> stream, CompletableFuture<ConfirmationWithConsistencyMarker> result) {
         this.stream = stream;
         this.result = result;
     }
@@ -52,7 +52,7 @@ public class AppendEventsTransactionImpl implements AppendEventsTransaction {
     }
 
     @Override
-    public CompletableFuture<Confirmation> commit() {
+    public CompletableFuture<ConfirmationWithConsistencyMarker> commit() {
         stream.onCompleted();
         return result;
     }

@@ -116,6 +116,7 @@ public class ContextConnection implements AxonServerConnection {
         doIfNotNull(eventTransformationChannel.get(), EventTransformationChannelImpl::reconnect);
         doIfNotNull(adminChannel.get(), AdminChannelImpl::reconnect);
         doIfNotNull(snapshotChannel.get(), SnapshotChannelImpl::reconnect);
+        doIfNotNull(dcbEventChannel.get(), DcbEventChannelImpl::reconnect);
     }
 
     @Override
@@ -132,6 +133,8 @@ public class ContextConnection implements AxonServerConnection {
                 && Optional.ofNullable(eventTransformationChannel.get()).map(EventTransformationChannelImpl::isReady)
                            .orElse(true)
                 && Optional.ofNullable(adminChannel.get()).map(AdminChannelImpl::isReady).orElse(true)
+                && Optional.ofNullable(dcbEventChannel.get()).map(DcbEventChannelImpl::isReady).orElse(true)
+                && Optional.ofNullable(snapshotChannel.get()).map(SnapshotChannelImpl::isReady).orElse(true)
                 && controlChannel.isReady();
     }
 
@@ -149,6 +152,7 @@ public class ContextConnection implements AxonServerConnection {
         doIfNotNull(eventTransformationChannel.get(), EventTransformationChannelImpl::disconnect);
         doIfNotNull(adminChannel.get(), AdminChannelImpl::disconnect);
         doIfNotNull(snapshotChannel.get(), SnapshotChannelImpl::disconnect);
+        doIfNotNull(dcbEventChannel.get(), DcbEventChannelImpl::disconnect);
         connection.shutdown();
         onShutdown.accept(this);
         try {

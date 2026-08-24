@@ -26,7 +26,6 @@ import io.axoniq.axonserver.grpc.event.dcb.TagsAndNamesCriterion;
 import org.junit.jupiter.api.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.containers.output.Slf4jLogConsumer;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
@@ -92,8 +91,6 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
         } else {
             // Connect to Docker container
             builder.routingServers(axonServerAddress);
-            Slf4jLogConsumer logConsumer = new Slf4jLogConsumer(logger);
-            axonServerContainer.followOutput(logConsumer);
         }
 
         client = builder.build();

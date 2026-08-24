@@ -19,9 +19,9 @@ package io.axoniq.axonserver.connector.event;
 import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.grpc.InstructionAck;
 import io.axoniq.axonserver.grpc.event.Confirmation;
+import io.axoniq.axonserver.grpc.event.ConfirmationWithConsistencyMarker;
 import io.axoniq.axonserver.grpc.event.Event;
 import io.axoniq.axonserver.grpc.streams.CreateResult;
-import io.axoniq.axonserver.grpc.streams.CreateStreamResponse;
 import io.axoniq.axonserver.grpc.streams.StreamStatus;
 
 import java.time.Duration;
@@ -105,7 +105,7 @@ public interface EventChannel {
      * @return a {@link CompletableFuture} resolving the confirmation of the successful processing of the append
      * transaction
      */
-    default CompletableFuture<Confirmation> appendEvents(Event... events) {
+    default CompletableFuture<ConfirmationWithConsistencyMarker> appendEvents(Event... events) {
         AppendEventsTransaction tx = startAppendEventsTransaction();
         for (Event event : events) {
             tx.appendEvent(event);
