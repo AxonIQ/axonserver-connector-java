@@ -233,6 +233,7 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
             return;
         }
 
+        boolean resubscribingExistingHandlers = !supportedQueries.isEmpty();
         IncomingQueryInstructionStream responseObserver = new IncomingQueryInstructionStream(
                 clientIdentification.getClientId(),
                 permits,
@@ -261,8 +262,9 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                         .whenComplete((unused, throwable) -> {
                             if (throwable != null) {
                                 logger.warn("An error occurred while registering query handlers", throwable);
-                            } else {
-                                logger.info("QueryChannel for context '{}' connected, {} registrations resubscribed", context, queryHandlers.size());
+                            } else if (resubscribingExistingHandlers) {
+                                logger.info("QueryChannel for context '{}' connected, {} registrations resubscribed",
+                                            context, queryHandlers.size());
                             }
                             subscriptionsCompleted.set(throwable == null);
                         });
@@ -300,8 +302,10 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
     @Override
     public Registration registerQueryHandler(QueryHandler handler, QueryDefinition... queryDefinitions) {
         CompletableFuture<Void> subscriptionResult = CompletableFuture.completedFuture(null);
+        boolean firstHandlers;
         synchronized (queryHandlerMonitor) {
-            if (queryHandlers.isEmpty()) {
+            firstHandlers = queryHandlers.isEmpty();
+            if (firstHandlers) {
                 doConnectQueryStream();
             }
 
@@ -326,6 +330,16 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                     } );
                 }
             }
+        }
+        if (firstHandlers) {
+            subscriptionResult.whenComplete((r, e) -> {
+                if (e == null) {
+                    logger.info("QueryChannel for context '{}' connected, {} registrations resubscribed",
+                                context, queryHandlers.size());
+                } else {
+                    logger.warn("An error occurred while registering query handlers", e);
+                }
+            });
         }
         return new AsyncRegistration(subscriptionResult, () -> {
             synchronized (queryHandlerMonitor) {
