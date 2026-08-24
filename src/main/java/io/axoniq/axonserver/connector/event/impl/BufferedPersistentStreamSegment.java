@@ -25,7 +25,6 @@ import io.axoniq.axonserver.grpc.streams.StreamRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -49,9 +48,14 @@ public class BufferedPersistentStreamSegment
     private final int segment;
     private final LongConsumer progressCallback;
     private final Consumer<String> errorCallback;
+    /**
+     * Guards {@link #onCompleted()}/{@link #close()} so their completion effect (enqueueing the terminal message,
+     * notifying {@link #onSegmentClosed(Runnable) segment-closed} listeners) runs exactly once, regardless of which of
+     * the two triggers it first. Deliberately NOT used to back {@link #isClosed()}. That must reflect whether the
+     * buffer has actually been drained, not merely whether a close/complete signal has been observed, otherwise
+     * already-buffered events become silently unreachable.
+     */
     private final AtomicBoolean closed = new AtomicBoolean();
-    private Runnable localOnAvailableCallback = () -> {
-    };
 
     /**
      * Constructs a {@link BufferedPersistentStreamSegment}.
@@ -82,9 +86,10 @@ public class BufferedPersistentStreamSegment
 
     @Override
     public void onCompleted() {
-        super.onCompleted();
-        closed.set(true);
-        onSegmentClosedCallbacks.forEach(Runnable::run);
+        if (closed.compareAndSet(false, true)) {
+            super.onCompleted();
+            onSegmentClosedCallbacks.forEach(Runnable::run);
+        }
     }
 
     @Override
@@ -102,11 +107,6 @@ public class BufferedPersistentStreamSegment
     }
 
     @Override
-    public boolean isClosed() {
-        return closed.get();
-    }
-
-    @Override
     public int segment() {
         return segment;
     }
@@ -115,14 +115,9 @@ public class BufferedPersistentStreamSegment
     public void close() {
         if (closed.compareAndSet(false, true)) {
             logger.info("{}: Close segment {}", streamId, segment);
-            localOnAvailableCallback.run();
+            super.onCompleted();
+            onSegmentClosedCallbacks.forEach(Runnable::run);
         }
-    }
-
-    @Override
-    public void onAvailable(Runnable callback) {
-        super.onAvailable(callback);
-        localOnAvailableCallback = callback;
     }
 
     @Override
