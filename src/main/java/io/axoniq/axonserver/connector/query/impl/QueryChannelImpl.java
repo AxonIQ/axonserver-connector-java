@@ -318,16 +318,21 @@ public class QueryChannelImpl extends AbstractAxonServerChannel<QueryProviderOut
                     QueryProviderOutbound subscribeMessage = buildSubscribeMessage(queryDefinition.getQueryName(),
                                                                                    queryDefinition.getResultType(),
                                                                                    UUID.randomUUID().toString());
-                    CompletableFuture<Void> instructionResult = sendInstruction(subscribeMessage,
-                                                                                QueryProviderOutbound::getInstructionId,
-                                                                                outboundQueryStream.get());
-                    subscriptionResult = CompletableFuture.allOf(subscriptionResult, instructionResult).whenComplete((r,e) -> {
-                        if (e == null) {
-                            logger.debug("Registered handler for query '{}' in context '{}'", queryDefinition.getQueryName(), context);
-                        } else {
-                            logger.warn("An error occurred while registering query '{}' in context '{}'", queryDefinition.getQueryName(), context, e);
-                        }
-                    } );
+                    CompletableFuture<Void> instructionResult =
+                            sendInstruction(
+                                    subscribeMessage,
+                                    QueryProviderOutbound::getInstructionId,
+                                    outboundQueryStream.get()
+                            ).whenComplete((r, e) -> {
+                                if (e == null) {
+                                    logger.debug("Registered handler for query '{}' in context '{}'",
+                                                 queryDefinition.getQueryName(), context);
+                                } else {
+                                    logger.warn("An error occurred while registering query '{}' in context '{}'",
+                                                queryDefinition.getQueryName(), context, e);
+                                }
+                            });
+                    subscriptionResult = CompletableFuture.allOf(subscriptionResult, instructionResult);
                 }
             }
         }

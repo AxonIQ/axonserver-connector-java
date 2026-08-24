@@ -260,14 +260,16 @@ public class CommandChannelImpl extends AbstractAxonServerChannel<CommandProvide
         CommandHandler commandHandler = new CommandHandler(handler, loadFactor);
         for (String commandName : commandNames) {
             commandHandlers.put(commandName, commandHandler);
-            CompletableFuture<Void> ack = sendSubscribe(commandName, loadFactor, outboundCommandStream.get());
-            subscriptionResult = CompletableFuture.allOf(subscriptionResult, ack).whenComplete((r,e) -> {
-                if (e == null) {
-                    logger.debug("Registered handler for command '{}' in context '{}'", commandName, context);
-                } else {
-                    logger.warn("An error occurred while registering command '{}' in context '{}'", commandName, context, e);
-                }
-            } );
+            CompletableFuture<Void> ack = sendSubscribe(commandName, loadFactor, outboundCommandStream.get())
+                    .whenComplete((r, e) -> {
+                        if (e == null) {
+                            logger.debug("Registered handler for command '{}' in context '{}'", commandName, context);
+                        } else {
+                            logger.warn("An error occurred while registering command '{}' in context '{}'",
+                                        commandName, context, e);
+                        }
+                    });
+            subscriptionResult = CompletableFuture.allOf(subscriptionResult, ack);
         }
         if (firstHandlers) {
             subscriptionResult.whenComplete((r, e) -> {
