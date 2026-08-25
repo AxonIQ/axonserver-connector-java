@@ -27,6 +27,8 @@ import io.axoniq.axonserver.grpc.event.dcb.GetSequenceAtResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetTagsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetTailResponse;
 import io.axoniq.axonserver.grpc.event.dcb.RemoveTagsResponse;
+import io.axoniq.axonserver.grpc.event.dcb.SnapshottedSourceEventsResponse;
+import io.axoniq.axonserver.grpc.event.dcb.SnapshottedSourceRequest;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.StreamEventsRequest;
@@ -207,6 +209,18 @@ public interface DcbEventChannel {
      * append new events to the event store
      */
     ResultStream<SourceEventsResponse> source(SourceEventsRequest request);
+
+    /**
+     * Provides a finite stream of events used to source a model, optionally preceded by the latest snapshot stored
+     * under the snapshot key in the given {@code request}. When a snapshot is present, it is emitted first, followed by
+     * events with a sequence greater than the snapshot's sequence. When no snapshot is present, this behaves like
+     * {@link #source(SourceEventsRequest)}, sourcing from the beginning.
+     *
+     * @param request the query used to filter events for sourcing and identify the snapshot to prefix the stream with
+     * @return the response containing an optional snapshot, events to source a model, and a consistency marker to be
+     * used when trying to append new events to the event store
+     */
+    ResultStream<SnapshottedSourceEventsResponse> source(SnapshottedSourceRequest request);
 
     /**
      * Provides tags for an event at the given global sequence.
