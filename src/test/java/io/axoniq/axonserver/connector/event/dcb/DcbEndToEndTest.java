@@ -8,14 +8,20 @@ import io.axoniq.axonserver.connector.AxonServerConnectionFactory;
 import io.axoniq.axonserver.connector.ResultStream;
 import io.axoniq.axonserver.connector.ResultStreamPublisher;
 import io.axoniq.axonserver.connector.event.DcbEventChannel;
+import io.axoniq.axonserver.connector.impl.HeaderAttachingInterceptor;
+import io.axoniq.axonserver.connector.impl.Headers;
 import io.axoniq.axonserver.connector.impl.ServerAddress;
+import io.axoniq.axonserver.grpc.event.dcb.AddSnapshotRequest;
 import io.axoniq.axonserver.grpc.event.dcb.AppendEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.ConsistencyCondition;
 import io.axoniq.axonserver.grpc.event.dcb.Criterion;
+import io.axoniq.axonserver.grpc.event.dcb.DcbSnapshotStoreGrpc;
 import io.axoniq.axonserver.grpc.event.dcb.Event;
 import io.axoniq.axonserver.grpc.event.dcb.GetSequenceAtResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetTagsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetTailResponse;
+import io.axoniq.axonserver.grpc.event.dcb.Snapshot;
+import io.axoniq.axonserver.grpc.event.dcb.SnapshottedSourceRequest;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.StreamEventsRequest;
@@ -23,6 +29,8 @@ import io.axoniq.axonserver.grpc.event.dcb.StreamEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.Tag;
 import io.axoniq.axonserver.grpc.event.dcb.TaggedEvent;
 import io.axoniq.axonserver.grpc.event.dcb.TagsAndNamesCriterion;
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
 import org.junit.jupiter.api.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -398,6 +406,72 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
                     .expectNextMatches(r -> r.getEvent().getEvent().equals(taggedEvent.getEvent())
                             && r.getEvent().getSequence() == head)
                     .expectNext(SourceEventsResponse.newBuilder().setConsistencyMarker(head + 1).build())
+                    .verifyComplete();
+    }
+
+    @Test
+    void sourceWithSnapshotWhenNoneStored() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        Tag tag = aTag();
+        String eventName = aString();
+
+        long head = retrieveHead();
+        TaggedEvent taggedEvent = taggedEvent(anEvent(aString(), eventName), tag);
+        appendEvent(taggedEvent);
+
+        TagsAndNamesCriterion tagsAndName = TagsAndNamesCriterion.newBuilder().addTag(tag).addName(eventName).build();
+        Criterion criterion = Criterion.newBuilder().setTagsAndNames(tagsAndName).build();
+        SnapshottedSourceRequest request = SnapshottedSourceRequest.newBuilder()
+                                                                   .setSnapshotKey(ByteString.copyFromUtf8(aString()))
+                                                                   .addCriterion(criterion)
+                                                                   .build();
+
+        StepVerifier.create(new ResultStreamPublisher<>(() -> dcbEventChannel.source(request)))
+                    .expectNextMatches(
+                            r -> !r.hasSnapshot()
+                                    && r.getEvent().getEvent().equals(taggedEvent.getEvent())
+                                    && r.getEvent().getSequence() == head
+                    )
+                    .expectNextMatches(r -> r.getConsistencyMarker() == head + 1L)
+                    .verifyComplete();
+    }
+
+    @Test
+    void sourceWithSnapshotWhenPresent() {
+        DcbEventChannel dcbEventChannel = connection.dcbEventChannel();
+        Tag tag = aTag();
+        String eventName = aString();
+        ByteString snapshotKey = ByteString.copyFromUtf8(aString());
+
+        long head = retrieveHead();
+        TaggedEvent beforeSnapshot = taggedEvent(anEvent(aString(), eventName), tag);
+        long snapshotSequence = appendEvent(beforeSnapshot).getSequenceOfTheFirstEvent();
+
+        Snapshot snapshot = Snapshot.newBuilder()
+                                    .setName("snapshot-name")
+                                    .setVersion("0.0.1")
+                                    .setPayload(ByteString.copyFromUtf8("snapshot-payload"))
+                                    .setTimestamp(Instant.now().toEpochMilli())
+                                    .build();
+        addSnapshot(snapshotKey, snapshotSequence, snapshot);
+
+        TaggedEvent afterSnapshot = taggedEvent(anEvent(aString(), eventName), tag);
+        appendEvent(afterSnapshot);
+
+        TagsAndNamesCriterion tagsAndNames = TagsAndNamesCriterion.newBuilder().addTag(tag).addName(eventName).build();
+        Criterion criterion = Criterion.newBuilder().setTagsAndNames(tagsAndNames).build();
+        SnapshottedSourceRequest request = SnapshottedSourceRequest.newBuilder()
+                                                                   .setSnapshotKey(snapshotKey)
+                                                                   .addCriterion(criterion)
+                                                                   .build();
+
+        StepVerifier.create(new ResultStreamPublisher<>(() -> dcbEventChannel.source(request)))
+                    .expectNextMatches(r -> r.hasSnapshot() && r.getSnapshot().equals(snapshot))
+                    .expectNextMatches(
+                            r -> r.getEvent().getEvent().equals(afterSnapshot.getEvent())
+                                    && r.getEvent().getSequence() > snapshotSequence
+                    )
+                    .expectNextMatches(r -> r.getConsistencyMarker() == head + 2L)
                     .verifyComplete();
     }
 
@@ -1032,6 +1106,24 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
         return dcbEventChannel.head()
                               .join()
                               .getSequence();
+    }
+
+    private void addSnapshot(ByteString key, long sequence, Snapshot snapshot) {
+        ManagedChannel channel =
+                ManagedChannelBuilder.forAddress(axonServerAddress.getHostName(), axonServerAddress.getGrpcPort())
+                                     .usePlaintext()
+                                     .intercept(new HeaderAttachingInterceptor<>(Headers.CONTEXT, "default"))
+                                     .build();
+        try {
+            AddSnapshotRequest snapshotRequest = AddSnapshotRequest.newBuilder()
+                                                                   .setKey(key)
+                                                                   .setSequence(sequence)
+                                                                   .setSnapshot(snapshot)
+                                                                   .build();
+            DcbSnapshotStoreGrpc.newBlockingStub(channel).add(snapshotRequest);
+        } finally {
+            channel.shutdownNow();
+        }
     }
 
     private AppendEventsResponse appendEvent(TaggedEvent taggedEvent) {

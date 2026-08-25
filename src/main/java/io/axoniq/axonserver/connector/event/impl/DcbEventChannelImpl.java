@@ -50,6 +50,9 @@ import io.axoniq.axonserver.grpc.event.dcb.RemoveTagsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.RescheduleEventRequest;
 import io.axoniq.axonserver.grpc.event.dcb.ScheduleEventRequest;
 import io.axoniq.axonserver.grpc.event.dcb.ScheduleToken;
+import io.axoniq.axonserver.grpc.event.dcb.SnapshottedDcbEventStoreGrpc;
+import io.axoniq.axonserver.grpc.event.dcb.SnapshottedSourceEventsResponse;
+import io.axoniq.axonserver.grpc.event.dcb.SnapshottedSourceRequest;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.StreamEventsRequest;
@@ -61,7 +64,6 @@ import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -81,7 +83,9 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
 
     private static final int BUFFER_SIZE = 512;
     private static final int REFILL_BATCH = 16;
+
     private final DcbEventStoreGrpc.DcbEventStoreStub eventStore;
+    private final SnapshottedDcbEventStoreGrpc.SnapshottedDcbEventStoreStub snapshottedEventStore;
     private final DcbEventSchedulerGrpc.DcbEventSchedulerStub eventScheduler;
     private final ClientIdentification clientIdentification;
     private final Set<ResultStream<StreamEventsResponse>> buffers = ConcurrentHashMap.newKeySet();
@@ -98,6 +102,7 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
                                AxonServerManagedChannel axonServerManagedChannel) {
         super(clientIdentification, executor, axonServerManagedChannel);
         this.eventStore = DcbEventStoreGrpc.newStub(axonServerManagedChannel);
+        this.snapshottedEventStore = SnapshottedDcbEventStoreGrpc.newStub(axonServerManagedChannel);
         this.eventScheduler = DcbEventSchedulerGrpc.newStub(axonServerManagedChannel);
         this.clientIdentification = clientIdentification;
     }
@@ -171,9 +176,9 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
     @Override
     public ResultStream<SourceEventsResponse> source(SourceEventsRequest request) {
         AbstractBufferedStream<SourceEventsResponse, Empty> result =
-                new AbstractBufferedStream<SourceEventsResponse, Empty>(clientIdentification.getClientId(),
-                                                                        BUFFER_SIZE,
-                                                                        REFILL_BATCH) {
+                new AbstractBufferedStream<>(clientIdentification.getClientId(),
+                                             BUFFER_SIZE,
+                                             REFILL_BATCH) {
                     @Override
                     protected SourceEventsResponse terminalMessage() {
                         return SourceEventsResponse.newBuilder()
@@ -186,6 +191,27 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
                     }
                 };
         eventStore.source(request, result);
+        return result;
+    }
+
+    @Override
+    public ResultStream<SnapshottedSourceEventsResponse> source(SnapshottedSourceRequest request) {
+        AbstractBufferedStream<SnapshottedSourceEventsResponse, Empty> result =
+                new AbstractBufferedStream<>(
+                        clientIdentification.getClientId(), BUFFER_SIZE, REFILL_BATCH
+                ) {
+                    @Override
+                    protected SnapshottedSourceEventsResponse terminalMessage() {
+                        return SnapshottedSourceEventsResponse.newBuilder()
+                                                              .build();
+                    }
+
+                    @Override
+                    protected Empty buildFlowControlMessage(FlowControl flowControl) {
+                        return null;
+                    }
+                };
+        snapshottedEventStore.source(request, result);
         return result;
     }
 
