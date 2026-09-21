@@ -47,7 +47,9 @@
         <axonserver.api.version>2026.1.0</axonserver.api.version>
 
         <grpc.version>1.79.0</grpc.version>
-        <protobuf.version>4.36.1</protobuf.version>
+        <!-- pinned to 4.35.1 to retain compatibility with the spring-boot ecosystem -->
+        <!-- protobuf forces the runtime to be >= codegen version, starting with 4.1 spring boot pins protobuf-java to 4.35.1 -->
+        <protobuf.version>4.35.1</protobuf.version>
 
         <slf4j.version>2.0.16</slf4j.version>
         <log4j.version>2.26.1</log4j.version>
