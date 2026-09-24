@@ -37,3 +37,5 @@ updates:
     ignore:
       - dependency-name: "org.junit:junit-bom"
         versions: [ "[6.0.0,)" ]
+      - dependency-name: "com.google.protobuf:protobuf-bom"
+        versions: [ ">=4.35.2" ]
