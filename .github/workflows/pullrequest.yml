@@ -11,11 +11,8 @@ jobs:
       matrix:
         include:
           - java-version: 11
-            sonar-enabled: false
           - java-version: 17
-            sonar-enabled: true
           - java-version: 21
-            sonar-enabled: true
       fail-fast: false # run both to the end
 
     steps:
@@ -32,18 +29,7 @@ jobs:
           server-username: MAVEN_USERNAME
           server-password: MAVEN_PASSWORD
 
-      - name: Build and Test with Sonar Analysis
-        if: matrix.sonar-enabled
-        run: |
-          ./mvnw -B -U -Dstyle.color=always -Pcoverage clean verify \
-          org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-          -Dsonar.projectKey=AxonIQ_axonserver-connector-java
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.CONNECTOR_SONAR_TOKEN }}
-
-      - name: Build and Test without Sonar Analysis
-        if: matrix.sonar-enabled != true
+      - name: Build
         run: |
           mvn -B -U -Dstyle.color=always clean verify
         env:
