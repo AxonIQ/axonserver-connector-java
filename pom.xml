@@ -23,8 +23,8 @@
     <url>https://github.com/AxonIQ/axonserver-connector-java</url>
     <licenses>
         <license>
-            <name>Apache 2.0</name>
-            <url>http://www.apache.org/licenses/LICENSE-2.0</url>
+            <name>Axoniq Terms of Service</name>
+            <url>https://www.axoniq.io/legal/terms-of-service</url>
         </license>
     </licenses>
     <issueManagement>
