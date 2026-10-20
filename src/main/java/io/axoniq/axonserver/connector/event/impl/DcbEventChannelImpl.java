@@ -45,6 +45,8 @@ import io.axoniq.axonserver.grpc.event.dcb.ScheduleToken;
 import io.axoniq.axonserver.grpc.event.dcb.SnapshottedDcbEventStoreGrpc;
 import io.axoniq.axonserver.grpc.event.dcb.SnapshottedSourceEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.SnapshottedSourceRequest;
+import io.axoniq.axonserver.grpc.event.dcb.SourceWithSnapshotRequest;
+import io.axoniq.axonserver.grpc.event.dcb.SourceWithSnapshotResponse;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.StreamEventsRequest;
@@ -187,6 +189,7 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
     }
 
     @Override
+    @Deprecated
     public ResultStream<SnapshottedSourceEventsResponse> source(SnapshottedSourceRequest request) {
         AbstractBufferedStream<SnapshottedSourceEventsResponse, Empty> result =
                 new AbstractBufferedStream<>(
@@ -204,6 +207,27 @@ public class DcbEventChannelImpl extends AbstractAxonServerChannel<Void> impleme
                     }
                 };
         snapshottedEventStore.source(request, result);
+        return result;
+    }
+
+    @Override
+    public ResultStream<SourceWithSnapshotResponse> sourceWithSnapshot(SourceWithSnapshotRequest request) {
+        AbstractBufferedStream<SourceWithSnapshotResponse, Empty> result =
+                new AbstractBufferedStream<>(
+                        clientIdentification.getClientId(), BUFFER_SIZE, REFILL_BATCH
+                ) {
+                    @Override
+                    protected SourceWithSnapshotResponse terminalMessage() {
+                        return SourceWithSnapshotResponse.newBuilder()
+                                                         .build();
+                    }
+
+                    @Override
+                    protected Empty buildFlowControlMessage(FlowControl flowControl) {
+                        return null;
+                    }
+                };
+        snapshottedEventStore.sourceWithSnapshot(request, result);
         return result;
     }
 
