@@ -103,7 +103,10 @@ public class FlowControlledReplyChannelWriter<T> implements FlowControl {
             } finally {
                 flowGate.set(false);
             }
-        } while (requestedRef.get() > 0 && !buffer.isEmpty());
+            // Also loop while a completion is pending: a concurrent close() loses the flowGate CAS and returns,
+            // so the current gate holder is the only one left to send the completion.
+        } while ((requestedRef.get() > 0 && !buffer.isEmpty())
+                || (buffer.closed() && buffer.isEmpty() && !completed.get()));
     }
 
     private long send(long maxMessages) {
