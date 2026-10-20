@@ -21,6 +21,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.LongStream;
 
@@ -153,8 +154,100 @@ class FlowControlledReplyChannelWriterTest {
     }
 
     @Test
+    void completionIsSentWhenBufferClosesWhileAnotherThreadHoldsTheFlowGate() {
+        BlockingCloseableBuffer<String> real = new BlockingCloseableBuffer<>();
+        DisposableReadonlyBuffer<String> hooked = closingDuringClosedCheck(real, real::close);
+        writer = new FlowControlledReplyChannelWriter<>(hooked, destination);
+        real.put("response");
+
+        writer.request(32);
+
+        verify(destination, times(1)).send("response");
+        verify(destination, times(1)).complete();
+        verify(destination, never()).completeWithError(any(ErrorMessage.class));
+    }
+
+    @Test
+    void errorCompletionIsSentWhenBufferClosesExceptionallyWhileAnotherThreadHoldsTheFlowGate() {
+        BlockingCloseableBuffer<String> real = new BlockingCloseableBuffer<>();
+        ErrorMessage error = ErrorMessage.newBuilder().setMessage("failure").build();
+        DisposableReadonlyBuffer<String> hooked =
+                closingDuringClosedCheck(real, () -> real.closeExceptionally(error));
+        writer = new FlowControlledReplyChannelWriter<>(hooked, destination);
+        real.put("response");
+
+        writer.request(32);
+
+        verify(destination, times(1)).send("response");
+        verify(destination, times(1)).completeWithError(error);
+        verify(destination, never()).complete();
+    }
+
+    @Test
     void testCancelPropagation() {
         writer.cancel();
         verify(source).dispose();
+    }
+
+    /**
+     * Wraps the given {@code real} buffer so that the first {@code closed()} check after the buffer has been drained
+     * triggers the given {@code closer} on a second thread, whilst still returning the value from before the close.
+     * This forces the interleaving in which the closing thread loses the flow gate CAS in the writer.
+     */
+    private static DisposableReadonlyBuffer<String> closingDuringClosedCheck(BlockingCloseableBuffer<String> real,
+                                                                             Runnable closer) {
+        AtomicBoolean drained = new AtomicBoolean();
+        AtomicBoolean injected = new AtomicBoolean();
+        return new DisposableReadonlyBuffer<String>() {
+            @Override
+            public Optional<String> poll() {
+                Optional<String> result = real.poll();
+                if (result.isPresent()) {
+                    drained.set(true);
+                }
+                return result;
+            }
+
+            @Override
+            public boolean isEmpty() {
+                return real.isEmpty();
+            }
+
+            @Override
+            public int capacity() {
+                return real.capacity();
+            }
+
+            @Override
+            public void onAvailable(Runnable onAvailable) {
+                real.onAvailable(onAvailable);
+            }
+
+            @Override
+            public void dispose() {
+                // noop
+            }
+
+            @Override
+            public Optional<ErrorMessage> error() {
+                return real.error();
+            }
+
+            @Override
+            public boolean closed() {
+                boolean closed = real.closed();
+                if (drained.get() && !closed && injected.compareAndSet(false, true)) {
+                    Thread producer = new Thread(closer, "producer");
+                    producer.start();
+                    try {
+                        producer.join();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException(e);
+                    }
+                }
+                return closed;
+            }
+        };
     }
 }
