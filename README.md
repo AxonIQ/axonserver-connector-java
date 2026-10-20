@@ -1,9 +1,5 @@
 # Axon Server Connector for Java
 
-[![Maven Central](https://img.shields.io/maven-central/v/io.axoniq/axonserver-connector-java)](https://central.sonatype.com/artifact/io.axoniq/axonserver-connector-java)
-![Build Status](https://github.com/AxonIQ/axonserver-connector-java/workflows/AxonServer%20Connector%20Java/badge.svg?branch=master)
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=AxonIQ_axonserver-connector-java&metric=alert_status&token=7f2878de3251f0b89dd985bd2fa6dff72c0a7697)](https://sonarcloud.io/dashboard?id=AxonIQ_axonserver-connector-java)
-
 The Axon Server Connector for Java serves the purpose of connecting JVM based applications
 to [Axon Server](https://axoniq.io/product-overview/axon-server).
 
