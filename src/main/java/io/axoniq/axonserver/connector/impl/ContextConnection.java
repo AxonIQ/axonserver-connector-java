@@ -136,6 +136,11 @@ public class ContextConnection implements AxonServerConnection {
     }
 
     @Override
+    public boolean supports(String capability) {
+        return connection.supports(capability);
+    }
+
+    @Override
     public void disconnect() {
         doIfNotNull(controlChannel, ControlChannelImpl::disconnect);
         doIfNotNull(commandChannel.get(), CommandChannelImpl::disconnect);

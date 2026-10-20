@@ -22,6 +22,8 @@ import io.axoniq.axonserver.grpc.event.dcb.AddSnapshotResponse;
 import io.axoniq.axonserver.grpc.event.dcb.DcbSnapshotStoreGrpc;
 import io.axoniq.axonserver.grpc.event.dcb.DeleteSnapshotsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.DeleteSnapshotsResponse;
+import io.axoniq.axonserver.grpc.event.dcb.FindLastSnapshotRequest;
+import io.axoniq.axonserver.grpc.event.dcb.FindLastSnapshotResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetLastSnapshotRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetLastSnapshotResponse;
 import io.axoniq.axonserver.grpc.event.dcb.ListSnapshotsRequest;
@@ -109,6 +111,13 @@ public class SnapshotChannelImpl extends AbstractAxonServerChannel<Void> impleme
     public CompletableFuture<GetLastSnapshotResponse> getLastSnapshot(GetLastSnapshotRequest request) {
         FutureStreamObserver<GetLastSnapshotResponse> res = new FutureStreamObserver<>(null);
         this.snapshotStore.getLast(request, res);
+        return res;
+    }
+
+    @Override
+    public CompletableFuture<FindLastSnapshotResponse> findLastSnapshot(FindLastSnapshotRequest request) {
+        FutureStreamObserver<FindLastSnapshotResponse> res = new FutureStreamObserver<>(null);
+        this.snapshotStore.findLast(request, res);
         return res;
     }
 

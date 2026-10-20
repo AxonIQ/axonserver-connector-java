@@ -21,6 +21,8 @@ import io.axoniq.axonserver.grpc.event.dcb.GetTailResponse;
 import io.axoniq.axonserver.grpc.event.dcb.RemoveTagsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.SnapshottedSourceEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.SnapshottedSourceRequest;
+import io.axoniq.axonserver.grpc.event.dcb.SourceWithSnapshotRequest;
+import io.axoniq.axonserver.grpc.event.dcb.SourceWithSnapshotResponse;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.StreamEventsRequest;
@@ -204,15 +206,32 @@ public interface DcbEventChannel {
 
     /**
      * Provides a finite stream of events used to source a model, optionally preceded by the latest snapshot stored
-     * under the snapshot key in the given {@code request}. When a snapshot is present, it is emitted first, followed by
-     * events with a sequence greater than the snapshot's sequence. When no snapshot is present, this behaves like
-     * {@link #source(SourceEventsRequest)}, sourcing from the beginning.
+     * under the snapshot key in the given {@code request}.
+     *
+     * @param request the query used to filter events for sourcing and identify the snapshot to prefix the stream with
+     * @return the response containing an optional snapshot, events to source a model, and a consistency marker to be
+     * used when trying to append new events to the event store
+     * @deprecated superseded by {@link #sourceWithSnapshot(SourceWithSnapshotRequest)}. Axon Server no longer
+     * implements the RPC behind this method and answers it with {@code UNIMPLEMENTED}; it resumed sourcing one past
+     * the snapshot's sequence, skipping any event at that sequence, and so could not be corrected in place.
+     */
+    @Deprecated
+    ResultStream<SnapshottedSourceEventsResponse> source(SnapshottedSourceRequest request);
+
+    /**
+     * Provides a finite stream of events used to source a model, optionally preceded by the latest snapshot stored
+     * under one of the snapshot keys in the given {@code request}. Candidate keys are tried strictly in order, and
+     * the first snapshot found is emitted first, followed by the events with a sequence greater than or equal to
+     * that snapshot's sequence. When no snapshot is found, this behaves like {@link #source(SourceEventsRequest)},
+     * sourcing from the beginning.
+     * <p>
+     * Only an Axon Server node advertising {@code dcb:snapshot-aware-sourcing} provides this RPC.
      *
      * @param request the query used to filter events for sourcing and identify the snapshot to prefix the stream with
      * @return the response containing an optional snapshot, events to source a model, and a consistency marker to be
      * used when trying to append new events to the event store
      */
-    ResultStream<SnapshottedSourceEventsResponse> source(SnapshottedSourceRequest request);
+    ResultStream<SourceWithSnapshotResponse> sourceWithSnapshot(SourceWithSnapshotRequest request);
 
     /**
      * Provides tags for an event at the given global sequence.
