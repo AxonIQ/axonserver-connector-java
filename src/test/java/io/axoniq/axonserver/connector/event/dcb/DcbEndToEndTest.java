@@ -430,7 +430,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
         TagsAndNamesCriterion tagsAndName = TagsAndNamesCriterion.newBuilder().addTag(tag).addName(eventName).build();
         Criterion criterion = Criterion.newBuilder().setTagsAndNames(tagsAndName).build();
         SnapshottedSourceRequest request = SnapshottedSourceRequest.newBuilder()
-                                                                   .setSnapshotKey(ByteString.copyFromUtf8(aString()))
+                                                                   .addSnapshotKey(ByteString.copyFromUtf8(aString()))
                                                                    .addCriterion(criterion)
                                                                    .build();
 
@@ -469,7 +469,7 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
         TagsAndNamesCriterion tagsAndNames = TagsAndNamesCriterion.newBuilder().addTag(tag).addName(eventName).build();
         Criterion criterion = Criterion.newBuilder().setTagsAndNames(tagsAndNames).build();
         SnapshottedSourceRequest request = SnapshottedSourceRequest.newBuilder()
-                                                                   .setSnapshotKey(snapshotKey)
+                                                                   .addSnapshotKey(snapshotKey)
                                                                    .addCriterion(criterion)
                                                                    .build();
 
