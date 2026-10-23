@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
@@ -55,6 +56,7 @@ public class AxonServerManagedChannel extends ManagedChannel {
     private final long connectTimeout;
 
     private final AtomicReference<ManagedChannel> activeChannel = new AtomicReference<>();
+    private final AtomicReference<Set<String>> capabilities = new AtomicReference<>();
     private final AtomicBoolean shutdown = new AtomicBoolean();
     private final AtomicBoolean suppressErrors = new AtomicBoolean();
     private final Queue<Runnable> connectListeners = new LinkedBlockingQueue<>();
@@ -135,6 +137,9 @@ public class AxonServerManagedChannel extends ManagedChannel {
                             new ServerAddress(primaryClusterInfo.getHostName(), primaryClusterInfo.getGrpcPort());
                     connection = connectionFactory.apply(serverAddress, context);
                 }
+                capabilities.set(primaryClusterInfo.hasCapabilities()
+                                          ? Set.copyOf(primaryClusterInfo.getCapabilities().getCapabilityList())
+                                          : null);
                 suppressErrors.set(false);
                 lastConnectException.set(null);
                 break;
@@ -404,6 +409,22 @@ public class AxonServerManagedChannel extends ManagedChannel {
      */
     public boolean isReady() {
         return getState(false) == ConnectivityState.READY;
+    }
+
+    /**
+     * Indicates whether the node this channel is currently connected to supports the given {@code capability}.
+     * <p>
+     * The result reflects the node reached by the most recent (re)connect, so it may change across reconnects -
+     * for example after this channel moves to a different node in the cluster, or after that node is upgraded.
+     *
+     * @param capability the capability identifier to check, e.g. {@code "dcb:snapshot-aware-sourcing"}
+     * @return {@code true} if the currently connected node has advertised the given capability, {@code false} if it
+     * either does not support it, or has not advertised any capabilities at all (e.g. because it predates capability
+     * negotiation)
+     */
+    public boolean supports(String capability) {
+        Set<String> currentCapabilities = capabilities.get();
+        return currentCapabilities != null && currentCapabilities.contains(capability);
     }
 
     private static class FailingCall<REQ, RESP> extends ClientCall<REQ, RESP> {
