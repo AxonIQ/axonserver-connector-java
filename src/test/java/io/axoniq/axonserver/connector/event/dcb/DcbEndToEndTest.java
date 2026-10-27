@@ -29,7 +29,7 @@ import io.axoniq.axonserver.grpc.event.dcb.GetSequenceAtResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetTagsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetTailResponse;
 import io.axoniq.axonserver.grpc.event.dcb.Snapshot;
-import io.axoniq.axonserver.grpc.event.dcb.SnapshottedSourceRequest;
+import io.axoniq.axonserver.grpc.event.dcb.SourceWithSnapshotRequest;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.SourceEventsResponse;
 import io.axoniq.axonserver.grpc.event.dcb.StreamEventsRequest;
@@ -429,12 +429,12 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
 
         TagsAndNamesCriterion tagsAndName = TagsAndNamesCriterion.newBuilder().addTag(tag).addName(eventName).build();
         Criterion criterion = Criterion.newBuilder().setTagsAndNames(tagsAndName).build();
-        SnapshottedSourceRequest request = SnapshottedSourceRequest.newBuilder()
-                                                                   .setSnapshotKey(ByteString.copyFromUtf8(aString()))
-                                                                   .addCriterion(criterion)
-                                                                   .build();
+        SourceWithSnapshotRequest request = SourceWithSnapshotRequest.newBuilder()
+                                                                     .addSnapshotKey(ByteString.copyFromUtf8(aString()))
+                                                                     .addCriterion(criterion)
+                                                                     .build();
 
-        StepVerifier.create(new ResultStreamPublisher<>(() -> dcbEventChannel.source(request)))
+        StepVerifier.create(new ResultStreamPublisher<>(() -> dcbEventChannel.sourceWithSnapshot(request)))
                     .expectNextMatches(
                             r -> !r.hasSnapshot()
                                     && r.getEvent().getEvent().equals(taggedEvent.getEvent())
@@ -461,20 +461,27 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
                                     .setPayload(ByteString.copyFromUtf8("snapshot-payload"))
                                     .setTimestamp(Instant.now().toEpochMilli())
                                     .build();
-        addSnapshot(snapshotKey, snapshotSequence, snapshot);
+        /*
+         * The stored sequence is a completeness watermark - the snapshot reflects every matching event below it -
+         * so it is one past the event it includes, and sourcing resumes there inclusively.
+         */
+        addSnapshot(snapshotKey, snapshotSequence + 1, snapshot);
 
         TaggedEvent afterSnapshot = taggedEvent(anEvent(aString(), eventName), tag);
         appendEvent(afterSnapshot);
 
         TagsAndNamesCriterion tagsAndNames = TagsAndNamesCriterion.newBuilder().addTag(tag).addName(eventName).build();
         Criterion criterion = Criterion.newBuilder().setTagsAndNames(tagsAndNames).build();
-        SnapshottedSourceRequest request = SnapshottedSourceRequest.newBuilder()
-                                                                   .setSnapshotKey(snapshotKey)
-                                                                   .addCriterion(criterion)
-                                                                   .build();
+        SourceWithSnapshotRequest request = SourceWithSnapshotRequest.newBuilder()
+                                                                     .addSnapshotKey(snapshotKey)
+                                                                     .addCriterion(criterion)
+                                                                     .build();
 
-        StepVerifier.create(new ResultStreamPublisher<>(() -> dcbEventChannel.source(request)))
-                    .expectNextMatches(r -> r.hasSnapshot() && r.getSnapshot().equals(snapshot))
+        StepVerifier.create(new ResultStreamPublisher<>(() -> dcbEventChannel.sourceWithSnapshot(request)))
+                    .expectNextMatches(r -> r.hasSnapshot()
+                            && r.getSnapshot().getSnapshot().equals(snapshot)
+                            && r.getSnapshot().getKey().equals(snapshotKey)
+                            && r.getSnapshot().getSequence() == snapshotSequence + 1)
                     .expectNextMatches(
                             r -> r.getEvent().getEvent().equals(afterSnapshot.getEvent())
                                     && r.getEvent().getSequence() > snapshotSequence

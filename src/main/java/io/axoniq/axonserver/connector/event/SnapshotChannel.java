@@ -13,6 +13,8 @@ import io.axoniq.axonserver.grpc.event.dcb.AddSnapshotRequest;
 import io.axoniq.axonserver.grpc.event.dcb.AddSnapshotResponse;
 import io.axoniq.axonserver.grpc.event.dcb.DeleteSnapshotsRequest;
 import io.axoniq.axonserver.grpc.event.dcb.DeleteSnapshotsResponse;
+import io.axoniq.axonserver.grpc.event.dcb.FindLastSnapshotRequest;
+import io.axoniq.axonserver.grpc.event.dcb.FindLastSnapshotResponse;
 import io.axoniq.axonserver.grpc.event.dcb.GetLastSnapshotRequest;
 import io.axoniq.axonserver.grpc.event.dcb.GetLastSnapshotResponse;
 import io.axoniq.axonserver.grpc.event.dcb.ListSnapshotsRequest;
@@ -64,4 +66,17 @@ public interface SnapshotChannel {
      * @return A CompletableFuture that resolves to a GetLastSnapshotResponse when the operation completes
      */
     CompletableFuture<GetLastSnapshotResponse> getLastSnapshot(GetLastSnapshotRequest request);
+
+    /**
+     * Retrieves the snapshot with the highest sequence number stored under the first of the request's candidate keys
+     * that yields one, optionally falling back to the snapshot Axon Framework 4 stored for an aggregate identifier.
+     * Candidate keys are tried strictly in order. The response reports which key the snapshot was found under, its
+     * sequence, and whether it came from the legacy fallback.
+     * <p>
+     * Only an Axon Server node advertising {@code dcb:snapshot-aware-sourcing} provides this RPC.
+     *
+     * @param request The request containing the candidate keys and an optional legacy aggregate identifier
+     * @return A CompletableFuture that resolves to a FindLastSnapshotResponse when the operation completes
+     */
+    CompletableFuture<FindLastSnapshotResponse> findLastSnapshot(FindLastSnapshotRequest request);
 }
