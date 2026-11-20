@@ -97,7 +97,7 @@ public class AxonServerUtils {
     }
 
     public static List<String> contexts(String hostname, int port) throws IOException {
-        final URL url = new URL(String.format("http://%s:%d/v1/public/context", hostname, port));
+        final URL url = new URL(String.format("http://%s:%d/internal/raft/contexts", hostname, port));
         HttpURLConnection connection = null;
         try {
             connection = (HttpURLConnection) url.openConnection();
