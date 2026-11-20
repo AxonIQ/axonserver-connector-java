@@ -23,9 +23,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
@@ -92,7 +92,7 @@ class ControlChannelImplProcessorInfoTest {
             return processorInfo("processor");
         }, mock(ProcessorInstructionHandler.class));
 
-        awaitUntil(() -> invocations.get() >= 5);
+        await().atMost(TIMEOUT).until(() -> invocations.get() >= 5);
         assertTrue(sentInfoCount("processor") >= 4, "Processor info should be sent after the supplier failed");
     }
 
@@ -101,13 +101,13 @@ class ControlChannelImplProcessorInfoTest {
         testSubject.registerEventProcessor("processor",
                                            () -> processorInfo("processor"),
                                            mock(ProcessorInstructionHandler.class));
-        awaitUntil(() -> sentInfoCount("processor") >= 1);
+        await().atMost(TIMEOUT).until(() -> sentInfoCount("processor") >= 1);
 
         sendFailuresToSimulate.set(1);
-        awaitUntil(() -> sendFailuresToSimulate.get() == 0);
+        await().atMost(TIMEOUT).until(() -> sendFailuresToSimulate.get() == 0);
         int sentBeforeRecovery = sentInfoCount("processor");
 
-        awaitUntil(() -> sentInfoCount("processor") >= sentBeforeRecovery + 3);
+        await().atMost(TIMEOUT).until(() -> sentInfoCount("processor") >= sentBeforeRecovery + 3);
     }
 
     @Test
@@ -121,7 +121,7 @@ class ControlChannelImplProcessorInfoTest {
         testSubject.registerEventProcessor("failing", alwaysFailing, mock(ProcessorInstructionHandler.class));
 
         int sentBefore = sentInfoCount("healthy");
-        awaitUntil(() -> sentInfoCount("healthy") >= sentBefore + 3);
+        await().atMost(TIMEOUT).until(() -> sentInfoCount("healthy") >= sentBefore + 3);
     }
 
     private static EventProcessorInfo processorInfo(String processorName) {
@@ -133,20 +133,5 @@ class ControlChannelImplProcessorInfoTest {
                                  .filter(PlatformInboundInstruction::hasEventProcessorInfo)
                                  .filter(m -> m.getEventProcessorInfo().getProcessorName().equals(processorName))
                                  .count();
-    }
-
-    private static void awaitUntil(BooleanSupplier condition) {
-        long deadline = System.nanoTime() + TIMEOUT.toNanos();
-        while (!condition.getAsBoolean()) {
-            if (System.nanoTime() > deadline) {
-                throw new AssertionError("Condition not met within " + TIMEOUT);
-            }
-            try {
-                Thread.sleep(5);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new AssertionError("Interrupted while waiting", e);
-            }
-        }
     }
 }
