@@ -48,6 +48,23 @@ public interface AxonServerConnection {
     boolean isConnected();
 
     /**
+     * Indicates whether the Axon Server node this connection currently reaches supports the given {@code
+     * capability}. The result reflects the node reached by the most recent (re)connect, so it may change over time -
+     * for example when this connection moves to a different node in the cluster, or that node gets upgraded.
+     * <p>
+     * Capability identifiers are defined by Axon Server and documented in its protobuf definitions, in the
+     * {@code axon-server-api} artifact: each optional RPC or behaviour that depends on one names it where that RPC
+     * is declared. Operations in this connector requiring a capability name it in their own documentation as well
+     * - see for example {@link io.axoniq.axonserver.connector.event.DcbEventChannel#sourceWithSnapshot}.
+     *
+     * @param capability the capability identifier to check, e.g. {@code "dcb:snapshot-aware-sourcing"}
+     * @return {@code true} if the currently connected node has advertised the given capability, {@code false} if it
+     * either does not support it, or has not advertised any capabilities at all (e.g. because it predates capability
+     * negotiation)
+     */
+    boolean supports(String capability);
+
+    /**
      * Disconnects all communication channels and terminates any active network connections to AxonServer. No more
      * operations can be performed on this connection after invoking <em>{@code disconnect()}</em>.
      */
