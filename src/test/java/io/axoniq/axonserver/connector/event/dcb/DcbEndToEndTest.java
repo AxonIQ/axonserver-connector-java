@@ -102,12 +102,18 @@ class DcbEndToEndTest extends AbstractAxonServerIntegrationTest {
         } else {
             // Connect to Docker container
             builder.routingServers(axonServerAddress);
-            Slf4jLogConsumer logConsumer = new Slf4jLogConsumer(logger);
-            axonServerContainer.followOutput(logConsumer);
         }
 
         client = builder.build();
         connection = client.connect("default");
+    }
+
+    @BeforeAll
+    static void beforeAll() {
+        if (!LOCAL) {
+            Slf4jLogConsumer logConsumer = new Slf4jLogConsumer(logger);
+            axonServerContainer.followOutput(logConsumer);
+        }
     }
 
     @AfterEach

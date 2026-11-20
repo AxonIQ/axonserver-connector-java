@@ -60,8 +60,9 @@
         <jacoco-maven-plugin.version>0.8.13</jacoco-maven-plugin.version>
         <junit.jupiter.version>5.13.1</junit.jupiter.version>
         <mockito.version>5.14.2</mockito.version>
-        <testcontainers.version>1.21.1</testcontainers.version>
+        <testcontainers.version>1.21.4</testcontainers.version>
         <testng.version>7.11.0</testng.version>
+        <awaitility.version>4.2.2</awaitility.version>
 
         <httpclient5.version>5.5</httpclient5.version>
         <toxiproxy.version>2.1.7</toxiproxy.version>
@@ -248,6 +249,12 @@
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
+            <version>${awaitility.version}</version>
             <scope>test</scope>
         </dependency>
 

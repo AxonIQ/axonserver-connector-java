@@ -26,15 +26,12 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class AxonServerUtils {
@@ -97,7 +94,7 @@ public class AxonServerUtils {
     }
 
     public static List<String> contexts(String hostname, int port) throws IOException {
-        final URL url = new URL(String.format("http://%s:%d/v1/public/context", hostname, port));
+        final URL url = new URL(String.format("http://%s:%d/internal/raft/contexts", hostname, port));
         HttpURLConnection connection = null;
         try {
             connection = (HttpURLConnection) url.openConnection();
@@ -154,41 +151,16 @@ public class AxonServerUtils {
 
     private static void waitForContextsCondition(String hostname, int port,
                                                  Predicate<List<String>> condition) {
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-        CountDownLatch latch = new CountDownLatch(1);
-        try {
-            scheduler.submit(() -> checkContextsCondition(hostname, port, condition, latch, scheduler))
-                     .get();
-            if (!latch.await(60, TimeUnit.SECONDS)) {
-                throw new RuntimeException("Condition on contexts has not been met!");
-            }
-        } catch (InterruptedException | ExecutionException e) {
-            throw new RuntimeException(e);
-        } finally {
-            scheduler.shutdown();
-        }
+        await("Condition on contexts")
+                .atMost(Duration.ofSeconds(60))
+                .pollInterval(Duration.ofMillis(100))
+                .until(() -> condition.test(contexts(hostname, port)));
     }
 
     private static void waitFor(long millis) {
         try {
             Thread.sleep(millis);
         } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private static void checkContextsCondition(String hostname, int port,
-                                               Predicate<List<String>> condition,
-                                               CountDownLatch latch, ScheduledExecutorService scheduler) {
-        try {
-            if (condition.test(contexts(hostname, port))) {
-                latch.countDown();
-            } else {
-                scheduler.schedule(() -> checkContextsCondition(hostname, port, condition, latch, scheduler),
-                                   10,
-                                   TimeUnit.MILLISECONDS);
-            }
-        } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
