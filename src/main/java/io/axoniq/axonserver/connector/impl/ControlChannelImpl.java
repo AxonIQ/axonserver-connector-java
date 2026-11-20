@@ -303,13 +303,35 @@ public class ControlChannelImpl extends AbstractAxonServerChannel<PlatformInboun
                 sendScheduledProcessorInfo();
             }
         } else {
-            CallStreamObserver<PlatformInboundInstruction> outbound = instructionDispatcher.get();
-            if (outbound != null && outbound.isReady()) {
-                infoSupplies.forEach(info -> doIfNotNull(info.get(), this::sendProcessorInfo));
-            } else {
-                logger.debug("Not sending processor info for context '{}'. Channel not ready...", context);
+            try {
+                CallStreamObserver<PlatformInboundInstruction> outbound = instructionDispatcher.get();
+                if (outbound != null && outbound.isReady()) {
+                    processorInfoSuppliers.forEach(this::sendProcessorInfo);
+                } else {
+                    logger.debug("Not sending processor info for context '{}'. Channel not ready...", context);
+                }
+            } catch (Exception e) {
+                logger.warn("Failed to send processor info for context '{}'. Will retry in {}ms.",
+                            context, processorInfoUpdateFrequency, e);
+            } finally {
+                // always reschedule, otherwise processor info updates stop permanently for this context
+                executor.schedule(this::sendScheduledProcessorInfo,
+                                  processorInfoUpdateFrequency,
+                                  TimeUnit.MILLISECONDS);
             }
-            executor.schedule(this::sendScheduledProcessorInfo, processorInfoUpdateFrequency, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    /**
+     * Sends the info of a single processor. Failures are contained, so that a failing supplier or send does not
+     * prevent the info of other processors from being sent.
+     */
+    private void sendProcessorInfo(String processorName, Supplier<EventProcessorInfo> infoSupplier) {
+        try {
+            doIfNotNull(infoSupplier.get(), this::sendProcessorInfo);
+        } catch (Exception e) {
+            logger.warn("Failed to send processor info of processor '{}' for context '{}'. Will retry in {}ms.",
+                        processorName, context, processorInfoUpdateFrequency, e);
         }
     }
 
