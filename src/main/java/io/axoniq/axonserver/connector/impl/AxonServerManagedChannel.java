@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
@@ -45,6 +46,12 @@ public class AxonServerManagedChannel extends ManagedChannel {
 
     private static final Logger logger = LoggerFactory.getLogger(AxonServerManagedChannel.class);
 
+    /*
+     * How many times a redirect is followed before giving up on reaching a node that answers for itself. A
+     * correctly configured cluster settles on the first or second attempt.
+     */
+    private static final int MAX_REDIRECTS = 3;
+
     private final List<ServerAddress> routingServers;
     private final long reconnectInterval;
     private final String context;
@@ -55,6 +62,7 @@ public class AxonServerManagedChannel extends ManagedChannel {
     private final long connectTimeout;
 
     private final AtomicReference<ManagedChannel> activeChannel = new AtomicReference<>();
+    private final AtomicReference<Set<String>> capabilities = new AtomicReference<>();
     private final AtomicBoolean shutdown = new AtomicBoolean();
     private final AtomicBoolean suppressErrors = new AtomicBoolean();
     private final Queue<Runnable> connectListeners = new LinkedBlockingQueue<>();
@@ -104,37 +112,44 @@ public class AxonServerManagedChannel extends ManagedChannel {
         for (ServerAddress nodeInfo : routingCandidates) {
             ManagedChannel candidate = null;
             try {
-                candidate = connectionFactory.apply(nodeInfo, context);
-                PlatformServiceGrpc.PlatformServiceBlockingStub stub =
-                        PlatformServiceGrpc.newBlockingStub(candidate)
-                                           .withDeadlineAfter(connectTimeout, TimeUnit.MILLISECONDS);
-                logger.info("Requesting connection details from {}:{}",
-                            nodeInfo.getHostName(), nodeInfo.getGrpcPort());
+                /*
+                 * A redirect is followed to completion rather than taken on trust: the node we are sent to is
+                 * asked for its own PlatformInfo in turn, until one answers for itself. Stopping one hop short
+                 * would leave us connected to a node we never spoke to, whose capabilities we do not know.
+                 *
+                 * Each answer reports the capabilities of the node that produced it, so whichever node we end up
+                 * on, we hold its capabilities - including when we stop following redirects and stay where we
+                 * are. Following one more hop instead would land us on an unqueried node all over again.
+                 */
+                ServerAddress target = nodeInfo;
+                candidate = connectionFactory.apply(target, context);
+                PlatformInfo clusterInfo = requestPlatformInfo(candidate, target);
 
-                PlatformInfo clusterInfo = stub.getPlatformServer(clientIdentification);
-                NodeInfo primaryClusterInfo = clusterInfo.getPrimary();
-                logger.debug("Received PlatformInfo suggesting [{}] ({}:{}), {}",
-                             primaryClusterInfo.getNodeName(),
-                             primaryClusterInfo.getHostName(),
-                             primaryClusterInfo.getGrpcPort(),
-                             clusterInfo.getSameConnection()
-                                     ? "allowing use of existing connection"
-                                     : "requiring new connection");
-                if (clusterInfo.getSameConnection()
-                        || (primaryClusterInfo.getGrpcPort() == nodeInfo.getGrpcPort()
-                        && primaryClusterInfo.getHostName().equals(nodeInfo.getHostName()))) {
-                    logger.debug("Reusing existing channel");
-                    connection = candidate;
-                } else {
+                for (int hop = 0; !describesSelf(clusterInfo, target) && hop < MAX_REDIRECTS; hop++) {
+                    NodeInfo redirect = clusterInfo.getPrimary();
                     candidate.shutdown();
                     logger.info("Connecting to [{}] ({}:{})",
-                                primaryClusterInfo.getNodeName(),
-                                primaryClusterInfo.getHostName(),
-                                primaryClusterInfo.getGrpcPort());
-                    ServerAddress serverAddress =
-                            new ServerAddress(primaryClusterInfo.getHostName(), primaryClusterInfo.getGrpcPort());
-                    connection = connectionFactory.apply(serverAddress, context);
+                                redirect.getNodeName(), redirect.getHostName(), redirect.getGrpcPort());
+                    target = new ServerAddress(redirect.getHostName(), redirect.getGrpcPort());
+                    candidate = connectionFactory.apply(target, context);
+                    clusterInfo = requestPlatformInfo(candidate, target);
                 }
+
+                if (!describesSelf(clusterInfo, target)) {
+                    logger.warn("AxonServer kept redirecting after {} attempts. Staying with [{}] ({}:{}), "
+                                        + "the last node that answered.",
+                                MAX_REDIRECTS, clusterInfo.getPrimary().getNodeName(),
+                                target.getHostName(), target.getGrpcPort());
+                }
+
+                /*
+                 * PlatformInfo.capabilities describes the node that answered, which is the node this channel is
+                 * connected to, redirect or not.
+                 */
+                connection = candidate;
+                capabilities.set(clusterInfo.hasCapabilities()
+                                          ? Set.copyOf(clusterInfo.getCapabilities().getCapabilityList())
+                                          : null);
                 suppressErrors.set(false);
                 lastConnectException.set(null);
                 break;
@@ -149,6 +164,36 @@ public class AxonServerManagedChannel extends ManagedChannel {
             }
         }
         return connection;
+    }
+
+    private PlatformInfo requestPlatformInfo(ManagedChannel channel, ServerAddress address) {
+        logger.info("Requesting connection details from {}:{}", address.getHostName(), address.getGrpcPort());
+
+        // A fresh stub per attempt, as the deadline set on it is absolute rather than per call.
+        PlatformInfo platformInfo = PlatformServiceGrpc.newBlockingStub(channel)
+                                                       .withDeadlineAfter(connectTimeout, TimeUnit.MILLISECONDS)
+                                                       .getPlatformServer(clientIdentification);
+        NodeInfo primary = platformInfo.getPrimary();
+
+        logger.debug("Received PlatformInfo suggesting [{}] ({}:{}), {}",
+                     primary.getNodeName(),
+                     primary.getHostName(),
+                     primary.getGrpcPort(),
+                     platformInfo.getSameConnection()
+                             ? "allowing use of existing connection"
+                             : "requiring new connection");
+        return platformInfo;
+    }
+
+    /*
+     * Whether the given PlatformInfo describes the node that produced it, rather than redirecting to another one.
+     * Only such a response says anything about the node reached at the given address.
+     */
+    private static boolean describesSelf(PlatformInfo platformInfo, ServerAddress connectedTo) {
+        NodeInfo primary = platformInfo.getPrimary();
+        return platformInfo.getSameConnection()
+                || (primary.getGrpcPort() == connectedTo.getGrpcPort()
+                && primary.getHostName().equals(connectedTo.getHostName()));
     }
 
     private void shutdownNow(ManagedChannel managedChannel) {
@@ -404,6 +449,22 @@ public class AxonServerManagedChannel extends ManagedChannel {
      */
     public boolean isReady() {
         return getState(false) == ConnectivityState.READY;
+    }
+
+    /**
+     * Indicates whether the node this channel is currently connected to supports the given {@code capability}.
+     * <p>
+     * The result reflects the node reached by the most recent (re)connect, so it may change across reconnects -
+     * for example after this channel moves to a different node in the cluster, or after that node is upgraded.
+     *
+     * @param capability the capability identifier to check, e.g. {@code "dcb:snapshot-aware-sourcing"}
+     * @return {@code true} if the currently connected node has advertised the given capability, {@code false} if it
+     * either does not support it, or has not advertised any capabilities at all (e.g. because it predates capability
+     * negotiation)
+     */
+    public boolean supports(String capability) {
+        Set<String> currentCapabilities = capabilities.get();
+        return currentCapabilities != null && currentCapabilities.contains(capability);
     }
 
     private static class FailingCall<REQ, RESP> extends ClientCall<REQ, RESP> {
