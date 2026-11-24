@@ -53,6 +53,7 @@
         <junit.jupiter.version>5.14.4</junit.jupiter.version>
         <mockito.version>5.23.0</mockito.version>
         <testcontainers.version>2.0.5</testcontainers.version>
+        <awaitility.version>4.2.2</awaitility.version>
 
         <httpclient5.version>5.6.4</httpclient5.version>
         <toxiproxy.version>2.1.11</toxiproxy.version>
@@ -240,6 +241,12 @@
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
+            <version>${awaitility.version}</version>
             <scope>test</scope>
         </dependency>
 
